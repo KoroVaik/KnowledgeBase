@@ -1,3 +1,5 @@
+using System.Text.RegularExpressions;
+
 const string DevFrontendCorsPolicy = "DevFrontend";
 
 // Soft cap for uploads. Note: this is checked after ASP.NET has already buffered the
@@ -13,11 +15,16 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
 // The Vite dev server runs on its own origin, so the browser needs an explicit
-// CORS grant before it will let the SPA call this API.
+// CORS grant before it will let the SPA call this API. Matched by regex (rather
+// than a fixed WithOrigins list) so a phone on the same Wi-Fi, reached via the
+// PC's LAN IP, is allowed too, without opening the API to the public internet.
+var devFrontendOriginPattern = new Regex(
+    @"^https?://(localhost|127\.0\.0\.1|192\.168\.\d{1,3}\.\d{1,3}|10\.\d{1,3}\.\d{1,3}\.\d{1,3}|172\.(1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}):5173$");
+
 builder.Services.AddCors(options =>
 {
     options.AddPolicy(DevFrontendCorsPolicy, policy => policy
-        .WithOrigins("http://localhost:5173", "http://127.0.0.1:5173")
+        .SetIsOriginAllowed(origin => devFrontendOriginPattern.IsMatch(origin))
         .AllowAnyHeader()
         .AllowAnyMethod());
 });
