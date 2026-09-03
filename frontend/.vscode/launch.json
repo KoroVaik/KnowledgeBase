@@ -1,0 +1,16 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      // Assumes VS Code has the `frontend/` folder open as its workspace root.
+      // Vite serves modules at URLs mirroring the folder layout under that root
+      // (src/components/Foo.tsx -> /src/components/Foo.tsx), so webRoot maps
+      // straight onto the workspace with no sourceMapPathOverrides needed.
+      "name": "Debug frontend (Chrome)",
+      "type": "chrome",
+      "request": "launch",
+      "url": "http://localhost:5173",
+      "webRoot": "${workspaceFolder}"
+    }
+  ]
+}

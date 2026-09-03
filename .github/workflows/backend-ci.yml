@@ -1,6 +1,8 @@
 name: Backend CI
 
 on:
+  # Ручний запуск кнопкою на вкладці Actions — не залежить від paths-фільтра
+  workflow_dispatch:
   push:
     branches: [main]
     paths:

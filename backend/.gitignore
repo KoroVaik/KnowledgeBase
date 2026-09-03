@@ -1,0 +1,10 @@
+bin/
+obj/
+
+# IDE settings are per-developer, not shared project state.
+.idea/
+.vs/
+*.user
+
+# Uploaded media and generated notes are local user data, not source.
+data/
