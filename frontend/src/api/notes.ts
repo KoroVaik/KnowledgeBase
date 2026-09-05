@@ -1,6 +1,9 @@
 // Matches the `http` launch profile in backend/Properties/launchSettings.json.
+// Reuses the page's own hostname (not a hardcoded "localhost") so this also works
+// when the SPA is opened via the PC's LAN IP from another device, e.g. a phone -
+// "localhost" there would resolve to the phone itself, not the PC.
 // Override with VITE_API_BASE_URL in a .env.local file if you run the API elsewhere.
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:5244'
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? `http://${window.location.hostname}:5244`
 
 /** Mirrors UploadedAssetResponse in backend/Program.cs (ASP.NET serialises camelCase). */
 export interface UploadedAsset {
