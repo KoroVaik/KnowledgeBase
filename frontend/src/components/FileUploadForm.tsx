@@ -3,9 +3,6 @@ import type { ChangeEvent, FormEvent } from 'react'
 import { uploadNoteFile } from '../api/notes'
 import type { UploadedAsset } from '../api/notes'
 
-// A discriminated union instead of several booleans: the compiler then guarantees
-// `asset` only exists on success and `message` only on error (like a sealed record
-// hierarchy in C#).
 type UploadState =
   | { status: 'idle' }
   | { status: 'uploading' }
@@ -16,8 +13,8 @@ export function FileUploadForm() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [state, setState] = useState<UploadState>({ status: 'idle' })
 
-  // <input type="file"> is uncontrolled - its value is owned by the DOM, not by React
-  // state - so we need a ref to clear it after a successful upload.
+  // <input type="file"> is uncontrolled: its value is owned by the DOM, so clearing it
+  // after a successful upload needs a ref.
   const inputRef = useRef<HTMLInputElement>(null)
 
   function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
@@ -26,7 +23,6 @@ export function FileUploadForm() {
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    // Without this the browser does a native form POST and reloads the page.
     event.preventDefault()
 
     if (selectedFile === null) {

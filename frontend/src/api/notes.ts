@@ -1,8 +1,5 @@
-// Matches the `http` launch profile in backend/Properties/launchSettings.json.
-// Reuses the page's own hostname (not a hardcoded "localhost") so this also works
-// when the SPA is opened via the PC's LAN IP from another device, e.g. a phone -
-// "localhost" there would resolve to the phone itself, not the PC.
-// Override with VITE_API_BASE_URL in a .env.local file if you run the API elsewhere.
+// Not a hardcoded "localhost": opened from a phone via the PC's LAN IP, "localhost"
+// would resolve to the phone itself. Port matches the `http` launch profile.
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? `http://${window.location.hostname}:5244`
 
 /** Mirrors UploadedAssetResponse in backend/Program.cs (ASP.NET serialises camelCase). */
@@ -12,7 +9,6 @@ export interface UploadedAsset {
   originalFileName: string
   contentType: string
   sizeBytes: number
-  /** ISO-8601 timestamp; kept as a string so the DTO stays JSON-shaped. */
   uploadedAtUtc: string
 }
 
@@ -47,7 +43,7 @@ async function readErrorMessage(response: Response): Promise<string> {
       return body.error
     }
   } catch {
-    // Body was not JSON (e.g. a plain 404 page) - fall through to the generic message.
+    // Body was not JSON (e.g. a plain 404 page).
   }
 
   return `Upload failed (HTTP ${response.status})`

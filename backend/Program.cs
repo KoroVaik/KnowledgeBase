@@ -2,22 +2,17 @@ using System.Text.RegularExpressions;
 
 const string DevFrontendCorsPolicy = "DevFrontend";
 
-// Soft cap for uploads. Note: this is checked after ASP.NET has already buffered the
-// multipart body (the framework default limit is 128 MB), which is fine for a local
-// dev stub but should move to a streaming/limit-aware path once real uploads land.
+// Soft cap only: ASP.NET has already buffered the multipart body by the time this is
+// checked (framework default 128 MB). Needs a streaming path once real uploads land.
 const long MaxUploadBytes = 25L * 1024 * 1024;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Add services to the container.
-// Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
-// The Vite dev server runs on its own origin, so the browser needs an explicit
-// CORS grant before it will let the SPA call this API. Matched by regex (rather
-// than a fixed WithOrigins list) so a phone on the same Wi-Fi, reached via the
-// PC's LAN IP, is allowed too, without opening the API to the public internet.
+// Regex rather than a fixed WithOrigins list: the PC's LAN IP is not known up front, so
+// a phone on the same Wi-Fi has to be allowed without opening the API to the internet.
 var devFrontendOriginPattern = new Regex(
     @"^https?://(localhost|127\.0\.0\.1|192\.168\.\d{1,3}\.\d{1,3}|10\.\d{1,3}\.\d{1,3}\.\d{1,3}|172\.(1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}):5173$");
 
@@ -31,7 +26,6 @@ builder.Services.AddCors(options =>
 
 var app = builder.Build();
 
-// Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
@@ -46,13 +40,11 @@ else
 
 app.UseCors(DevFrontendCorsPolicy);
 
-// Uploaded media lives next to the notes, under the project's content root:
-// backend/data/assets. Created eagerly so the first upload cannot race on it.
+// Created eagerly so concurrent first uploads cannot race on it.
 var assetsDirectory = Path.Combine(app.Environment.ContentRootPath, "data", "assets");
 Directory.CreateDirectory(assetsDirectory);
 
-// Stub: stores the raw file and returns its metadata. No AI processing, no .md
-// generation, no indexing - those come in a later iteration.
+// Stub: no AI processing, no .md generation, no indexing yet.
 app.MapPost("/api/notes/upload", async (IFormFile file, CancellationToken cancellationToken) =>
 {
     if (file.Length == 0)
@@ -65,8 +57,7 @@ app.MapPost("/api/notes/upload", async (IFormFile file, CancellationToken cancel
         return Results.BadRequest(new { error = $"File exceeds the {MaxUploadBytes / (1024 * 1024)} MB limit." });
     }
 
-    // Never trust the client-supplied name: strip any directory part, keep only a
-    // plausible extension, and store the file under a generated id.
+    // Never trust the client-supplied name: keep only a plausible extension.
     var originalFileName = Path.GetFileName(file.FileName);
     var extension = Path.GetExtension(originalFileName);
     if (extension.Length > 16 || extension.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0)
