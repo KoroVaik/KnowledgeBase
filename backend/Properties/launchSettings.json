@@ -19,6 +19,17 @@
         "ASPNETCORE_ENVIRONMENT": "Development"
       }
     },
+    "http-s3": {
+      "commandName": "Project",
+      "dotnetRunMessages": true,
+      "launchBrowser": false,
+      "launchUrl": "swagger",
+      "applicationUrl": "http://0.0.0.0:5244",
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "Storage__Provider": "S3"
+      }
+    },
     "https": {
       "commandName": "Project",
       "dotnetRunMessages": true,
