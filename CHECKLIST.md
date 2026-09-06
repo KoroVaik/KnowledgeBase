@@ -135,9 +135,22 @@
 
 ### Файловий сервер удома
 
-- [ ] Підняти **Garage** у Docker (S3-сумісний, Rust, під self-host).
-      Не MinIO: community-репозиторій архівовано в лютому 2026 — без патчів безпеки
-- [ ] Дані — у volume на диску, щоб переживали перезапуск контейнера
+- [x] Підняти **Garage** у Docker (S3-сумісний, Rust, під self-host).
+      Не MinIO: community-репозиторій архівовано в лютому 2026 — без патчів безпеки.
+      `infra/garage/`: compose з образом `dxflrs/garage:v2.3.0`, `garage.toml`,
+      секрети в `.env` поза git, bootstrap-команди в `README.md`.
+      Порти 3900/3903 прив'язані до `127.0.0.1` — назовні нічого не стирчить,
+      поки перед Garage не поставлено тунель. Бакет `knowledgebase-assets`,
+      ключ `knowledgebase-backend` з правами RW.
+      `rpc_secret`/`admin_token` навмисне в env, а не у файлі конфігу: bind-mount
+      на Windows виглядає для Garage world-readable, і він відмовляється стартувати.
+      `root_domain` у `[s3_api]` не заданий — vhost-style вимагає wildcard-DNS,
+      якого жоден тунель не дає, отже лишається тільки path-style.
+      Перевірено round-trip'ом через одноразовий `amazon/aws-cli`: put → list → get,
+      файл побайтово той самий
+- [x] Дані — у volume на диску, щоб переживали перезапуск контейнера. Перевірено
+      сильнішим тестом, ніж restart: `docker compose down` + `up` (контейнер
+      створюється наново) — об'єкт на місці
 - [ ] Тунель для публічного HTTPS: **Tailscale Funnel** (`*.ts.net`, домен не потрібен)
       або Cloudflare Tunnel (потребує власного домену на їхніх NS)
 - [ ] Ключі доступу (access key / secret) — у змінних оточення Render
@@ -154,8 +167,33 @@
       завантаження не гонились). Ендпоінт більше не знає про файлову систему — віддає
       `Stream` і отримує `StoredAsset`. Перевірено реальним завантаженням: 200 і файл
       під GUID у `data/assets`
-- [ ] `S3AssetStorage` (`AWSSDK.S3`) другою реалізацією; перемикання — реєстрацією в DI
-      за конфігом
+- [x] `S3AssetStorage` (`AWSSDK.S3` 4.0.102.5) другою реалізацією; перемикання —
+      `Storage:Provider` = `Local` | `S3`, одним `if` у `StorageRegistration`.
+      Ключі — лише через змінні оточення / user-secrets (`Storage__S3__AccessKeyId`);
+      неповний конфіг валить застосунок на старті (`ValidateOnStart`), а не на першому
+      завантаженні у вигляді 500. Іменування файлу винесено в `AssetFileName`, щоб
+      `SafeExtension` не дублювався у двох реалізаціях.
+      **Пастка AWS SDK v4:** дефолт `RequestChecksumCalculation = WHEN_SUPPORTED`
+      перетворює PUT на chunked-тіло з трейлером контрольної суми, і Garage відповідає
+      `Invalid payload signature`. Виставлено `WHEN_REQUIRED` у конфізі клієнта.
+      Перевірено проти локального Garage: логін → upload → 200, об'єкт у бакеті
+      побайтово збігається з надісланим; порожній файл → 400, без cookie → 401;
+      `Provider=Local` поводиться як раніше
+- [x] Локальні налаштування — `backend/appsettings.Local.json` (`UseLocalOverrides`):
+      у `.gitignore` і `.dockerignore`, підключається **лише в Development**. Джерело
+      додається після `CreateBuilder`, тому перебиває всі інші, включно зі змінними
+      оточення — гейт на Development саме для цього: копія, що осіла поруч із
+      бінарником, не перебʼє конфіг Render. Перевірено: ключі Garage лежать у файлі,
+      `Storage__Provider=S3 dotnet run` вантажить у бакет без жодної змінної з ключами;
+      без цієї змінної файли лягають у `data/assets`, як раніше; той самий файл поруч
+      із бінарником у Production ігнорується (падіння на `ValidateOnStart`);
+      `docker build` не бачить його в контексті (перевірено пробним образом)
+- [ ] Content-Type у S3 виводиться SDK з розширення ключа, а не з того, що прислав
+      клієнт: `IAssetStorage.SaveAsync` його не приймає. Для `.pdf` вийшло правильно,
+      але файл без розширення браузер отримає як `application/octet-stream`.
+      Розібратись разом із віддачею байтів
+- [ ] `IAssetStorage` уміє тільки зберігати. Для presigned-віддачі й для прибирання
+      сміття після невдалої обробки знадобляться читання і видалення
 - [x] Прибрати захардкоджений `ContentRootPath` з `Program.cs` — шлях тепер із конфігу
       (`Storage:AssetsPath`, дефолт `data/assets`) і резолвиться всередині
       `LocalFileAssetStorage`; абсолютний шлях у конфізі береться як є. S3-реалізації

@@ -1,0 +1,18 @@
+services:
+  garage:
+    image: dxflrs/garage:v2.3.0
+    container_name: knowledgebase-garage
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      - ./garage.toml:/etc/garage.toml:ro
+      - garage-meta:/var/lib/garage/meta
+      - garage-data:/var/lib/garage/data
+    ports:
+      # Bound to loopback: nothing reaches the S3 API until a tunnel is put in front of it.
+      - "127.0.0.1:3900:3900"
+      - "127.0.0.1:3903:3903"
+
+volumes:
+  garage-meta:
+  garage-data:

@@ -17,6 +17,20 @@ public static class HostingSetup
         return builder;
     }
 
+    // Machine-specific settings that must not be shared: keys, endpoints, local switches.
+    // Added after CreateBuilder, so it outranks every other source, including environment
+    // variables — gated on Development so a stray copy inside an image cannot quietly
+    // override the deployed configuration.
+    public static WebApplicationBuilder UseLocalOverrides(this WebApplicationBuilder builder)
+    {
+        if (builder.Environment.IsDevelopment())
+        {
+            builder.Configuration.AddJsonFile("appsettings.Local.json", optional: true);
+        }
+
+        return builder;
+    }
+
     public static IServiceCollection AddProxyAwareHosting(this IServiceCollection services)
     {
         services.Configure<ForwardedHeadersOptions>(options =>

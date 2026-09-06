@@ -5,6 +5,7 @@ using Backend.Infrastructure.Storage;
 var builder = WebApplication.CreateBuilder(args);
 
 builder.UseAssignedPort();
+builder.UseLocalOverrides();
 
 builder.Services.AddControllers();
 

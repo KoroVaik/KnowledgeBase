@@ -8,3 +8,6 @@ obj/
 
 # Uploaded media and generated notes are local user data, not source.
 data/
+
+# Machine-specific config: endpoints and keys for local runs. Outranks every other source.
+appsettings.Local.json

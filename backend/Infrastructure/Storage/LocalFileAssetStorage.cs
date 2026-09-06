@@ -24,21 +24,11 @@ public sealed class LocalFileAssetStorage : IAssetStorage
         CancellationToken cancellationToken)
     {
         var id = Guid.NewGuid().ToString("N");
-        var fileName = id + SafeExtension(originalFileName);
+        var fileName = AssetFileName.For(id, originalFileName);
 
         await using var target = File.Create(Path.Combine(_root, fileName));
         await content.CopyToAsync(target, cancellationToken);
 
         return new StoredAsset(id, fileName);
-    }
-
-    // Never trust the client-supplied name: keep only a plausible extension.
-    private static string SafeExtension(string? originalFileName)
-    {
-        var extension = Path.GetExtension(Path.GetFileName(originalFileName)) ?? string.Empty;
-
-        return extension.Length > 16 || extension.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0
-            ? string.Empty
-            : extension;
     }
 }

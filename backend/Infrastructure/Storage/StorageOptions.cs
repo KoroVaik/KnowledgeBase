@@ -1,8 +1,16 @@
 namespace Backend.Infrastructure.Storage;
 
+public enum AssetStorageProvider
+{
+    Local,
+    S3,
+}
+
 public sealed class StorageOptions
 {
     public const string SectionName = "Storage";
+
+    public AssetStorageProvider Provider { get; set; } = AssetStorageProvider.Local;
 
     public string AssetsPath { get; set; } = Path.Combine("data", "assets");
 

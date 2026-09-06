@@ -1,0 +1,20 @@
+metadata_dir = "/var/lib/garage/meta"
+data_dir = "/var/lib/garage/data"
+db_engine = "lmdb"
+
+replication_factor = 1
+
+rpc_bind_addr = "[::]:3901"
+rpc_public_addr = "127.0.0.1:3901"
+
+# rpc_secret and admin_token come from the environment on purpose: a bind-mounted file on
+# Windows looks world-readable to Garage and it refuses to start when secrets sit inside it.
+
+[s3_api]
+s3_region = "garage"
+api_bind_addr = "[::]:3900"
+# root_domain is left out: vhost-style (bucket.host/key) needs wildcard DNS, which no tunnel
+# hostname gives us. Clients must use path-style (host/bucket/key).
+
+[admin]
+api_bind_addr = "[::]:3903"
