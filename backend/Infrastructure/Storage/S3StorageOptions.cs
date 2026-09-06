@@ -6,7 +6,8 @@ public sealed class S3StorageOptions
 
     public string ServiceUrl { get; set; } = string.Empty;
 
-    // Must match s3_region in garage.toml: SigV4 signs the region, a mismatch is a 403.
+    // SigV4 signs the region, but Garage v2.3.0 accepts any value — verified. Kept
+    // configurable for providers that do check it (AWS, R2).
     public string Region { get; set; } = "garage";
 
     public string BucketName { get; set; } = string.Empty;

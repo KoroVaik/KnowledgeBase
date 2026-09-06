@@ -63,4 +63,6 @@ cd backend && Storage__Provider=S3 dotnet run --launch-profile http
 На Render те саме задається змінними оточення (`Storage__Provider`,
 `Storage__S3__ServiceUrl` тощо) — подвійне підкреслення замість вкладеності.
 
-`Region` має збігатися з `s3_region` у `garage.toml`: SigV4 підписує регіон.
+`Region` формально має збігатися з `s3_region` у `garage.toml`, але Garage v2.3.0 його
+не перевіряє — підпис із будь-яким регіоном проходить. Значення лишається в конфізі
+заради AWS і R2, де регіон справді звіряють.
