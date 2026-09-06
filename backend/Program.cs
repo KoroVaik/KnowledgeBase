@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.HttpOverrides;
 using System.Threading.RateLimiting;
 
 // Soft cap only: ASP.NET has already buffered the multipart body by the time this is
@@ -16,8 +17,31 @@ const string OwnerPassword = "baba";
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Render picks the port at runtime and treats a process listening anywhere else as dead.
+// Unset locally, so the launch profile keeps deciding.
+var assignedPort = Environment.GetEnvironmentVariable("PORT");
+if (!string.IsNullOrWhiteSpace(assignedPort))
+{
+    builder.WebHost.UseUrls($"http://*:{assignedPort}");
+}
+
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
+builder.Services.AddHealthChecks();
+
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+
+    // The default known-proxy list is loopback only, and Render's proxy address is neither
+    // fixed nor local — left as is, the headers would be dropped unread.
+    options.KnownNetworks.Clear();
+    options.KnownProxies.Clear();
+});
+
+// Without an explicit port the redirect middleware cannot build a target and silently
+// passes everything through.
+builder.Services.AddHttpsRedirection(options => options.HttpsPort = 443);
 
 builder.Services
     .AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
@@ -62,13 +86,25 @@ if (app.Environment.IsDevelopment())
 }
 else
 {
+    // Must run before anything reads the scheme or the client address: behind the proxy
+    // Kestrel sees plain http and the balancer's IP, so redirection would loop and the
+    // login limiter would bucket every client together.
+    app.UseForwardedHeaders();
+
     // Skipped in Development on purpose: the Vite proxy forwards to http://localhost:5244,
     // and a 307 to the HTTPS endpoint would break it on the dev certificate.
     app.UseHttpsRedirection();
 }
 
+// The SPA lives in wwwroot in the container image; in Development it is absent and Vite
+// serves it instead.
+app.UseDefaultFiles();
+app.UseStaticFiles();
+
 app.UseAuthentication();
 app.UseAuthorization();
+
+app.MapHealthChecks("/health");
 
 // Created eagerly so concurrent first uploads cannot race on it.
 var assetsDirectory = Path.Combine(app.Environment.ContentRootPath, "data", "assets");
@@ -168,6 +204,11 @@ app.MapPost("/api/notes/upload", async (IFormFile file, CancellationToken cancel
 // Minimal-API form binding opts into antiforgery validation; SameSite=Lax already keeps
 // the auth cookie off cross-site posts, so the token flow is not wired up yet.
 .DisableAntiforgery();
+
+// Deep links have to reach the SPA, but a bare catch-all would answer a mistyped /api path
+// with index.html and HTTP 200 — fetch() would read that markup as success.
+app.MapFallback("/api/{**path}", () => Results.NotFound());
+app.MapFallbackToFile("index.html");
 
 app.Run();
 
