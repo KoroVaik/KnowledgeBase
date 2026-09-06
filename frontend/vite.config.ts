@@ -4,11 +4,16 @@ import { defineConfig } from 'vite'
 export default defineConfig({
   plugins: [react()],
   server: {
-    // 5173 is hard-coded in the backend CORS policy and .vscode/launch.json. strictPort
-    // fails loudly instead of drifting to 5174, which looks like a CORS misconfiguration.
+    // strictPort fails loudly instead of drifting to 5174, which would silently break
+    // the .vscode/launch.json URL.
     port: 5173,
     strictPort: true,
     // All interfaces, so a phone on the same LAN can reach the dev server by IP.
     host: true,
+    // Keeps the browser on a single origin in dev, matching production where ASP.NET
+    // serves the SPA itself: no CORS, and cookies behave the same in both.
+    proxy: {
+      '/api': 'http://localhost:5244',
+    },
   },
 })

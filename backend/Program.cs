@@ -1,28 +1,57 @@
-using System.Text.RegularExpressions;
-
-const string DevFrontendCorsPolicy = "DevFrontend";
+using System.Security.Claims;
+using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authentication.Cookies;
+using System.Threading.RateLimiting;
 
 // Soft cap only: ASP.NET has already buffered the multipart body by the time this is
 // checked (framework default 128 MB). Needs a streaming path once real uploads land.
 const long MaxUploadBytes = 25L * 1024 * 1024;
+
+const string OwnerName = "owner";
+const int MaxFailedLoginsPerWindow = 5;
+
+// Temporary: plain password in source, for local debugging only. Must move back to a
+// hash in configuration before anything is deployed.
+const string OwnerPassword = "baba";
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
-// Regex rather than a fixed WithOrigins list: the PC's LAN IP is not known up front, so
-// a phone on the same Wi-Fi has to be allowed without opening the API to the internet.
-var devFrontendOriginPattern = new Regex(
-    @"^https?://(localhost|127\.0\.0\.1|192\.168\.\d{1,3}\.\d{1,3}|10\.\d{1,3}\.\d{1,3}\.\d{1,3}|172\.(1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}):5173$");
+builder.Services
+    .AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
+    .AddCookie(options =>
+    {
+        options.Cookie.Name = "kb.auth";
+        options.Cookie.SameSite = SameSiteMode.Lax;
+        options.ExpireTimeSpan = TimeSpan.FromDays(30);
+        options.SlidingExpiration = true;
 
-builder.Services.AddCors(options =>
-{
-    options.AddPolicy(DevFrontendCorsPolicy, policy => policy
-        .SetIsOriginAllowed(origin => devFrontendOriginPattern.IsMatch(origin))
-        .AllowAnyHeader()
-        .AllowAnyMethod());
-});
+        // Cookie auth defaults to redirecting a browser to a login page; fetch() would
+        // follow that 302 and read HTML as success. An API has to answer with the status.
+        options.Events.OnRedirectToLogin = context =>
+        {
+            context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+            return Task.CompletedTask;
+        };
+        options.Events.OnRedirectToAccessDenied = context =>
+        {
+            context.Response.StatusCode = StatusCodes.Status403Forbidden;
+            return Task.CompletedTask;
+        };
+    });
+
+builder.Services.AddAuthorization();
+
+// Driven by hand rather than by the rate-limiting middleware: the middleware would spend
+// an attempt on every request, including the successful sign-in that ends the guessing.
+var failedLoginLimiter = PartitionedRateLimiter.Create<string, string>(client =>
+    RateLimitPartition.GetFixedWindowLimiter(client, _ => new FixedWindowRateLimiterOptions
+    {
+        PermitLimit = MaxFailedLoginsPerWindow,
+        Window = TimeSpan.FromMinutes(1),
+    }));
 
 var app = builder.Build();
 
@@ -33,16 +62,68 @@ if (app.Environment.IsDevelopment())
 }
 else
 {
-    // Skipped in Development on purpose: the SPA talks to http://localhost:5244, and a
-    // 307 to the HTTPS endpoint would fail the CORS preflight / dev-certificate check.
+    // Skipped in Development on purpose: the Vite proxy forwards to http://localhost:5244,
+    // and a 307 to the HTTPS endpoint would break it on the dev certificate.
     app.UseHttpsRedirection();
 }
 
-app.UseCors(DevFrontendCorsPolicy);
+app.UseAuthentication();
+app.UseAuthorization();
 
 // Created eagerly so concurrent first uploads cannot race on it.
 var assetsDirectory = Path.Combine(app.Environment.ContentRootPath, "data", "assets");
 Directory.CreateDirectory(assetsDirectory);
+
+app.MapPost("/api/auth/login", async (LoginRequest request, HttpContext httpContext) =>
+{
+    var client = httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+
+    // Statistics rather than a zero-permit probe: acquiring 0 permits always succeeds,
+    // so it cannot answer whether the window is exhausted. Checked before the password is
+    // verified, so a client that ran out of attempts gets no guessing feedback at all.
+    if (failedLoginLimiter.GetStatistics(client) is { CurrentAvailablePermits: < 1 })
+    {
+        return Results.Json(
+            new { error = "Too many failed attempts. Wait a minute and try again." },
+            statusCode: StatusCodes.Status429TooManyRequests);
+    }
+
+    if (!string.Equals(request.Password, OwnerPassword, StringComparison.Ordinal))
+    {
+        failedLoginLimiter.AttemptAcquire(client).Dispose();
+
+        return Results.Json(
+            new { error = "Invalid password." },
+            statusCode: StatusCodes.Status401Unauthorized);
+    }
+
+    var identity = new ClaimsIdentity(
+        [new Claim(ClaimTypes.Name, OwnerName)],
+        CookieAuthenticationDefaults.AuthenticationScheme);
+
+    await httpContext.SignInAsync(
+        CookieAuthenticationDefaults.AuthenticationScheme,
+        new ClaimsPrincipal(identity));
+
+    return Results.Ok(new CurrentUserResponse(OwnerName));
+})
+.WithName("Login")
+.WithOpenApi();
+
+app.MapPost("/api/auth/logout", async (HttpContext httpContext) =>
+{
+    await httpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+    return Results.NoContent();
+})
+.RequireAuthorization()
+.WithName("Logout")
+.WithOpenApi();
+
+app.MapGet("/api/auth/me", (ClaimsPrincipal user) =>
+    Results.Ok(new CurrentUserResponse(user.Identity?.Name ?? OwnerName)))
+.RequireAuthorization()
+.WithName("GetCurrentUser")
+.WithOpenApi();
 
 // Stub: no AI processing, no .md generation, no indexing yet.
 app.MapPost("/api/notes/upload", async (IFormFile file, CancellationToken cancellationToken) =>
@@ -81,38 +162,18 @@ app.MapPost("/api/notes/upload", async (IFormFile file, CancellationToken cancel
         file.Length,
         DateTimeOffset.UtcNow));
 })
+.RequireAuthorization()
 .WithName("UploadNoteAsset")
 .WithOpenApi()
-// Minimal-API form binding opts into antiforgery validation; there is no token flow
-// here yet, so it is disabled explicitly rather than failing at runtime.
+// Minimal-API form binding opts into antiforgery validation; SameSite=Lax already keeps
+// the auth cookie off cross-site posts, so the token flow is not wired up yet.
 .DisableAntiforgery();
-
-var summaries = new[]
-{
-    "Freezing", "Bracing", "Chilly", "Cool", "Mild", "Warm", "Balmy", "Hot", "Sweltering", "Scorching"
-};
-
-app.MapGet("/weatherforecast", () =>
-{
-    var forecast =  Enumerable.Range(1, 5).Select(index =>
-        new WeatherForecast
-        (
-            DateOnly.FromDateTime(DateTime.Now.AddDays(index)),
-            Random.Shared.Next(-20, 55),
-            summaries[Random.Shared.Next(summaries.Length)]
-        ))
-        .ToArray();
-    return forecast;
-})
-.WithName("GetWeatherForecast")
-.WithOpenApi();
 
 app.Run();
 
-record WeatherForecast(DateOnly Date, int TemperatureC, string? Summary)
-{
-    public int TemperatureF => 32 + (int)(TemperatureC / 0.5556);
-}
+record LoginRequest(string? Password);
+
+record CurrentUserResponse(string Name);
 
 record UploadedAssetResponse(
     string Id,
