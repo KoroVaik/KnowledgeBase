@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { fetchCurrentUser, logout } from './api/auth'
 import type { CurrentUser } from './api/auth'
+import { AssetList } from './components/AssetList'
 import { FileUploadForm } from './components/FileUploadForm'
 import { LoginForm } from './components/LoginForm'
 import './App.css'
@@ -12,6 +13,8 @@ type AuthState =
 
 function App() {
   const [auth, setAuth] = useState<AuthState>({ status: 'checking' })
+  // The form and the list are siblings, so what they share lives in their parent.
+  const [uploadCount, setUploadCount] = useState(0)
 
   useEffect(() => {
     let cancelled = false
@@ -66,7 +69,8 @@ function App() {
           <p className="subtitle">
             Upload a file to <code>backend/data/assets</code>. AI processing is not wired up yet.
           </p>
-          <FileUploadForm />
+          <FileUploadForm onUploaded={() => setUploadCount((count) => count + 1)} />
+          <AssetList reloadToken={uploadCount} />
         </>
       )}
     </main>

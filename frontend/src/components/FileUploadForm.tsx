@@ -1,15 +1,17 @@
 import { useRef, useState } from 'react'
 import type { ChangeEvent, FormEvent } from 'react'
 import { uploadAsset } from '../api/assets'
-import type { UploadedAsset } from '../api/assets'
 
 type UploadState =
   | { status: 'idle' }
   | { status: 'uploading' }
-  | { status: 'success'; asset: UploadedAsset }
   | { status: 'error'; message: string }
 
-export function FileUploadForm() {
+interface FileUploadFormProps {
+  onUploaded: () => void
+}
+
+export function FileUploadForm({ onUploaded }: FileUploadFormProps) {
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [state, setState] = useState<UploadState>({ status: 'idle' })
 
@@ -32,12 +34,14 @@ export function FileUploadForm() {
     setState({ status: 'uploading' })
 
     try {
-      const asset = await uploadAsset(selectedFile)
-      setState({ status: 'success', asset })
+      await uploadAsset(selectedFile)
+      setState({ status: 'idle' })
       setSelectedFile(null)
       if (inputRef.current !== null) {
         inputRef.current.value = ''
       }
+      // Success is not reported here: the new row showing up in the list below says it.
+      onUploaded()
     } catch (error) {
       setState({
         status: 'error',
@@ -68,16 +72,6 @@ export function FileUploadForm() {
         <p className="upload-error" role="alert">
           {state.message}
         </p>
-      )}
-
-      {state.status === 'success' && (
-        <div className="upload-result">
-          <p>
-            Stored <strong>{state.asset.originalFileName}</strong> as{' '}
-            <code>{state.asset.storedFileName}</code> ({state.asset.sizeBytes} bytes)
-          </p>
-          <pre>{JSON.stringify(state.asset, null, 2)}</pre>
-        </div>
       )}
     </section>
   )
