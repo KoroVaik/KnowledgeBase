@@ -222,6 +222,21 @@
   - [x] Реальний вхід через Google пройдено в браузері: згода Google → повернення на `/`
         → сесія є. Лишились неперевіреними лише негативні гілки з чужим акаунтом
         (`authError=google-not-allowed`)
+  - [x] **Увімкнено в проді.** Окремий OAuth-клієнт (дев-ний у прод не їде), redirect URI
+        `https://knowledgebase-9z29.onrender.com/api/auth/google/callback`, креденшели
+        і `Features__GoogleSignInEnabled` — змінними оточення Render. Код виїхав
+        окремо від увімкнення: у `appsettings.json` флаг лишається `false`, тож деплой
+        сам по собі нічого не відкриває — рівно те, заради чого флаг і робився
+  - [x] Перевірено на проді curl'ом: `/api/features` → `googleSignInEnabled: true`
+        (ефективний стан, тобто креденшели теж на місці); `google/start` → 302 з
+        **`redirect_uri=https://…`** і correlation-cookie `secure; samesite=lax`;
+        callback без cookie → 302 на `/?authError=google-failed`.
+        `https` тут і був головний ризик: Render віддає в контейнер plain http, і без
+        `UseForwardedHeaders()` Google відповів би `redirect_uri_mismatch`. Той самий
+        `SecurePolicy = SameAsRequest`, що локально прибрав `secure`, у проді його
+        повернув — одна настройка, правильна поведінка в обох середовищах
+  - [ ] Реальний клік у проді ще не робили — лишається підтвердити видачу `kb.auth`
+        на публічній адресі
 - [ ] GitHub OAuth як друге джерело identity (allow-list на один акаунт) — після Google
       радше зайвий; лишається як варіант, а не план
 - [ ] Антифоргері: `.DisableAntiforgery()` лишається на upload. `SameSite=Lax` не пускає
