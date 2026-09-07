@@ -2,8 +2,10 @@ using System.Security.Claims;
 using Backend.Controllers.Auth.Configuration;
 using Backend.Controllers.Auth.Contracts;
 using Backend.Controllers.Auth.Services;
+using Backend.Infrastructure.Features;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.Authentication.Google;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
@@ -21,11 +23,16 @@ public sealed class AuthController : ControllerBase
 {
     private readonly ILoginAttemptLimiter _limiter;
     private readonly AuthOptions _options;
+    private readonly IOptionsSnapshot<FeatureOptions> _features;
 
-    public AuthController(ILoginAttemptLimiter limiter, IOptions<AuthOptions> options)
+    public AuthController(
+        ILoginAttemptLimiter limiter,
+        IOptions<AuthOptions> options,
+        IOptionsSnapshot<FeatureOptions> features)
     {
         _limiter = limiter;
         _options = options.Value;
+        _features = features;
     }
 
     /// <summary>
@@ -70,6 +77,33 @@ public sealed class AuthController : ControllerBase
             new ClaimsPrincipal(identity));
 
         return Ok(new CurrentUserResponse(_options.OwnerName));
+    }
+
+    /// <summary>
+    /// Sends the browser to Google's consent screen.
+    /// </summary>
+    /// <remarks>
+    /// A redirect, not JSON: an OAuth flow is a chain of top-level navigations, and fetch()
+    /// cannot carry the user through Google's own pages. Google returns to the callback path,
+    /// where the handler issues the same session cookie the password login does.
+    /// </remarks>
+    /// <response code="302">Redirecting to Google.</response>
+    /// <response code="404">Google sign-in is switched off or has no credentials.</response>
+    [HttpGet("google/start")]
+    [AllowAnonymous]
+    [ProducesResponseType(StatusCodes.Status302Found)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public IActionResult StartGoogleSignIn()
+    {
+        // Checked here too, not only in the UI: a flag that merely hides a button is decoration.
+        if (!_features.Value.GoogleSignInEnabled || !_options.Google.IsConfigured)
+        {
+            return NotFound();
+        }
+
+        return Challenge(
+            new AuthenticationProperties { RedirectUri = "/" },
+            GoogleDefaults.AuthenticationScheme);
     }
 
     /// <summary>

@@ -4,6 +4,7 @@ import { readErrorMessage } from './http'
 export interface FeatureFlags {
   uploadEnabled: boolean
   downloadEnabled: boolean
+  googleSignInEnabled: boolean
 }
 
 export async function fetchFeatures(): Promise<FeatureFlags> {

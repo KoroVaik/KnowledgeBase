@@ -22,6 +22,7 @@ function App() {
   const [features, setFeatures] = useState<FeatureFlags>({
     uploadEnabled: false,
     downloadEnabled: false,
+    googleSignInEnabled: false,
   })
 
   useEffect(() => {
@@ -78,7 +79,10 @@ function App() {
       {auth.status === 'anonymous' && (
         <>
           <p className="subtitle">Sign in to upload documents.</p>
-          <LoginForm onSignedIn={(user) => setAuth({ status: 'authenticated', user })} />
+          <LoginForm
+            onSignedIn={(user) => setAuth({ status: 'authenticated', user })}
+            googleSignInEnabled={features.googleSignInEnabled}
+          />
         </>
       )}
 

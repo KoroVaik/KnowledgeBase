@@ -7,4 +7,6 @@ public sealed class FeatureOptions
     public bool UploadEnabled { get; init; } = true;
 
     public bool DownloadEnabled { get; init; } = true;
+
+    public bool GoogleSignInEnabled { get; init; }
 }

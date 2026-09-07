@@ -15,4 +15,6 @@ public sealed class AuthOptions
     public TimeSpan FailedLoginWindow { get; set; } = TimeSpan.FromMinutes(1);
 
     public TimeSpan SessionLifetime { get; set; } = TimeSpan.FromDays(30);
+
+    public GoogleAuthOptions Google { get; set; } = new();
 }

@@ -1,3 +1,4 @@
+using Backend.Controllers.Auth.Configuration;
 using Backend.Controllers.Features.Contracts;
 using Backend.Infrastructure.Features;
 using Microsoft.AspNetCore.Mvc;
@@ -14,10 +15,12 @@ namespace Backend.Controllers.Features;
 public sealed class FeaturesController : ControllerBase
 {
     private readonly IOptionsSnapshot<FeatureOptions> _features;
+    private readonly AuthOptions _auth;
 
-    public FeaturesController(IOptionsSnapshot<FeatureOptions> features)
+    public FeaturesController(IOptionsSnapshot<FeatureOptions> features, IOptions<AuthOptions> auth)
     {
         _features = features;
+        _auth = auth.Value;
     }
 
     /// <summary>
@@ -32,5 +35,11 @@ public sealed class FeaturesController : ControllerBase
     [HttpGet]
     [ProducesResponseType(typeof(FeatureFlagsResponse), StatusCodes.Status200OK)]
     public FeatureFlagsResponse Get() =>
-        new(_features.Value.UploadEnabled, _features.Value.DownloadEnabled);
+        new(
+            _features.Value.UploadEnabled,
+            _features.Value.DownloadEnabled,
+            // Reported as the effective state, not the raw flag: the Google scheme is registered
+            // only when the credentials are there, so a flag switched on without them would put
+            // a button on screen that can only answer 404.
+            _features.Value.GoogleSignInEnabled && _auth.Google.IsConfigured);
 }

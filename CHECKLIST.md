@@ -188,7 +188,42 @@
 - [ ] Автотести замість ручної перевірки: xUnit + `WebApplicationFactory`
 - [ ] 401 під час upload не скидає фронт у стан «не залогінений» — сесія протухла,
       а користувач бачить помилку завантаження. Потрібен спільний обробник 401
-- [ ] GitHub OAuth як друге джерело identity (allow-list на один акаунт)
+- [ ] **Google OAuth як друге джерело identity** — за флагом `Features:GoogleSignInEnabled`
+      (дефолт `false`). Пароль лишається, Google лише додається: обробник має
+      `SignInScheme = cookie`, тож видає ту саму `kb.auth`, і `/api/auth/me`, logout
+      та `[Authorize]` не змінились. Пакет `Microsoft.AspNetCore.Authentication.Google`
+  - [x] Схема реєструється **тільки** за наявності `ClientId`/`ClientSecret`: обробник
+        перевіряє свій callback на кожному запиті, а валідатор OAuth-опцій падає на
+        порожньому `ClientId` — незаповнена схема поклала б увесь API, не лише вхід
+  - [x] `CallbackPath = /api/auth/google/callback` замість дефолтного `/signin-google`:
+        Vite проксює лише `/api`, і дефолтний шлях впав би у фронтенд
+  - [x] Correlation-cookie: `SameSite = Lax` **і** `SecurePolicy = SameAsRequest`. Дефолти
+        `None` + `Secure` разом вимагають https, і флоу ламався б на plain http — на
+        localhost Chrome ще пропускає (secure context), а з телефона по LAN-IP уже ні.
+        Google повертає top-level навігацією, тож `Lax` cookie доносить
+  - [x] Allow-list `Auth:Google:AllowedEmails` — порожній означає **нікого не пускати**:
+        сам вхід через Google вдається будь-якому акаунту у світі. Звірка в
+        `OnTicketReceived` (не `OnCreatingTicket` — там `Fail()` ігнорується), відмова
+        через `HandleResponse()` + редірект на `/?authError=…`, бо `Fail()` дав би 500
+  - [x] `/api/features` віддає **ефективний** стан (`флаг && IsConfigured`), а
+        `GET /api/auth/google/start` перевіряє флаг сам — щоб флаг не був лише декорацією
+  - [x] Кнопка «Continue with Google» у формі логіну за флагом; це `<a>`, а не `fetch`:
+        OAuth — ланцюг top-level навігацій, fetch крізь сторінки Google не проведе
+  - [x] `changeOrigin: false` у Vite-проксі. Vite 8 за замовчуванням підміняє `Host` на
+        адресу цілі, а бекенд будує `redirect_uri` саме з нього — Google повертав би
+        браузер на `:5244`, повз проксі, на порт, який у dev не віддає SPA.
+        Знайдено перевіркою: у `Location` стояв `redirect_uri=...localhost%3A5244...`
+  - [x] Перевірено curl'ом через проксі: `/api/features` → `googleSignInEnabled: true`;
+        `/api/auth/google/start` → 302 на `accounts.google.com` з
+        `redirect_uri=http://localhost:5173/api/auth/google/callback` і cookie
+        `samesite=lax; httponly` **без** `secure`; callback без correlation-cookie →
+        302 на `/?authError=google-failed` (а не 500). З флагом `false`:
+        `/api/features` → `googleSignInEnabled: false`, `google/start` → 404
+  - [x] Реальний вхід через Google пройдено в браузері: згода Google → повернення на `/`
+        → сесія є. Лишились неперевіреними лише негативні гілки з чужим акаунтом
+        (`authError=google-not-allowed`)
+- [ ] GitHub OAuth як друге джерело identity (allow-list на один акаунт) — після Google
+      радше зайвий; лишається як варіант, а не план
 - [ ] Антифоргері: `.DisableAntiforgery()` лишається на upload. `SameSite=Lax` не пускає
       auth-cookie на cross-site POST, тож зараз дірки немає — переглянути, якщо фронт
       і API колись роз'їдуться на різні адреси

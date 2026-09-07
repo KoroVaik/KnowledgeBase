@@ -100,6 +100,17 @@
   opacity: 0.5;
 }
 
+.login-google {
+  display: inline-block;
+  margin-top: 16px;
+  padding: 8px 20px;
+  border-radius: 6px;
+  color: var(--text-h);
+  background: transparent;
+  border: 1px solid var(--border);
+  text-decoration: none;
+}
+
 .login-error {
   margin-top: 16px;
   color: #dc2626;

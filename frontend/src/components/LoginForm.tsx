@@ -10,11 +10,32 @@ type LoginState =
 
 interface LoginFormProps {
   onSignedIn: (user: CurrentUser) => void
+  googleSignInEnabled: boolean
 }
 
-export function LoginForm({ onSignedIn }: LoginFormProps) {
+const googleErrors: Record<string, string> = {
+  'google-not-allowed': 'That Google account is not allowed to sign in here.',
+  'google-failed': 'Google sign-in did not complete.',
+}
+
+/** The Google flow has no response to catch: it reports back through the return URL. */
+function readGoogleError(): LoginState {
+  const code = new URLSearchParams(window.location.search).get('authError')
+
+  return code === null || !(code in googleErrors)
+    ? { status: 'idle' }
+    : { status: 'error', message: googleErrors[code] }
+}
+
+export function LoginForm({ onSignedIn, googleSignInEnabled }: LoginFormProps) {
   const [password, setPassword] = useState('')
-  const [state, setState] = useState<LoginState>({ status: 'idle' })
+  const [state, setState] = useState<LoginState>(readGoogleError)
+
+  // The message has been read into state, so the parameter has done its job - dropping it keeps
+  // a reload from showing a stale error.
+  useEffect(() => {
+    window.history.replaceState(null, '', window.location.pathname)
+  }, [])
 
   const inputRef = useRef<HTMLInputElement>(null)
 
@@ -71,6 +92,12 @@ export function LoginForm({ onSignedIn }: LoginFormProps) {
           {isSubmitting ? 'Signing in…' : 'Sign in'}
         </button>
       </form>
+
+      {googleSignInEnabled && (
+        <a className="login-google" href="/api/auth/google/start">
+          Continue with Google
+        </a>
+      )}
 
       {state.status === 'error' && (
         <p className="login-error" role="alert">
