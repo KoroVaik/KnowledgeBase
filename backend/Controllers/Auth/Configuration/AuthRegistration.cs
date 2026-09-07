@@ -1,5 +1,7 @@
-using Backend.Controllers.Auth.Services;
+﻿using Backend.Controllers.Auth.Services;
+using Backend.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.DataProtection;
 
 namespace Backend.Controllers.Auth.Configuration;
 
@@ -15,6 +17,11 @@ public static class AuthRegistration
         // Singleton because the limiter *is* the state: a per-request instance would start every
         // client back at a full window and the limit would never trigger.
         services.AddSingleton<ILoginAttemptLimiter, LoginAttemptLimiter>();
+
+        // The session cookie is encrypted with Data Protection keys, and their default home is
+        // the filesystem the app runs on — which in a container is thrown away on every deploy,
+        // signing everyone out. In the database they outlive the container.
+        services.AddDataProtection().PersistKeysToDbContext<KnowledgeBaseDbContext>();
 
         // Bound a second time by hand: the cookie scheme is configured while the container is
         // still being built, so IOptions<AuthOptions> cannot be resolved yet.

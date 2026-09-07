@@ -56,10 +56,12 @@ export function AssetList({ reloadToken, downloadEnabled }: AssetListProps) {
 
   useResourceChanges('assets', reload)
 
-  async function handleDelete(fileName: string) {
-    if (!window.confirm(`Delete ${fileName}? This cannot be undone.`)) {
+  async function handleDelete(asset: AssetSummary) {
+    if (!window.confirm(`Delete ${asset.originalFileName}? This cannot be undone.`)) {
       return
     }
+
+    const fileName = asset.storedFileName
 
     setActionError(null)
     setDeletingFileName(fileName)
@@ -107,18 +109,18 @@ export function AssetList({ reloadToken, downloadEnabled }: AssetListProps) {
             <li className="asset" key={asset.storedFileName}>
               {downloadEnabled ? (
                 <a className="asset-name" href={assetDownloadUrl(asset.storedFileName)}>
-                  {asset.storedFileName}
+                  {asset.originalFileName}
                 </a>
               ) : (
-                <span className="asset-name">{asset.storedFileName}</span>
+                <span className="asset-name">{asset.originalFileName}</span>
               )}
               <span className="asset-meta">
-                {formatSize(asset.sizeBytes)} · {new Date(asset.lastModifiedUtc).toLocaleString()}
+                {formatSize(asset.sizeBytes)} · {new Date(asset.uploadedAtUtc).toLocaleString()}
               </span>
               <button
                 type="button"
                 className="asset-delete"
-                onClick={() => void handleDelete(asset.storedFileName)}
+                onClick={() => void handleDelete(asset)}
                 disabled={deletingFileName === asset.storedFileName}
               >
                 {deletingFileName === asset.storedFileName ? 'Deleting…' : 'Delete'}

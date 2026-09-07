@@ -1,10 +1,11 @@
-using Backend.Controllers.Assets.Contracts;
+﻿using Backend.Controllers.Assets.Contracts;
 using Backend.Infrastructure.Features;
+using Backend.Infrastructure.Persistence;
 using Backend.Infrastructure.RealTime;
 using Backend.Infrastructure.Storage;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.StaticFiles;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 
 namespace Backend.Controllers.Assets;
@@ -12,15 +13,18 @@ namespace Backend.Controllers.Assets;
 /// <summary>
 /// Uploaded files: the raw PDFs and images notes will be built from.
 /// </summary>
+/// <remarks>
+/// The table is the source of truth: the listing comes from it, and the storage only holds
+/// bytes. Bytes without a row are invisible to the API and get collected separately.
+/// </remarks>
 [ApiController]
 [Route("api/[controller]")]
 [Authorize]
 [Produces("application/json")]
 public sealed class AssetsController : ControllerBase
 {
-    private static readonly FileExtensionContentTypeProvider ContentTypes = new();
-
     private readonly IAssetStorage _storage;
+    private readonly KnowledgeBaseDbContext _database;
     private readonly IChangeNotifier _notifier;
     private readonly StorageOptions _options;
     private readonly FeatureOptions _features;
@@ -29,11 +33,13 @@ public sealed class AssetsController : ControllerBase
     // configuration takes effect without a restart.
     public AssetsController(
         IAssetStorage storage,
+        KnowledgeBaseDbContext database,
         IChangeNotifier notifier,
         IOptions<StorageOptions> options,
         IOptionsSnapshot<FeatureOptions> features)
     {
         _storage = storage;
+        _database = database;
         _notifier = notifier;
         _options = options.Value;
         _features = features.Value;
@@ -47,7 +53,6 @@ public sealed class AssetsController : ControllerBase
     /// <returns>Metadata of the stored file.</returns>
     /// <remarks>
     /// A stub: the file is kept as is. No AI processing, no .md generation, no indexing yet.
-    /// The original name and content type are echoed back but not persisted anywhere.
     /// </remarks>
     /// <response code="201">The file is stored.</response>
     /// <response code="400">The file is empty or over the size limit.</response>
@@ -77,15 +82,26 @@ public sealed class AssetsController : ControllerBase
         }
 
         await using var content = file.OpenReadStream();
+
+        // Bytes first, row second: a crash in between leaves an unreferenced file, which is
+        // waste. The other order would leave a row the storage cannot answer for.
         var stored = await _storage.SaveAsync(content, file.FileName, cancellationToken);
 
+        var record = AssetRecord.For(stored, file.FileName, file.ContentType, file.Length);
+
+        _database.Assets.Add(record);
+
+        // Deliberately not the request token: the bytes are already on disk, and a client that
+        // walked away mid-request must not cost us the row that makes them findable.
+        await _database.SaveChangesAsync(CancellationToken.None);
+
         var response = new UploadedAssetResponse(
-            stored.Id,
-            stored.FileName,
-            Path.GetFileName(file.FileName),
-            file.ContentType,
-            file.Length,
-            DateTimeOffset.UtcNow);
+            record.Id,
+            record.StoredFileName,
+            record.OriginalFileName,
+            record.ContentType,
+            record.SizeBytes,
+            record.UploadedAtUtc);
 
         _notifier.Publish(new ChangeEvent(ChangeResources.Assets, ChangeActions.Created, stored.FileName));
 
@@ -96,10 +112,7 @@ public sealed class AssetsController : ControllerBase
     /// Lists every stored file, newest first.
     /// </summary>
     /// <param name="cancellationToken">Cancels the listing if the client disconnects.</param>
-    /// <returns>Stored name, size and last modification time of each file.</returns>
-    /// <remarks>
-    /// Only what the storage itself knows: the original file name is not kept anywhere.
-    /// </remarks>
+    /// <returns>Stored name, original name, size and upload time of each file.</returns>
     /// <response code="200">The listing, possibly empty.</response>
     /// <response code="401">No session, or it has expired.</response>
     [HttpGet]
@@ -107,11 +120,16 @@ public sealed class AssetsController : ControllerBase
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> List(CancellationToken cancellationToken)
     {
-        var assets = await _storage.ListAsync(cancellationToken);
+        var assets = await _database.Assets
+            .OrderByDescending(asset => asset.UploadedAtUtc)
+            .Select(asset => new AssetSummaryResponse(
+                asset.StoredFileName,
+                asset.OriginalFileName,
+                asset.SizeBytes,
+                asset.UploadedAtUtc))
+            .ToListAsync(cancellationToken);
 
-        return Ok(assets
-            .Select(asset => new AssetSummaryResponse(asset.FileName, asset.SizeBytes, asset.LastModifiedUtc))
-            .ToList());
+        return Ok(assets);
     }
 
     /// <summary>
@@ -141,20 +159,23 @@ public sealed class AssetsController : ControllerBase
             return StatusCode(StatusCodes.Status403Forbidden, new { error = "Downloading is turned off." });
         }
 
-        var content = await _storage.OpenReadAsync(fileName, cancellationToken);
+        var record = await FindAsync(fileName, cancellationToken);
+
+        if (record is null)
+        {
+            return NotFound();
+        }
+
+        var content = await _storage.OpenReadAsync(record.StoredFileName, cancellationToken);
 
         if (content is null)
         {
             return NotFound();
         }
 
-        // Nothing stores the content type, so it is guessed back from the extension the
-        // upload kept.
-        var contentType = ContentTypes.TryGetContentType(fileName, out var known)
-            ? known
-            : "application/octet-stream";
-
-        return File(content, contentType, fileName);
+        // The browser saves it under the name the user picked, not under the GUID it is
+        // stored as.
+        return File(content, record.ContentType, record.OriginalFileName);
     }
 
     /// <summary>
@@ -171,13 +192,25 @@ public sealed class AssetsController : ControllerBase
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> Delete(string fileName, CancellationToken cancellationToken)
     {
-        if (!await _storage.DeleteAsync(fileName, cancellationToken))
+        var record = await FindAsync(fileName, cancellationToken);
+
+        if (record is null)
         {
             return NotFound();
         }
+
+        // Row first: the file leaves the listing even if the storage call below fails, and a
+        // leftover object is easier to live with than a row pointing at nothing.
+        _database.Assets.Remove(record);
+        await _database.SaveChangesAsync(CancellationToken.None);
+
+        await _storage.DeleteAsync(record.StoredFileName, cancellationToken);
 
         _notifier.Publish(new ChangeEvent(ChangeResources.Assets, ChangeActions.Deleted, fileName));
 
         return NoContent();
     }
+
+    private Task<AssetRecord?> FindAsync(string fileName, CancellationToken cancellationToken) =>
+        _database.Assets.FirstOrDefaultAsync(asset => asset.StoredFileName == fileName, cancellationToken);
 }

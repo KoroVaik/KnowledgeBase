@@ -1,4 +1,4 @@
-namespace Backend.Controllers.Assets.Contracts;
+﻿namespace Backend.Controllers.Assets.Contracts;
 
 public sealed record UploadedAssetResponse(
     string Id,
@@ -6,4 +6,4 @@ public sealed record UploadedAssetResponse(
     string OriginalFileName,
     string ContentType,
     long SizeBytes,
-    DateTimeOffset UploadedAtUtc);
+    DateTime UploadedAtUtc);

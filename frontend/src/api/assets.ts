@@ -13,8 +13,9 @@ export interface UploadedAsset {
 /** Mirrors AssetSummaryResponse in backend/Controllers/Assets. */
 export interface AssetSummary {
   storedFileName: string
+  originalFileName: string
   sizeBytes: number
-  lastModifiedUtc: string
+  uploadedAtUtc: string
 }
 
 /**

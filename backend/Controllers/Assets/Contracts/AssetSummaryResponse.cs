@@ -1,6 +1,7 @@
-namespace Backend.Controllers.Assets.Contracts;
+﻿namespace Backend.Controllers.Assets.Contracts;
 
 public sealed record AssetSummaryResponse(
     string StoredFileName,
+    string OriginalFileName,
     long SizeBytes,
-    DateTimeOffset LastModifiedUtc);
+    DateTime UploadedAtUtc);
