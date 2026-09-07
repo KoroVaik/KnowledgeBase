@@ -9,9 +9,10 @@ type UploadState =
 
 interface FileUploadFormProps {
   onUploaded: () => void
+  uploadEnabled: boolean
 }
 
-export function FileUploadForm({ onUploaded }: FileUploadFormProps) {
+export function FileUploadForm({ onUploaded, uploadEnabled }: FileUploadFormProps) {
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [state, setState] = useState<UploadState>({ status: 'idle' })
 
@@ -51,9 +52,12 @@ export function FileUploadForm({ onUploaded }: FileUploadFormProps) {
   }
 
   const isUploading = state.status === 'uploading'
+  const isBlocked = isUploading || !uploadEnabled
 
   return (
     <section className="upload">
+      {!uploadEnabled && <p className="upload-disabled">Uploading is turned off.</p>}
+
       <form className="upload-form" onSubmit={handleSubmit}>
         <label htmlFor="note-file">Document or image</label>
         <input
@@ -61,9 +65,9 @@ export function FileUploadForm({ onUploaded }: FileUploadFormProps) {
           ref={inputRef}
           type="file"
           onChange={handleFileChange}
-          disabled={isUploading}
+          disabled={isBlocked}
         />
-        <button type="submit" disabled={selectedFile === null || isUploading}>
+        <button type="submit" disabled={selectedFile === null || isBlocked}>
           {isUploading ? 'Uploading…' : 'Upload'}
         </button>
       </form>

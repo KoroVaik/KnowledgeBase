@@ -10,9 +10,10 @@ type ListState =
 interface AssetListProps {
   /** Changing this reloads the list - the upload form bumps it after a successful upload. */
   reloadToken: number
+  downloadEnabled: boolean
 }
 
-export function AssetList({ reloadToken }: AssetListProps) {
+export function AssetList({ reloadToken, downloadEnabled }: AssetListProps) {
   const [state, setState] = useState<ListState>({ status: 'loading' })
   const [deletingFileName, setDeletingFileName] = useState<string | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
@@ -90,9 +91,13 @@ export function AssetList({ reloadToken }: AssetListProps) {
         <ul className="assets-list">
           {state.assets.map((asset) => (
             <li className="asset" key={asset.storedFileName}>
-              <a className="asset-name" href={assetDownloadUrl(asset.storedFileName)}>
-                {asset.storedFileName}
-              </a>
+              {downloadEnabled ? (
+                <a className="asset-name" href={assetDownloadUrl(asset.storedFileName)}>
+                  {asset.storedFileName}
+                </a>
+              ) : (
+                <span className="asset-name">{asset.storedFileName}</span>
+              )}
               <span className="asset-meta">
                 {formatSize(asset.sizeBytes)} · {new Date(asset.lastModifiedUtc).toLocaleString()}
               </span>

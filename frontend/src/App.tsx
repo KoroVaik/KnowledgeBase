@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import { fetchCurrentUser, logout } from './api/auth'
 import type { CurrentUser } from './api/auth'
+import { fetchFeatures } from './api/features'
+import type { FeatureFlags } from './api/features'
 import { AssetList } from './components/AssetList'
 import { FileUploadForm } from './components/FileUploadForm'
 import { LoginForm } from './components/LoginForm'
@@ -15,6 +17,12 @@ function App() {
   const [auth, setAuth] = useState<AuthState>({ status: 'checking' })
   // The form and the list are siblings, so what they share lives in their parent.
   const [uploadCount, setUploadCount] = useState(0)
+  // Until the flags arrive, assume the feature is off: showing a working control that
+  // the server then refuses is worse than showing a disabled one for a moment.
+  const [features, setFeatures] = useState<FeatureFlags>({
+    uploadEnabled: false,
+    downloadEnabled: false,
+  })
 
   useEffect(() => {
     let cancelled = false
@@ -29,6 +37,16 @@ function App() {
         if (!cancelled) {
           setAuth({ status: 'anonymous' })
         }
+      })
+
+    void fetchFeatures()
+      .then((flags) => {
+        if (!cancelled) {
+          setFeatures(flags)
+        }
+      })
+      .catch(() => {
+        // Leave every flag off - the server refuses a switched-off feature anyway.
       })
 
     return () => {
@@ -69,8 +87,11 @@ function App() {
           <p className="subtitle">
             Upload a file to <code>backend/data/assets</code>. AI processing is not wired up yet.
           </p>
-          <FileUploadForm onUploaded={() => setUploadCount((count) => count + 1)} />
-          <AssetList reloadToken={uploadCount} />
+          <FileUploadForm
+            onUploaded={() => setUploadCount((count) => count + 1)}
+            uploadEnabled={features.uploadEnabled}
+          />
+          <AssetList reloadToken={uploadCount} downloadEnabled={features.downloadEnabled} />
         </>
       )}
     </main>

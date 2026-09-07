@@ -171,3 +171,8 @@
   margin-bottom: 16px;
   color: #dc2626;
 }
+
+.upload-disabled {
+  margin-bottom: 12px;
+  color: var(--text);
+}

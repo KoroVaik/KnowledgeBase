@@ -1,4 +1,5 @@
 using Backend.Controllers.Assets.Contracts;
+using Backend.Infrastructure.Features;
 using Backend.Infrastructure.Storage;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -20,11 +21,18 @@ public sealed class AssetsController : ControllerBase
 
     private readonly IAssetStorage _storage;
     private readonly StorageOptions _options;
+    private readonly FeatureOptions _features;
 
-    public AssetsController(IAssetStorage storage, IOptions<StorageOptions> options)
+    // IOptionsSnapshot, not IOptions: it is re-read per request, so a flag flipped in
+    // configuration takes effect without a restart.
+    public AssetsController(
+        IAssetStorage storage,
+        IOptions<StorageOptions> options,
+        IOptionsSnapshot<FeatureOptions> features)
     {
         _storage = storage;
         _options = options.Value;
+        _features = features.Value;
     }
 
     /// <summary>
@@ -40,12 +48,20 @@ public sealed class AssetsController : ControllerBase
     /// <response code="201">The file is stored.</response>
     /// <response code="400">The file is empty or over the size limit.</response>
     /// <response code="401">No session, or it has expired.</response>
+    /// <response code="403">Uploading is switched off by the Features:UploadEnabled flag.</response>
     [HttpPost]
     [ProducesResponseType(typeof(UploadedAssetResponse), StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     public async Task<IActionResult> Upload(IFormFile file, CancellationToken cancellationToken)
     {
+        // A disabled control in the UI is a hint, not a restriction: the refusal has to live here.
+        if (!_features.UploadEnabled)
+        {
+            return StatusCode(StatusCodes.Status403Forbidden, new { error = "Uploading is turned off." });
+        }
+
         if (file.Length == 0)
         {
             return BadRequest(new { error = "File is empty." });
@@ -104,14 +120,21 @@ public sealed class AssetsController : ControllerBase
     /// </remarks>
     /// <response code="200">The file.</response>
     /// <response code="401">No session, or it has expired.</response>
+    /// <response code="403">Downloading is switched off by the Features:DownloadEnabled flag.</response>
     /// <response code="404">No such file.</response>
     [HttpGet("{fileName}")]
     [Produces("application/octet-stream")]
     [ProducesResponseType(typeof(FileResult), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> Download(string fileName, CancellationToken cancellationToken)
     {
+        if (!_features.DownloadEnabled)
+        {
+            return StatusCode(StatusCodes.Status403Forbidden, new { error = "Downloading is turned off." });
+        }
+
         var content = await _storage.OpenReadAsync(fileName, cancellationToken);
 
         if (content is null)
