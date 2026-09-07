@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { assetDownloadUrl, deleteAsset, fetchAssets } from '../api/assets'
 import type { AssetSummary } from '../api/assets'
+import { useResourceChanges } from '../hooks/useResourceChanges'
 
 type ListState =
   | { status: 'loading' }
@@ -8,7 +9,11 @@ type ListState =
   | { status: 'error'; message: string }
 
 interface AssetListProps {
-  /** Changing this reloads the list - the upload form bumps it after a successful upload. */
+  /**
+   * Changing this reloads the list - the upload form bumps it after a successful upload.
+   * Kept even though the server announces that upload over the change stream too: it shows
+   * the new row without waiting for the round trip, and it still works if the stream is down.
+   */
   reloadToken: number
   downloadEnabled: boolean
 }
@@ -18,29 +23,38 @@ export function AssetList({ reloadToken, downloadEnabled }: AssetListProps) {
   const [deletingFileName, setDeletingFileName] = useState<string | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
 
-  useEffect(() => {
-    // A reload started earlier can finish later; the flag keeps its response from
-    // overwriting a newer one.
-    let cancelled = false
+  // Reloads are no longer triggered by this component alone - the change stream fires them
+  // too, and two can be in flight at once. Only the newest one may write to the state.
+  const latestReload = useRef(0)
+
+  const reload = useCallback(() => {
+    const reloadId = ++latestReload.current
 
     // A reload deliberately leaves the current rows on screen instead of flipping back to
     // "Loading…" - the list would flash on every upload.
     void fetchAssets()
       .then((assets) => {
-        if (!cancelled) {
+        if (reloadId === latestReload.current) {
           setState({ status: 'ready', assets })
         }
       })
       .catch((error: unknown) => {
-        if (!cancelled) {
-          setState({ status: 'error', message: messageOf(error) })
+        if (reloadId !== latestReload.current) {
+          return
         }
-      })
 
-    return () => {
-      cancelled = true
-    }
-  }, [reloadToken])
+        // A reload nobody asked for is allowed to fail quietly: rows already on screen are
+        // still the best answer available, and blanking them on a flaky connection would be
+        // worse than showing them a minute stale.
+        setState((current) =>
+          current.status === 'ready' ? current : { status: 'error', message: messageOf(error) },
+        )
+      })
+  }, [])
+
+  useEffect(reload, [reload, reloadToken])
+
+  useResourceChanges('assets', reload)
 
   async function handleDelete(fileName: string) {
     if (!window.confirm(`Delete ${fileName}? This cannot be undone.`)) {

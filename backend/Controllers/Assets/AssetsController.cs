@@ -1,5 +1,6 @@
 using Backend.Controllers.Assets.Contracts;
 using Backend.Infrastructure.Features;
+using Backend.Infrastructure.RealTime;
 using Backend.Infrastructure.Storage;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -20,6 +21,7 @@ public sealed class AssetsController : ControllerBase
     private static readonly FileExtensionContentTypeProvider ContentTypes = new();
 
     private readonly IAssetStorage _storage;
+    private readonly IChangeNotifier _notifier;
     private readonly StorageOptions _options;
     private readonly FeatureOptions _features;
 
@@ -27,10 +29,12 @@ public sealed class AssetsController : ControllerBase
     // configuration takes effect without a restart.
     public AssetsController(
         IAssetStorage storage,
+        IChangeNotifier notifier,
         IOptions<StorageOptions> options,
         IOptionsSnapshot<FeatureOptions> features)
     {
         _storage = storage;
+        _notifier = notifier;
         _options = options.Value;
         _features = features.Value;
     }
@@ -82,6 +86,8 @@ public sealed class AssetsController : ControllerBase
             file.ContentType,
             file.Length,
             DateTimeOffset.UtcNow);
+
+        _notifier.Publish(new ChangeEvent(ChangeResources.Assets, ChangeActions.Created, stored.FileName));
 
         return CreatedAtAction(nameof(Download), new { fileName = stored.FileName }, response);
     }
@@ -163,6 +169,15 @@ public sealed class AssetsController : ControllerBase
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> Delete(string fileName, CancellationToken cancellationToken) =>
-        await _storage.DeleteAsync(fileName, cancellationToken) ? NoContent() : NotFound();
+    public async Task<IActionResult> Delete(string fileName, CancellationToken cancellationToken)
+    {
+        if (!await _storage.DeleteAsync(fileName, cancellationToken))
+        {
+            return NotFound();
+        }
+
+        _notifier.Publish(new ChangeEvent(ChangeResources.Assets, ChangeActions.Deleted, fileName));
+
+        return NoContent();
+    }
 }

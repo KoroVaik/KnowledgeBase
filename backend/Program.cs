@@ -1,6 +1,7 @@
 using Backend.Controllers.Auth.Configuration;
 using Backend.Infrastructure.Features;
 using Backend.Infrastructure.Hosting;
+using Backend.Infrastructure.RealTime;
 using Backend.Infrastructure.Storage;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -21,6 +22,7 @@ builder.Services.AddProxyAwareHosting();
 builder.Services.AddFeatureFlags(builder.Configuration);
 builder.Services.AddAuthFeature(builder.Configuration);
 builder.Services.AddAssetStorage(builder.Configuration);
+builder.Services.AddRealTimeUpdates();
 
 var app = builder.Build();
 
