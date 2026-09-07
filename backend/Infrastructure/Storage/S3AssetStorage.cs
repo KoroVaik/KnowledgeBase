@@ -30,6 +30,11 @@ public sealed class S3AssetStorage : IAssetStorage
                 BucketName = _bucketName,
                 Key = key,
                 InputStream = content,
+
+                // Cloudflare R2 answers chunked payload signing with
+                // "STREAMING-AWS4-HMAC-SHA256-PAYLOAD not implemented"; one signature over the
+                // whole body is understood by every S3-compatible provider.
+                UseChunkEncoding = false,
             },
             cancellationToken);
 
