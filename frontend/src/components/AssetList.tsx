@@ -87,37 +87,26 @@ export function AssetList({ reloadToken }: AssetListProps) {
       {state.status === 'ready' && state.assets.length === 0 && <p>Nothing uploaded yet.</p>}
 
       {state.status === 'ready' && state.assets.length > 0 && (
-        <table className="assets-table">
-          <thead>
-            <tr>
-              <th>File</th>
-              <th>Size</th>
-              <th>Uploaded</th>
-              <th />
-            </tr>
-          </thead>
-          <tbody>
-            {state.assets.map((asset) => (
-              <tr key={asset.storedFileName}>
-                <td>
-                  <a href={assetDownloadUrl(asset.storedFileName)}>{asset.storedFileName}</a>
-                </td>
-                <td>{formatSize(asset.sizeBytes)}</td>
-                <td>{new Date(asset.lastModifiedUtc).toLocaleString()}</td>
-                <td>
-                  <button
-                    type="button"
-                    className="assets-delete"
-                    onClick={() => void handleDelete(asset.storedFileName)}
-                    disabled={deletingFileName === asset.storedFileName}
-                  >
-                    {deletingFileName === asset.storedFileName ? 'Deleting…' : 'Delete'}
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <ul className="assets-list">
+          {state.assets.map((asset) => (
+            <li className="asset" key={asset.storedFileName}>
+              <a className="asset-name" href={assetDownloadUrl(asset.storedFileName)}>
+                {asset.storedFileName}
+              </a>
+              <span className="asset-meta">
+                {formatSize(asset.sizeBytes)} · {new Date(asset.lastModifiedUtc).toLocaleString()}
+              </span>
+              <button
+                type="button"
+                className="asset-delete"
+                onClick={() => void handleDelete(asset.storedFileName)}
+                disabled={deletingFileName === asset.storedFileName}
+              >
+                {deletingFileName === asset.storedFileName ? 'Deleting…' : 'Delete'}
+              </button>
+            </li>
+          ))}
+        </ul>
       )}
     </section>
   )

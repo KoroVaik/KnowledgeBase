@@ -75,6 +75,9 @@ h2 {
 
 h1 {
   font-size: 56px;
+  /* A percentage line-height on body inherits as its computed px value, not as a ratio,
+     so without this the 36px heading wraps onto 23px lines and overlaps itself. */
+  line-height: 110%;
   letter-spacing: -1.68px;
   margin: 32px 0;
   @media (max-width: 1024px) {

@@ -114,34 +114,37 @@
   font-size: 20px;
 }
 
-.assets-table {
-  width: 100%;
-  border-collapse: collapse;
+.assets-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
 }
 
-.assets-table th,
-.assets-table td {
-  padding: 10px 12px;
-  text-align: left;
+/* Three columns on a wide screen, so it still reads like a table; on a phone the name
+   takes its own row and the file is not asked to be narrower than its own text. */
+.asset {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  align-items: center;
+  gap: 4px 16px;
+  padding: 12px 0;
   border-bottom: 1px solid var(--border);
+}
+
+.asset-name {
+  font: 14px/150% var(--mono);
+  overflow-wrap: anywhere;
+}
+
+.asset-meta {
+  font-size: 14px;
   white-space: nowrap;
 }
 
-.assets-table th {
-  font-size: 14px;
-  font-weight: 500;
-}
-
-.assets-table td:first-child {
-  font: 14px/150% var(--mono);
-  white-space: normal;
-  word-break: break-all;
-}
-
-.assets-delete {
+.asset-delete {
   font: inherit;
   font-size: 14px;
-  padding: 4px 12px;
+  padding: 8px 16px;
   border-radius: 6px;
   cursor: pointer;
   color: var(--text);
@@ -149,9 +152,19 @@
   border: 1px solid var(--border);
 }
 
-.assets-delete:disabled {
+.asset-delete:disabled {
   cursor: not-allowed;
   opacity: 0.5;
+}
+
+@media (max-width: 600px) {
+  .asset {
+    grid-template-columns: 1fr auto;
+  }
+
+  .asset-name {
+    grid-column: 1 / -1;
+  }
 }
 
 .assets-error {
