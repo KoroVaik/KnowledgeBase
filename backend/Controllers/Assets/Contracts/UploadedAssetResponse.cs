@@ -1,4 +1,4 @@
-namespace Backend.Controllers.Notes.Contracts;
+namespace Backend.Controllers.Assets.Contracts;
 
 public sealed record UploadedAssetResponse(
     string Id,

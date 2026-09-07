@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react'
 import type { ChangeEvent, FormEvent } from 'react'
-import { uploadNoteFile } from '../api/notes'
-import type { UploadedAsset } from '../api/notes'
+import { uploadAsset } from '../api/assets'
+import type { UploadedAsset } from '../api/assets'
 
 type UploadState =
   | { status: 'idle' }
@@ -32,7 +32,7 @@ export function FileUploadForm() {
     setState({ status: 'uploading' })
 
     try {
-      const asset = await uploadNoteFile(selectedFile)
+      const asset = await uploadAsset(selectedFile)
       setState({ status: 'success', asset })
       setSelectedFile(null)
       if (inputRef.current !== null) {
