@@ -1,4 +1,4 @@
-import { readErrorMessage } from './http'
+import { apiFetch, readErrorMessage } from './http'
 
 export interface CurrentUser {
   name: string
@@ -6,7 +6,7 @@ export interface CurrentUser {
 
 /** Returns null when nobody is signed in, so callers do not have to inspect status codes. */
 export async function fetchCurrentUser(): Promise<CurrentUser | null> {
-  const response = await fetch('/api/auth/me')
+  const response = await apiFetch('/api/auth/me')
 
   if (response.status === 401) {
     return null
@@ -20,7 +20,7 @@ export async function fetchCurrentUser(): Promise<CurrentUser | null> {
 }
 
 export async function login(password: string): Promise<CurrentUser> {
-  const response = await fetch('/api/auth/login', {
+  const response = await apiFetch('/api/auth/login', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ password }),
@@ -34,7 +34,7 @@ export async function login(password: string): Promise<CurrentUser> {
 }
 
 export async function logout(): Promise<void> {
-  const response = await fetch('/api/auth/logout', { method: 'POST' })
+  const response = await apiFetch('/api/auth/logout', { method: 'POST' })
 
   if (!response.ok) {
     throw new Error(await readErrorMessage(response, 'Sign out failed'))

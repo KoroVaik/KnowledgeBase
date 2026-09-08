@@ -1,4 +1,4 @@
-import { readErrorMessage } from './http'
+import { apiFetch, readErrorMessage } from './http'
 
 /** Mirrors UploadedAssetResponse in backend/Controllers/Assets (ASP.NET serialises camelCase). */
 export interface UploadedAsset {
@@ -31,7 +31,7 @@ export async function uploadAsset(file: File): Promise<UploadedAsset> {
   // The field name must stay "file" - it binds to the IFormFile parameter name.
   formData.append('file', file)
 
-  const response = await fetch('/api/assets', {
+  const response = await apiFetch('/api/assets', {
     method: 'POST',
     // No Content-Type header on purpose: the browser has to set it itself so the
     // multipart boundary is included.
@@ -46,7 +46,7 @@ export async function uploadAsset(file: File): Promise<UploadedAsset> {
 }
 
 export async function fetchAssets(): Promise<AssetSummary[]> {
-  const response = await fetch('/api/assets')
+  const response = await apiFetch('/api/assets')
 
   if (!response.ok) {
     throw new Error(await readErrorMessage(response, 'Could not load the files'))
@@ -56,7 +56,7 @@ export async function fetchAssets(): Promise<AssetSummary[]> {
 }
 
 export async function deleteAsset(storedFileName: string): Promise<void> {
-  const response = await fetch(assetDownloadUrl(storedFileName), { method: 'DELETE' })
+  const response = await apiFetch(assetDownloadUrl(storedFileName), { method: 'DELETE' })
 
   if (!response.ok) {
     throw new Error(await readErrorMessage(response, 'Delete failed'))

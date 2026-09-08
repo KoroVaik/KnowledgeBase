@@ -6,17 +6,22 @@ import type { FeatureFlags } from './api/features'
 import { AssetList } from './components/AssetList'
 import { FileUploadForm } from './components/FileUploadForm'
 import { LoginForm } from './components/LoginForm'
+import { useConnectionStatus } from './hooks/useConnectionStatus'
 import './App.css'
 
 type AuthState =
   | { status: 'checking' }
   | { status: 'anonymous' }
   | { status: 'authenticated'; user: CurrentUser }
+  | { status: 'unreachable'; message: string }
 
 function App() {
   const [auth, setAuth] = useState<AuthState>({ status: 'checking' })
   // The form and the list are siblings, so what they share lives in their parent.
   const [uploadCount, setUploadCount] = useState(0)
+  // Bumped by "Try again": the load lives in an effect, and a new value is how a button
+  // outside it asks for another run.
+  const [attempt, setAttempt] = useState(0)
   // Until the flags arrive, assume the feature is off: showing a working control that
   // the server then refuses is worse than showing a disabled one for a moment.
   const [features, setFeatures] = useState<FeatureFlags>({
@@ -24,6 +29,8 @@ function App() {
     downloadEnabled: false,
     googleSignInEnabled: false,
   })
+
+  const connection = useConnectionStatus()
 
   useEffect(() => {
     let cancelled = false
@@ -34,9 +41,13 @@ function App() {
           setAuth(user === null ? { status: 'anonymous' } : { status: 'authenticated', user })
         }
       })
-      .catch(() => {
+      .catch((error: unknown) => {
         if (!cancelled) {
-          setAuth({ status: 'anonymous' })
+          // Not `anonymous`: the one case that means "nobody is signed in" is a 401, and
+          // fetchCurrentUser answers that with null. Everything else leaves the session
+          // genuinely unknown, and the sign-in form would be a claim we cannot make - with
+          // the API down there is nothing to sign in to.
+          setAuth({ status: 'unreachable', message: messageOf(error) })
         }
       })
 
@@ -53,7 +64,14 @@ function App() {
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [attempt])
+
+  // The state is reset here rather than inside the effect: the effect synchronises with the
+  // server, and the click is what actually put the page back into "checking".
+  function retry() {
+    setAuth({ status: 'checking' })
+    setAttempt((count) => count + 1)
+  }
 
   async function handleSignOut() {
     try {
@@ -74,7 +92,24 @@ function App() {
         )}
       </header>
 
+      {connection === 'offline' && (
+        // role="status", not "alert": this is not the answer to something the user just did,
+        // and a screen reader should finish what it is saying first.
+        <p className="connection-banner" role="status">
+          No connection to the server — reconnecting. What you see may be out of date.
+        </p>
+      )}
+
       {auth.status === 'checking' && <p className="subtitle">Checking the session…</p>}
+
+      {auth.status === 'unreachable' && (
+        <>
+          <p className="subtitle">{auth.message}. The page cannot show anything until it answers.</p>
+          <button type="button" className="retry" onClick={retry}>
+            Try again
+          </button>
+        </>
+      )}
 
       {auth.status === 'anonymous' && (
         <>
@@ -100,6 +135,10 @@ function App() {
       )}
     </main>
   )
+}
+
+function messageOf(error: unknown): string {
+  return error instanceof Error ? error.message : 'Unexpected error'
 }
 
 export default App

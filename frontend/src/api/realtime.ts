@@ -9,6 +9,14 @@ export interface ResourceChange {
  *  never queued, so the listener has to re-read its collection. */
 export type ChangeListener = (change: ResourceChange | null) => void
 
+/**
+ * `paused` is not a failure: the stream is deliberately closed while nobody is listening,
+ * the tab is hidden or the user has gone idle. Only `offline` means the API did not answer.
+ */
+export type ConnectionStatus = 'online' | 'offline' | 'paused'
+
+export type ConnectionListener = (status: ConnectionStatus) => void
+
 /** Long enough to sit out an Alt-Tab without tearing the stream down and building it up again. */
 const HIDDEN_GRACE_MS = 30_000
 
@@ -22,6 +30,9 @@ const REOPEN_MAX_MS = 60_000
 const ACTIVITY_EVENTS = ['pointerdown', 'pointermove', 'keydown', 'scroll', 'wheel'] as const
 
 const listeners = new Map<string, Set<ChangeListener>>()
+const connectionListeners = new Set<ConnectionListener>()
+
+let status: ConnectionStatus = 'paused'
 
 let source: EventSource | null = null
 let hasConnected = false
@@ -57,6 +68,28 @@ export function subscribeToChanges(resource: string, listener: ChangeListener): 
 }
 
 /**
+ * Reports whether the stream is up. The listener is called at once with the current status,
+ * so a component that mounts into an already broken connection still learns about it.
+ */
+export function subscribeToConnection(listener: ConnectionListener): () => void {
+  connectionListeners.add(listener)
+  listener(status)
+
+  return () => {
+    connectionListeners.delete(listener)
+  }
+}
+
+function setStatus(next: ConnectionStatus) {
+  if (next === status) {
+    return
+  }
+
+  status = next
+  connectionListeners.forEach((listener) => listener(next))
+}
+
+/**
  * Opens or closes the stream to match the three conditions worth holding one open for:
  * somebody is listening, the tab is on screen, and the user is still around. Every event
  * handler below just changes one of those and calls back in here.
@@ -67,7 +100,9 @@ function sync() {
 
   if (wanted && source === null && reopenTimer === undefined) {
     open()
-  } else if (!wanted && source !== null) {
+  } else if (!wanted) {
+    // Also when there is no stream to close: a reconnect may be pending, and a stream nobody
+    // wants must not report itself offline while it waits out a backoff nobody is watching.
     close()
   }
 }
@@ -77,6 +112,7 @@ function open() {
 
   source.onopen = () => {
     reopenDelayMs = REOPEN_MIN_MS
+    setStatus('online')
 
     // Skipped on the very first connection: a component loads its own data when it mounts,
     // and this would only duplicate that request.
@@ -96,9 +132,12 @@ function open() {
   }
 
   source.onerror = () => {
-    // A dropped connection the browser retries on its own (readyState stays CONNECTING).
-    // CLOSED means it refuses to: an HTTP error, typically a 502 while the API restarts or
-    // an expired session.
+    // Offline either way: CONNECTING means the browser is retrying on its own, and until it
+    // succeeds the page is just as cut off as on a hard failure.
+    setStatus('offline')
+
+    // CLOSED means the browser refuses to retry: an HTTP error, typically a 502 while the
+    // API restarts or an expired session.
     if (source?.readyState === EventSource.CLOSED) {
       reopenLater()
     }
@@ -111,6 +150,7 @@ function close() {
   clearTimer(reopenTimer)
   reopenTimer = undefined
   reopenDelayMs = REOPEN_MIN_MS
+  setStatus('paused')
 }
 
 function reopenLater() {

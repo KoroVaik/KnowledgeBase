@@ -1,4 +1,4 @@
-import { readErrorMessage } from './http'
+import { apiFetch, readErrorMessage } from './http'
 
 /** Mirrors FeatureFlagsResponse in backend/Controllers/Features. */
 export interface FeatureFlags {
@@ -8,7 +8,7 @@ export interface FeatureFlags {
 }
 
 export async function fetchFeatures(): Promise<FeatureFlags> {
-  const response = await fetch('/api/features')
+  const response = await apiFetch('/api/features')
 
   if (!response.ok) {
     throw new Error(await readErrorMessage(response, 'Could not read the feature flags'))
