@@ -56,7 +56,6 @@ export function AssetList({ reloadToken, downloadEnabled }: AssetListProps) {
   useEffect(reload, [reload, reloadToken])
 
   useResourceChanges('assets', reload)
-  useResourceChanges('notes', reload)
 
   async function handleDownload(asset: AssetSummary) {
     setActionError(null)
