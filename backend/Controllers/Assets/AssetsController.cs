@@ -21,35 +21,26 @@ namespace Backend.Controllers.Assets;
 [Route("api/[controller]")]
 [Authorize]
 [Produces("application/json")]
-public sealed class AssetsController : ControllerBase
+// IOptionsSnapshot, not IOptions: it is re-read per request, so a flag flipped in
+// configuration takes effect without a restart.
+//
+// The signer is optional for the same reason it is in FeaturesController: local storage
+// registers none, and a required parameter would break every action, not just signing.
+public sealed class AssetsController(
+    IAssetStorage storage,
+    KnowledgeBaseDbContext database,
+    IChangeNotifier notifier,
+    IOptions<StorageOptions> options,
+    IOptionsSnapshot<FeatureOptions> features,
+    IAssetLinkSigner? signer = null)
+    : ControllerBase
 {
-    private readonly IAssetStorage _storage;
-    private readonly KnowledgeBaseDbContext _database;
-    private readonly IChangeNotifier _notifier;
-    private readonly StorageOptions _options;
-    private readonly FeatureOptions _features;
-    private readonly IAssetLinkSigner? _signer;
-
-    // IOptionsSnapshot, not IOptions: it is re-read per request, so a flag flipped in
-    // configuration takes effect without a restart.
-    //
-    // The signer is optional for the same reason it is in FeaturesController: local storage
-    // registers none, and a required parameter would break every action, not just signing.
-    public AssetsController(
-        IAssetStorage storage,
-        KnowledgeBaseDbContext database,
-        IChangeNotifier notifier,
-        IOptions<StorageOptions> options,
-        IOptionsSnapshot<FeatureOptions> features,
-        IAssetLinkSigner? signer = null)
-    {
-        _storage = storage;
-        _database = database;
-        _notifier = notifier;
-        _options = options.Value;
-        _features = features.Value;
-        _signer = signer;
-    }
+    private readonly IAssetStorage _storage = storage;
+    private readonly KnowledgeBaseDbContext _database = database;
+    private readonly IChangeNotifier _notifier = notifier;
+    private readonly StorageOptions _options = options.Value;
+    private readonly FeatureOptions _features = features.Value;
+    private readonly IAssetLinkSigner? _signer = signer;
 
     /// <summary>
     /// Stores an uploaded file and returns its metadata.

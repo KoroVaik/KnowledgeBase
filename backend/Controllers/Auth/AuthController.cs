@@ -19,21 +19,13 @@ namespace Backend.Controllers.Auth;
 [Route("api/[controller]")]
 [Authorize]
 [Produces("application/json")]
-public sealed class AuthController : ControllerBase
+public sealed class AuthController(
+    ILoginAttemptLimiter limiter,
+    IOptions<AuthOptions> options,
+    IOptionsSnapshot<FeatureOptions> features)
+    : ControllerBase
 {
-    private readonly ILoginAttemptLimiter _limiter;
-    private readonly AuthOptions _options;
-    private readonly IOptionsSnapshot<FeatureOptions> _features;
-
-    public AuthController(
-        ILoginAttemptLimiter limiter,
-        IOptions<AuthOptions> options,
-        IOptionsSnapshot<FeatureOptions> features)
-    {
-        _limiter = limiter;
-        _options = options.Value;
-        _features = features;
-    }
+    private readonly AuthOptions _options = options.Value;
 
     /// <summary>
     /// Signs the owner in and issues the session cookie.
@@ -54,7 +46,7 @@ public sealed class AuthController : ControllerBase
 
         // Checked before the password is verified, so a client that has run out of attempts gets
         // no guessing feedback at all.
-        if (_limiter.IsBlocked(client))
+        if (limiter.IsBlocked(client))
         {
             return StatusCode(
                 StatusCodes.Status429TooManyRequests,
@@ -63,7 +55,7 @@ public sealed class AuthController : ControllerBase
 
         if (!string.Equals(request.Password, _options.Password, StringComparison.Ordinal))
         {
-            _limiter.RecordFailure(client);
+            limiter.RecordFailure(client);
 
             return Unauthorized(new { error = "Invalid password." });
         }
@@ -96,7 +88,7 @@ public sealed class AuthController : ControllerBase
     public IActionResult StartGoogleSignIn()
     {
         // Checked here too, not only in the UI: a flag that merely hides a button is decoration.
-        if (!_features.Value.GoogleSignInEnabled || !_options.Google.IsConfigured)
+        if (!features.Value.GoogleSignInEnabled || !_options.Google.IsConfigured)
         {
             return NotFound();
         }

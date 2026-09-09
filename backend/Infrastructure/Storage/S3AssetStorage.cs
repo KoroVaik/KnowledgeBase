@@ -5,16 +5,10 @@ using Microsoft.Extensions.Options;
 
 namespace Backend.Infrastructure.Storage;
 
-public sealed class S3AssetStorage : IAssetStorage
+public sealed class S3AssetStorage(IAmazonS3 client, IOptions<S3StorageOptions> options) : IAssetStorage
 {
-    private readonly IAmazonS3 _client;
-    private readonly string _bucketName;
-
-    public S3AssetStorage(IAmazonS3 client, IOptions<S3StorageOptions> options)
-    {
-        _client = client;
-        _bucketName = options.Value.BucketName;
-    }
+    private readonly IAmazonS3 _client = client;
+    private readonly string _bucketName = options.Value.BucketName;
 
     public async Task<StoredAsset> SaveAsync(
         Stream content,

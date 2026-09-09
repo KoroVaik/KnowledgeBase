@@ -13,24 +13,18 @@ namespace Backend.Controllers.Features;
 [ApiController]
 [Route("api/[controller]")]
 [Produces("application/json")]
-public sealed class FeaturesController : ControllerBase
+// The signer is only in the container when the storage provider is a bucket, so the
+// parameter needs a default - without one the container would refuse to build this
+// controller at all on a local-storage instance.
+public sealed class FeaturesController(
+    IOptionsSnapshot<FeatureOptions> features,
+    IOptions<AuthOptions> auth,
+    IAssetLinkSigner? signer = null)
+    : ControllerBase
 {
-    private readonly IOptionsSnapshot<FeatureOptions> _features;
-    private readonly AuthOptions _auth;
-    private readonly IAssetLinkSigner? _signer;
-
-    // The signer is only in the container when the storage provider is a bucket, so the
-    // parameter needs a default - without one the container would refuse to build this
-    // controller at all on a local-storage instance.
-    public FeaturesController(
-        IOptionsSnapshot<FeatureOptions> features,
-        IOptions<AuthOptions> auth,
-        IAssetLinkSigner? signer = null)
-    {
-        _features = features;
-        _auth = auth.Value;
-        _signer = signer;
-    }
+    private readonly IOptionsSnapshot<FeatureOptions> _features = features;
+    private readonly AuthOptions _auth = auth.Value;
+    private readonly IAssetLinkSigner? _signer = signer;
 
     /// <summary>
     /// Returns the feature flags the UI has to respect.

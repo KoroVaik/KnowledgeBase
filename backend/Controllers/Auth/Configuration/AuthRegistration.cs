@@ -2,7 +2,6 @@
 using Backend.Controllers.Auth.Services;
 using Backend.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Authentication.Cookies;
-using Microsoft.AspNetCore.Authentication.Google;
 using Microsoft.AspNetCore.DataProtection;
 
 namespace Backend.Controllers.Auth.Configuration;

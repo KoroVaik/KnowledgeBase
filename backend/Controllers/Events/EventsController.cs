@@ -12,7 +12,7 @@ namespace Backend.Controllers.Events;
 [ApiController]
 [Route("api/[controller]")]
 [Authorize]
-public sealed class EventsController : ControllerBase
+public sealed class EventsController(IChangeNotifier notifier) : ControllerBase
 {
     // Long enough to stay cheap, short enough to beat the idle timeout of a proxy or a mobile
     // network - those start dropping a silent connection at about a minute.
@@ -21,12 +21,7 @@ public sealed class EventsController : ControllerBase
     // Web defaults, so the payload is camelCase like every other response here.
     private static readonly JsonSerializerOptions EventJson = new(JsonSerializerDefaults.Web);
 
-    private readonly IChangeNotifier _notifier;
-
-    public EventsController(IChangeNotifier notifier)
-    {
-        _notifier = notifier;
-    }
+    private readonly IChangeNotifier _notifier = notifier;
 
     /// <summary>
     /// Streams change events until the caller goes away (Server-Sent Events).
