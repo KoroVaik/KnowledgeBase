@@ -7,7 +7,7 @@
 
 - [x] Скафолд `frontend/` (React 19 + TypeScript + Vite)
 - [x] Скафолд `backend/` (ASP.NET Core 8 Web API, minimal API)
-- [x] `Backend.sln`
+- [x] `KnowledgeBase.sln` (Core + Api + Worker; спершу був один `Backend.csproj`)
 - [x] `strict: true` у `tsconfig.app.json`
 - [x] `.gitignore` для бекенду (`bin`, `obj`, `data`, налаштування IDE)
 - [x] Vite proxy `/api` → `localhost:5244` замість CORS: браузер бачить одну адресу
@@ -138,11 +138,13 @@
 - [ ] Валідація вхідних моделей (FluentValidation у `Controllers/<фіча>/Validators/`, як у
       робочому проєкті). Зараз валідувати нічого — `LoginRequest` має одне поле, і
       порівняння пароля саме собі перевірка. Актуально, коли з'явиться створення нотатки
-- [ ] Модель зберігання нотатки: YAML-frontmatter у `.md` (заголовок, категорія, дата, теги)
-- [ ] `GET /api/notes` — список нотаток
-- [ ] `GET /api/notes/{id}` — вміст однієї нотатки
-- [ ] Перегляд списку нотаток на фронтенді
-- [ ] Рендер `.md` у HTML для перегляду
+- [ ] Модель зберігання, `GET /api/notes`, перегляд на фронті — переїхало в розділ
+      «AI-пайплайн» нижче (нотатки народжує воркер, а не ручне створення)
+- [x] Рендер `.md` у HTML для перегляду — залежність `marked` (~12 KB gzip), виклик
+      `marked.parse(md, { async: false })` → рядок HTML → `dangerouslySetInnerHTML`.
+      Санітизацію (`DOMPurify`) свідомо не додано: застосунок однокористувацький, тіло
+      нотатки народжує локальна Ollama з файлів самого користувача — той самий рівень
+      довіри, що й решта рядків БД. Актуально, коли нотатки прийматимуть контент ззовні
 
 ## Автентифікація
 
@@ -528,12 +530,10 @@
       і невидимий для API. Потрібне прибирання — lifecycle-правило на бакеті або команда,
       що звіряє список об'єктів із таблицею. З'явилось разом із прямим upload'ом, раніше
       такого стану не існувало
-- [ ] **CORS на R2 — блокер деплою.** Прапорця `DirectAssetAccessEnabled` більше немає
-      (див. нижче): прямий доступ безумовний, тож перший же деплой після цього робить прямий
-      шлях єдиним у проді. Без CORS-правила на R2 (`PUT` з origin прода, заголовок
-      `content-type`) завантаження на проді впаде. Скачування йде `<iframe>`-навігацією,
-      CORS йому не треба. Правило ставиться тим самим `PutBucketCors`, що для Garage у
-      `infra/garage/` — лишається зробити для R2 і задеплоїти разом
+- [x] **CORS на R2 — зроблено** (за словами користувача, 2026-09-09). Правило `PUT` з
+      origin прода + заголовок `content-type` на бакеті R2, тим самим `PutBucketCors`,
+      що для Garage. Скачування йде `<iframe>`-навігацією, CORS йому не треба.
+      Наскрізний браузерний upload на проді ще не переганявся, але блокер знято
 - [ ] Прибрати мертву змінну `Features__DirectAssetAccessEnabled` зі змінних оточення
       Render. Прапорця в коді більше немає, ASP.NET невідомий ключ просто ігнорує —
       на поведінку не впливає, тож не блокер, а прибирання за собою
@@ -549,7 +549,8 @@
       перейменований на `uploadAsset`, старий `multipart`-`uploadAsset` і `<a href>`-скачування
       прибрані, `FileUploadForm` / `AssetList` більше не розгалужуються.
       `dotnet build` і `npm run build && npm run lint` чисті; прямий upload пройдено
-      кліком у браузері (див. пункт вище). У проді не запрацює, поки не зроблено CORS на R2
+      кліком у браузері локально (див. пункт вище). CORS на R2 зроблено — на проді
+      наскрізь ще не переганялось
 - [ ] Недоступне сховище тепер видно і на скачуванні: `/link` робить `HeadObject`, і при
       вимкненому ПК це буде `500`, а не зрозуміла відмова. Той самий пункт, що вже стоїть
       вище («фронт має пережити недоступність сховища»), просто з новим місцем прояву
@@ -579,9 +580,13 @@
       контейнер запущено як на Render (`-e PORT=10000`) і прогнано весь набір перевірок:
       `/` і `/notes` → 200 `text/html`, `/assets/*.js` → 200 `text/javascript`,
       `/health` → 200, `/api/does-not-exist` → 404, логін/`me`/upload → 200,
-      без cookie → 401. `/swagger` у Production → 404, як і має бути
+      без cookie → 401. `/swagger` у Production → 404, як і має бути.
+      Після розділення на проєкти: публікує `KnowledgeBase.Api`, entrypoint
+      `KnowledgeBase.Api.dll`, воркер у `.dockerignore`. `docker build` зелений
+      (~188 МБ); запуск контейнера з повним набором env наживо ще не переганявся
 - [x] Kestrel слухає порт зі змінної `PORT` (Render передає свій). Перевірено:
       `PORT=8099 dotnet Backend.dll` → `Now listening on: http://[::]:8099`
+      (тепер `KnowledgeBase.Api.dll`)
 - [x] `ForwardedHeaders` **перед** `UseHttpsRedirection` — за проксі інакше
       виходить цикл редіректів. Перевірено на Production-білді: запит із
       `X-Forwarded-Proto: https` віддає 200, без нього — 307 на `https://`.
@@ -630,7 +635,9 @@
 - [x] CI для фронтенду (`.github/workflows/frontend-ci.yml`: `npm ci`, lint, build) —
       зелений на GitHub (2026-09-06, за словами користувача; `gh` на машині немає)
 - [x] CI для бекенду (`.github/workflows/backend-ci.yml`: `dotnet restore` +
-      `build -c Release`) — зелений там само
+      `build -c Release`) — зелений там само. Після розділення на проєкти будує
+      `KnowledgeBase.sln` цілком (Core + Api + Worker) — воркер під наглядом CI без
+      окремого workflow
 - [ ] Додати `dotnet test` у backend-CI, коли з'явиться перший тест-проєкт
 - [ ] CD: `push у main → build + lint + test → зелено → curl Deploy Hook Render`.
       Саме так, а не Render auto-deploy: авто-деплой викотить і зламану збірку,
@@ -640,15 +647,185 @@
 
 ## AI-пайплайн
 
-- [ ] Абстракція клієнта моделі (інтерфейс + реалізація на `HttpClient`), щоб її можна
-      було підмінити фейком у тестах — закласти **до** написання логіки
-- [ ] Ключ моделі через user-secrets / змінні оточення
-- [ ] Аналіз PDF та зображень → генерація `.md`
-- [ ] Автовизначення категорії
-- [ ] Двосторонні `[[wiki-links]]`: вставка backlinks у наявні нотатки
-- [ ] Асинхронна обробка: `202 Accepted` + `jobId`, опитування статусу або SSE
-      (синхронний запит на 30+ секунд не годиться)
-- [ ] Ідемпотентність: повторна обробка не має дублювати посилання
+Схема (рішення від 2026-09-09). Завантажений файл → рядок `AssetRecord` → рядок у
+черзі `ProcessingJobs`. Воркер опитує чергу, бере байти з бакета напряму (він серверний,
+ключ у нього є — presigned не потрібен), віддає моделі, пише `Note` + `NoteLink` у
+Postgres. Тіло нотатки — колонка `text`, не `.md`-файл (див. CLAUDE.md).
+
+- **Воркер** — окремий процес `KnowledgeBase.Worker` (розділено 2026-09-09). Живе на
+  домашньому ПК поряд з Ollama, ходить у Neon і R2 по інтернету. У прод (Render) їде
+  тільки `KnowledgeBase.Api`. Прапорець `Pipeline:Enabled` **не робимо** — після
+  розділення API воркера не хостить, а воркер завжди має крутити цикл, тож вимикати
+  нема чого.
+- **Черга — таблиця Postgres**, не зовнішній брокер (правило «без окремого сервісу»).
+  Вибірка `SELECT ... FOR UPDATE SKIP LOCKED`.
+- **Фронт** пінгає `GET /api/notes` на завантаженні сторінки; бек читає з БД те, що
+  встиг обробити воркер. SSE-мосту воркер→бек поки нема (воркер на іншій машині не
+  докличеться до `IChangeNotifier` у памʼяті).
+- **Текст і зображення** (перевірка по MIME/розширенню при постановці job). PDF / відео —
+  далі. Аналіз локально через Ollama (`localhost:11434`, звичайний `HttpClient`), одна
+  multimodal-модель `qwen2.5vl:7b` на обидва типи; пріоритизацію моделей (щоб не жонглювати
+  у VRAM) робитимемо потім. Далі — інші агенти за тим самим інтерфейсом.
+
+### Схема БД
+
+- [x] Нові сутності в `Infrastructure/Persistence/` + міграція `AddPipelineAndNotes`:
+      `ProcessingJob` (Id, AssetId FK, Status enum-як-рядок, Attempts, часи, Error),
+      `Note` (Id, Title, Category, Body `text`, SourceAssetId FK, часи),
+      `NoteLink` (Id, SourceNoteId FK, TargetTitle сирий, TargetNoteId? — nullable для
+      висячих `[[...]]`). Індекси: `ProcessingJobs (Status, CreatedAtUtc)` під поллінг,
+      унікальний `ProcessingJobs.AssetId` проти дублю job, унікальний
+      `NoteLinks (SourceNoteId, TargetTitle)`. Накатано на локальний Postgres
+      (`dotnet ef database update`), звірено `psql \d`: колонки, індекси, FK
+      (`ProcessingJobs→Assets` CASCADE, `NoteLinks→Notes` CASCADE + SET NULL) на місці
+
+### Розділення на процеси
+
+- [x] **Воркер винесено в окремий процес.** Один `Backend.csproj` → рішення
+      `KnowledgeBase.sln` з трьох проєктів: `KnowledgeBase.Core` (`Microsoft.NET.Sdk` —
+      EF-модель + міграції, `Storage/`, `Ai/`, `Pipeline/`, контракт `RealTime`),
+      `KnowledgeBase.Api` (`Sdk.Web` — контролери, SSE-реалізація, `Hosting/`,
+      `Features/`; єдине, що їде в прод), `KnowledgeBase.Worker` (`Sdk.Worker` —
+      `Program.cs`, `NullChangeNotifier`, `AnalyzeCommand`). Namespace `Backend.*` →
+      `KnowledgeBase.{Core,Api,Worker}.*`, тека-обгортка `Infrastructure/` в Core
+      прибрана. `Migrations/` поїхали з рештою `Persistence/` у Core; `dotnet ef`
+      далі працює — `--project KnowledgeBase.Core --startup-project KnowledgeBase.Api`.
+      **Міграції накатує тільки API** на старті (`MigrateDatabase`, тепер extension на
+      `IHost`); воркер бере `AddDatabase`, але не мігрує.
+      `UseLocalOverrides` → `KnowledgeBase.Core/Hosting/` як generic extension на
+      `IHostApplicationBuilder` (працює і для `WebApplicationBuilder`, і для
+      `HostApplicationBuilder` воркера). `AssetFileName` став `public` (був `internal`,
+      тепер API до нього тягнеться через Core).
+      Воркер: `Program.cs` кличе `AddDatabase` + `AddAssetStorage` + `AddContentAnalyzer`
+      + `AddContentPipeline` + `NullChangeNotifier`; профіль `worker` вмикає
+      `DOTNET_ENVIRONMENT=Development` (не `ASPNETCORE_`, бо generic host).
+      Конфіги: `appsettings.json` (несекретні дефолти, `Storage:S3:Region=auto` під R2),
+      `appsettings.Development.json` (локальний Postgres), `appsettings.Local.json`
+      (Garage, gitignored — дзеркало API).
+      Кореневий `Dockerfile` (тільки API) / `.dockerignore` / `backend-ci.yml`
+      переведені на нові шляхи й `.sln`. `dotnet build KnowledgeBase.sln`,
+      `npm run build && lint`, `docker build` — усі зелені.
+      Документація: `DEPLOYMENT.md` (цілісна картина), `infra/worker/README.md`,
+      `CLAUDE.md` розділ «Як запустити».
+- [x] **Наскрізний прогін відділеного воркера — пройдено** (локально, 2026-09-09).
+      API і `dotnet run --project backend/KnowledgeBase.Worker` двома окремими
+      процесами проти локального Postgres + Garage + Ollama (`qwen2.5vl:7b`):
+      login → `upload-link` → `PUT` у Garage → `confirm` `201` → воркер сам б'є
+      Ollama `/api/tags` (200) + `/api/chat` (200) → `ProcessingJob` `Done`,
+      `Attempts=1`, `Error=null` → `Note` «Postgres Connection Pooling»
+      (Category `Database`, коректний Markdown + `## Related` з `[[links]]`).
+      Тестові asset/job/note/links і об'єкт із бакета прибрано.
+- [x] **Воркер у проді — контейнер у Docker.** `backend/KnowledgeBase.Worker/Dockerfile`
+      (multi-stage, `runtime:8.0-alpine`) + `infra/worker/docker-compose.yml`
+      (`env_file: worker.env`, `restart: unless-stopped`,
+      `Ai__Ollama__BaseUrl=http://host.docker.internal:11434`,
+      `extra_hosts: host-gateway`). `infra/worker/run-worker.ps1` — скафолдить
+      `worker.env` з прикладу, `compose down` + `up -d --build` (зупинити старий,
+      пересобрати, підняти новий), прапорець `-Logs`; окремий `stop-worker.ps1`.
+      Хост стартує як Production. Образ зібрано; контейнер прогнано проти
+      локального Postgres + Garage — стартує як Production, конект по БД, цикл
+      поллінгу тихий (EF command-лог прибрано в `Warning`). `run-worker.ps1` і
+      `stop-worker.ps1` прогнані: перший запуск, повторний (down→build→up), стоп.
+      `host.docker.internal:11434` з контейнера дотягується до нативної Ollama на
+      `127.0.0.1` без правок (`/api/tags` → `200` — проксі Docker Desktop).
+      **На домашньому ПК ще не піднято** — треба ключ R2 `knowledgebase-worker` і
+      заповнений `worker.env`.
+- [ ] Живе оновлення нотаток на фронті більше не працюватиме в проді: воркер на
+      домашньому ПК шле `notes/created` у `NullChangeNotifier`, до API-SSE це не
+      доходить. Фронт бачить нову нотатку лише на перезавантаженні. Потрібен
+      воркер→API міст (HTTP-пінг на внутрішній ендпоінт або спільний Redis/pg
+      `LISTEN/NOTIFY` — вирішити пізніше).
+- [ ] Підняти воркер на домашньому ПК: ключ R2 `knowledgebase-worker`, заповнити
+      `infra/worker/worker.env` (Neon + R2), `run-worker.ps1`. Ollama чіпати не треба —
+      `host.docker.internal` дотягується до неї на `127.0.0.1` через проксі Docker
+      Desktop (перевірено з контейнера: `/api/tags` → `200`). Поки не піднято —
+      job'и з `confirm` копляться в Neon `Pending`.
+
+### Далі
+
+- [x] Постановка job у `confirm`: `ProcessableContent.IsText` (MIME `text/*` **або**
+      розширення `.txt`/`.md`/`.markdown` — браузер для `.md` часто шле порожній тип),
+      `_database.ProcessingJobs.Add(ProcessingJob.Queue(record.Id))` у той самий
+      `SaveChangesAsync`, що й рядок ассета — одна транзакція. Перевірено curl через
+      реальний бакет: `.txt` → рядок у `ProcessingJobs` (`Pending`, `Attempts=0`,
+      `AssetId` = id ассета); `image/png` → ассет є, job **немає**;
+      `DELETE` ассета → job зникає каскадом (`jobs count` 1→0)
+- [x] `Controllers/Notes/` (повернуто): `GET /api/notes` (список без тіла, найновіші
+      зверху за `UpdatedAtUtc`), `GET /api/notes/{id}` (з `Body`, 404 якщо нема),
+      `[Authorize]`, Swagger-доки. Перевірено curl: список → `[]` `200`,
+      `{id}` неіснуючий → `404`
+- [ ] Блок нотаток унизу сторінки на фронті — тимчасовий перегляд до окремої сторінки.
+      Реалізовано: `api/notes.ts` (`fetchNotes`, `fetchNote`, інтерфейси-дзеркала
+      `NoteSummaryResponse`/`NoteResponse`), `components/NotesList.tsx` за зразком
+      `AssetList` — список (заголовок, категорія, дата за `UpdatedAtUtc`), клік по рядку
+      розгортає тіло через `GET /api/notes/{id}` і рендерить Markdown. Живе оновлення —
+      `useResourceChanges('notes', reload)` (бек шле `notes`/`created` з `PipelineWorker`).
+      Показується в `App.tsx` під `<AssetList>` лише для `authenticated`. Без роутингу.
+      `npm run build` і `npm run lint` — зелені. **Не перевірено в браузері** — лишається
+      клікнути по нотатці на живому застосунку (потрібна хоч одна оброблена нотатка)
+- [x] `IContentAnalyzer` (інтерфейс + `OllamaAnalyzer` на типізованому `HttpClient`) у
+      `Infrastructure/Ai/`. Вхід `AnalysisRequest { Text, ExistingTitles, KnownCategories }`,
+      вихід `AnalysisResult { Title, Category, MarkdownBody, Links[] }`. Ollama `POST /api/chat`,
+      `stream:false`, **structured output** через `format` = JSON-схема (не парсимо прозу).
+      `EnsureModelAvailableAsync` б'є `GET /api/tags` і падає з «ollama pull ...», якщо моделі
+      нема, або «Ollama is not reachable», якщо служба лежить — це кличе воркер/CLI, не хост
+      (хост без Ollama має стартувати, поки воркера ще нема).
+      Гнучкий конфіг `Ai:Ollama` — `BaseUrl`, `Model` (дефолт `qwen2.5vl:7b`), `KeepAlive`,
+      `Timeout`, `Options { Temperature, NumCtx, NumGpu, NumThread }` (усі nullable, у запит
+      ідуть лише задані; `NumGpu=0` = чистий CPU).
+      Перевірено CLI-командою `dotnet run -- analyze <файл>` (тимчасова, приберемо з воркером)
+      проти живої Ollama + `qwen2.5:14b`: текстова нотатка про пулінг Postgres → валідний
+      JSON `{ Title: "Postgres Connection Pooling Setup on Neon", Category: "Database",
+      MarkdownBody: ..., Links: [] }` (~38 с з холодним завантаженням моделі);
+      неіснуюча модель → «Run: ollama pull ghost:7b». Збірка зелена
+- [x] `PipelineWorker : BackgroundService` в `Infrastructure/Pipeline/` (усередині API-процесу
+      поки що; окремим сервісом розділимо потім). Цикл: перевірити модель → claim job
+      (`FOR UPDATE SKIP LOCKED`, raw SQL, `Status='Running'` у короткій транзакції) →
+      прочитати текст з S3 (`IAssetContentReader` + `S3AssetContentReader` через
+      `IAmazonS3.GetObjectAsync` — окремо від браузерного `IAssetStorage`) → `AnalyzeAsync`
+      → `Note` (Body + дописаний `## Related` з `[[Links]]`) + `NoteLink` на кожен лінк →
+      усе в один `SaveChangesAsync`. Успіх → `Publish("notes","created")`.
+      Конфіг `Pipeline` — `PollInterval` (5 с), `OutageDelay` (30 с), `MaxAttempts` (3).
+      **Пастка:** `EnableRetryOnFailure` забороняє голий `BeginTransaction` — claim обгорнуто
+      в `Database.CreateExecutionStrategy().ExecuteAsync(...)`.
+      **Пастка LLM:** 14B модель ігнорує «лінкуй лише з наданих заголовків» — вигадує назви
+      і лінкує нотатку саму на себе. Тому `result.Links` фільтрується по фактичному списку
+      наявних заголовків **до** створення `NoteLink` (точний збіг, регістронечутливо;
+      нечіткий — на потім).
+      Перевірено наскрізь проти живої Ollama + `qwen2.5:14b`, локальний Postgres + Garage:
+      `.txt` → job `Pending` → за ~10–15 с `Note` (Category `Database`, коректний Body),
+      job `Done`, `Attempts=1`; друга `.txt` → `NoteLink` на першу з `TargetNoteId`
+      проставленим; `## Related` у тілі другої нотатки; недоступна Ollama (bad `BaseUrl`) →
+      job циклиться `Pending↔Running`, **`Attempts` лишається 0** (простій не палить спроби),
+      у лозі «Analyzer unavailable». Тестові ассети з бакета і БД прибрано
+- [x] Резолв висячих лінків: `ProcessAsync` вантажить `NoteLink` з `TargetNoteId IS NULL AND
+      TargetTitle == note.Title` як tracked-сутності й проставляє `TargetNoteId` у тому ж
+      `SaveChangesAsync`. З фільтром лінків по наявних заголовках (вище) з боку аналізатора
+      висячих не виникає — код лишається під майбутній парсинг інлайн-`[[...]]` із тексту
+- [ ] Гілка `Failed` (Attempts >= MaxAttempts) кодом є, але не перевірена наживо —
+      треба сценарій «Ollama відповідає, але сміттям». Простій Ollama перевірено (не палить
+      спроби); падіння аналізу — ні
+- [ ] Дублі при повторній обробці: одна job на ассет (унікальний індекс), але немає захисту
+      від «видалили job вручну → залили знову». Ідемпотентність не покрита
+- [ ] Прибрати CLI `analyze` (`dotnet run --project backend/KnowledgeBase.Worker -- analyze`)
+      і `AnalyzeCommand` (переїхав у `KnowledgeBase.Worker/`) — тимчасова, воркер її
+      замінив. Лишити до першого інтеграційного тесту воркера
+- [x] **Аналіз зображень.** `ProcessableContent.Classify` → `ContentKind { Text, Image }`
+      (`image/*` або `.jpg/.jpeg/.png/.webp/.gif`), job ставиться і для картинок.
+      `IAssetContentReader.ReadBytesAsync` під бінарні байти. `AnalysisRequest` — `Text?`
+      **або** `Image? { Bytes, ContentType }`, воркер заповнює одне по `kind`. `OllamaAnalyzer`
+      кладе base64 у `images` повідомлення `/api/chat` (`DefaultIgnoreCondition` прибирає
+      поле для текстових запитів); системний промпт просить розпізнати текст + описати
+      картинку. Модель — `qwen2.5vl:7b` (одна multimodal на текст і фото), дефолт у конфізі
+      оновлено. Вихідний контракт `AnalysisResult` не змінився.
+      Перевірено наскрізь: PNG зі списком покупок і нагадуваннями → job `Pending` → за ~20 с
+      `Note` (Title «Grocery List and Reminders», Category `Shopping`, Body з розпізнаним
+      текстом — milk/eggs/bread, «pay rent by Friday», «call dentist»), job `Done`,
+      `Attempts=1`. Тестовий ассет прибрано
+- [ ] Ключ моделі (коли підуть хмарні агенти) через user-secrets / змінні оточення
+- [ ] Пріоритизація моделей: коли типів більше, ніж одна модель тягне в VRAM — черга/лізинг
+      під модель, щоб Ollama не свопала ваги на кожному job
+- [ ] Аналіз PDF → генерація нотатки (текстовий шар + рендер сторінок у зображення)
 - [ ] Обробка помилок моделі: битий вихід не повинен псувати наявні нотатки
 
 ## Фронтенд

@@ -6,7 +6,20 @@ Personal Knowledge Base — веб-застосунок для збору нот
 Кінцева мета: мультимодальна AI-модель аналізує PDF/фото, генерує `.md` нотатку, визначає
 категорію і додає двосторонні `[[wiki-links]]` у вже наявні нотатки.
 
-Монорепо: `frontend/` (React + TypeScript + Vite) і `backend/` (ASP.NET Core 8 Web API).
+Монорепо: `frontend/` (React + TypeScript + Vite) і `backend/` (ASP.NET Core 8).
+
+`backend/KnowledgeBase.sln` — три проєкти:
+
+- **`KnowledgeBase.Core`** (`Microsoft.NET.Sdk`) — спільне: EF-модель і міграції,
+  сховище S3, клієнт Ollama, `PipelineWorker`, контракт SSE-подій.
+- **`KnowledgeBase.Api`** (`Microsoft.NET.Sdk.Web`) — HTTP API + віддача SPA. **Єдине,
+  що їде в прод** (Render, Docker). Накатує міграції на старті — власник схеми.
+- **`KnowledgeBase.Worker`** (`Microsoft.NET.Sdk.Worker`) — AI-пайплайн окремим
+  процесом на домашньому ПК, поряд з Ollama; ходить у Neon і R2 по інтернету.
+  Міграцій не накатує.
+
+Деталі розгортання — [`DEPLOYMENT.md`](DEPLOYMENT.md), запуск воркера в проді —
+[`infra/worker/README.md`](infra/worker/README.md).
 
 ## Стек і свідомі обмеження
 
@@ -14,8 +27,11 @@ Personal Knowledge Base — веб-застосунок для збору нот
 
 - **Бекенд тільки C# / ASP.NET Core.** Без Python. Виклики до моделі — напряму через
   `HttpClient` або офіційний SDK, **без окремого сервісу**.
-- **Вміст — файли, метадані — Postgres.** Нотатки `.md` у `backend/data/notes` лишаються
-  файлами. Байти медіа живуть **тільки** в S3-сумісному сховищі за інтерфейсом
+- **Медіа — у S3, решта — у Postgres.** Тіло нотатки — колонка `text` у Postgres, а не
+  `.md`-файл (рішення від 2026-09-09, скасовує попереднє «нотатки лишаються файлами»):
+  граф `[[wiki-links]]` і повнотекстовий пошук живуть у БД, а нотатка — це кілобайти
+  тексту, не медіа. Справжні `.md`-файли, якщо знадобляться для Obsidian, — похідний
+  експорт із БД. Байти медіа живуть **тільки** в S3-сумісному сховищі за інтерфейсом
   `IAssetStorage` — у проді Cloudflare R2, локально Garage на домашньому ПК (він же
   друга копія). Локального файлового сховища більше немає: бекенд байтів не торкається,
   браузер PUT/GET'ить бакет напряму за підписаними посиланнями (`IAssetLinkSigner`).
@@ -89,14 +105,14 @@ Personal Knowledge Base — веб-застосунок для збору нот
 
 ## Як запустити
 
-Два окремі процеси, у двох терміналах. Обидва мають працювати одночасно.
+Окремі процеси, кожен у своєму терміналі, працюють одночасно.
 
 ```bash
 cd infra/postgres && docker compose up -d
 ```
 
 ```bash
-cd backend && dotnet run --launch-profile http
+dotnet run --project backend/KnowledgeBase.Api --launch-profile http
 ```
 
 ```bash
@@ -109,6 +125,17 @@ http://localhost:5244/swagger
 `--launch-profile http` обов'язковий: дефолтний профіль `https` слухає порт 7087, і
 фронтенд у нього не влучить.
 
+**AI-воркер** — окремо, коли треба обробляти завантаження (потрібна запущена Ollama
+на `localhost:11434`):
+
+```bash
+dotnet run --project backend/KnowledgeBase.Worker
+```
+
+Профіль `worker` вмикає `DOTNET_ENVIRONMENT=Development` → локальний Postgres +
+локальний Garage (`appsettings.Local.json`) + локальна Ollama. Смоук-тест аналізатора
+без черги: `dotnet run --project backend/KnowledgeBase.Worker -- analyze <файл>`.
+
 Перевірки перед комітом:
 
 ```bash
@@ -116,5 +143,5 @@ cd frontend && npm run build && npm run lint
 ```
 
 ```bash
-cd backend && dotnet build
+dotnet build backend/KnowledgeBase.sln
 ```

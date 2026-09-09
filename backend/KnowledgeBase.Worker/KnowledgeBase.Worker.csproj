@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk.Worker">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>KnowledgeBase.Worker</RootNamespace>
+    <UserSecretsId>b3f1c8e2-4a6d-4f19-9c2e-7d5a1b0e3f84</UserSecretsId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\KnowledgeBase.Core\KnowledgeBase.Core.csproj" />
+  </ItemGroup>
+
+  <!-- Local Garage keys: read from the project dir during `dotnet run`, but never shipped in a
+       `dotnet publish` that goes to the home PC (where Production ignores it anyway). -->
+  <ItemGroup>
+    <Content Update="appsettings.Local.json" CopyToPublishDirectory="Never" />
+  </ItemGroup>
+
+</Project>

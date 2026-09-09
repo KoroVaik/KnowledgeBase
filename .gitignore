@@ -1,3 +1,6 @@
 .neon
 .env.local
 node_modules/
+
+# Filled-in prod credentials for the home-PC worker.
+infra/worker/worker.env

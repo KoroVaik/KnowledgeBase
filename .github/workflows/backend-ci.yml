@@ -36,6 +36,8 @@ jobs:
         with:
           dotnet-version: '8.0.x'
 
-      - run: dotnet restore Backend.sln
+      # Building the solution covers all three projects (Api, Core, Worker) - the worker stays
+      # compilable under CI without a separate workflow.
+      - run: dotnet restore KnowledgeBase.sln
 
-      - run: dotnet build Backend.sln -c Release --no-restore
+      - run: dotnet build KnowledgeBase.sln -c Release --no-restore

@@ -72,8 +72,9 @@ LAN-IP цим правилом не покритий — там знадобит
 
 ## Підключення бекенду
 
-Локально ключі живуть у `backend/appsettings.Local.json` — файл поза git, читається
-тільки в Development:
+Локально ключі живуть у `backend/KnowledgeBase.Api/appsettings.Local.json` (і, якщо
+ганяєш воркер, у `backend/KnowledgeBase.Worker/appsettings.Local.json`) — файли поза
+git, читаються тільки в Development:
 
 ```json
 {
@@ -94,7 +95,7 @@ LAN-IP цим правилом не покритий — там знадобит
 цьому файлі, тож звичайний запуск уже йде проти Garage:
 
 ```bash
-cd backend && dotnet run --launch-profile http
+dotnet run --project backend/KnowledgeBase.Api --launch-profile http
 ```
 
 На Render ключі задаються змінними оточення (`Storage__S3__ServiceUrl` тощо) — подвійне

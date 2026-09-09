@@ -235,8 +235,81 @@
       → *Чому в XHR-версії заголовок рівно один, і що зламає доданий
         `X-Requested-With`?*
 
+## AI-пайплайн
+
+- [~] **Типізований `HttpClient` (`AddHttpClient<TInterface, TImpl>`).** Що це замість
+      `new HttpClient()`, навіщо `IHttpClientFactory`, звідки `OllamaAnalyzer` бере
+      `HttpClient` у конструктор і хто ним керує (pool з'єднань, час життя handler'а).
+      → `Infrastructure/Ai/AiRegistration.cs`, `OllamaAnalyzer.cs`
+      → *Чому `BaseAddress` і `Timeout` задаються при реєстрації, а не в конструкторі
+        аналізатора?*
+      → *Чим це відрізняється від `AddSingleton<IAssetStorage>` поруч?*
+
+- [~] **Structured output моделі.** `format` = JSON-схема в запиті → модель зобов'язана
+      повернути JSON саме такої форми. Чому це надійніше за «попроси JSON у промпті і
+      парси що прийде».
+      → `OllamaAnalyzer.ResultSchema()`, `AnalyzeAsync`
+      → *`message.content` приходить рядком, який сам є JSON — чому подвійний парсинг?*
+
+- [~] **Патерн опцій із вкладеною секцією.** `OllamaOptions` з `OllamaModelOptions`
+      всередині, усі поля nullable, у запит ідуть лише задані. `section.Get<T>()` вручну
+      проти `IOptions<T>` — те саме питання, що вже стоїть у секції «Конфігурація».
+      → `Infrastructure/Ai/Configuration/OllamaOptions.cs`, `AiRegistration.cs`
+      → *Чому `AiRegistration` читає секцію двічі — і `.Bind()`, і `.Get<T>()`?*
+
+- [ ] **`ValidateOnStart` vs перевірка «наживо».** Валідація опцій (`BaseUrl`, `Model`
+      непорожні) — на старті хоста. Перевірка, що модель реально завантажена
+      (`GET /api/tags`) — НЕ на старті, а в момент роботи воркера. Чому різні місця.
+      → `AiRegistration.cs` (`ValidateOnStart`), `OllamaAnalyzer.EnsureModelAvailableAsync`
+      → *Чому «Ollama лежить» не має класти весь застосунок, поки воркера ще нема?*
+
+- [ ] **`BackgroundService` і scoped `DbContext`.** Хостед-сервіс — синглтон, `DbContext` —
+      scoped (живе один запит). Тому кожна ітерація циклу: `scopeFactory.CreateScope()` +
+      `GetRequiredService` зсередини. Що зламається, якщо інжектити `DbContext` прямо
+      в конструктор воркера.
+      → `PipelineWorker.TickAsync`
+      → *Чому не можна тримати один `DbContext` на весь час життя воркера?*
+
+- [ ] **Execution strategy проти явних транзакцій.** `EnableRetryOnFailure()` вмикає
+      стратегію повторів, і вона забороняє голий `BeginTransaction` — весь транзакційний
+      блок треба віддати `CreateExecutionStrategy().ExecuteAsync(...)`, щоб повтор
+      відтворив його цілком. Одиничний `SaveChanges` обгортати не треба — він уже
+      ретрайбельний сам.
+      → `PipelineWorker.ClaimAsync`
+      → *Чому повтор половини транзакції небезпечний, а повтор цілої — ні?*
+
+- [ ] **`FOR UPDATE SKIP LOCKED` як черга.** Як один SQL-рядок робить із таблиці чергу,
+      яку можуть безпечно розбирати кілька воркерів: `FOR UPDATE` бере замок на рядок,
+      `SKIP LOCKED` каже сусідові не чекати, а взяти наступний. Замок тримається до
+      commit'у транзакції, тому claim і flip у `Running` — в одній транзакції.
+      → `PipelineWorker.ClaimAsync` (raw SQL, бо EF не вміє)
+      → *Що станеться, якщо прибрати транзакцію і лишити тільки `SELECT ... FOR UPDATE`?*
+      → *Чому результат матеріалізується через `ToListAsync`, а не `FirstOrDefaultAsync`?*
+
+- [ ] **Модель не слухається промпту — фільтруй вихід.** 14B-модель ігнорує «лінкуй лише
+      з цього списку»: вигадує заголовки, лінкує нотатку саму на себе. Захист не в
+      кращому промпті, а в тому, що `result.Links` перетинається з фактичним списком
+      наявних заголовків у коді.
+      → `PipelineWorker.ProcessAsync`
+      → *Чому «попросити ще раз, наполегливіше» — не рішення для продакшену?*
+
+- [ ] **Multimodal через Ollama.** Vision-модель (`qwen2.5vl`) бачить картинку, якщо в
+      повідомленні `/api/chat` є масив `images` з base64. Той самий ендпоінт, та сама
+      structured-output схема — змінюється лише вміст повідомлення. Текстова модель
+      (`qwen2.5:14b`) картинку не прийме взагалі.
+      → `OllamaAnalyzer.AnalyzeAsync`, `OllamaMessage.Images`
+      → *Чому `DefaultIgnoreCondition = WhenWritingNull` тут не косметика?*
+
 ## Нотатки
 
+- 2026-09-09: розділ «AI-пайплайн» — пункти по ходу задачі «контракт аналізатора»
+  пояснювались усно (типізований HttpClient, structured output, назви ендпоінтів
+  Ollama), розбір окремо. Схема БД (`ProcessingJob`/`Note`/`NoteLink`) пояснень не
+  потребувала — той самий EF Core, що вже є.
+- 2026-09-09: воркер (`PipelineWorker`) — додано 5 пунктів (scoped DbContext у
+  BackgroundService, execution strategy vs транзакції, `SKIP LOCKED` як черга, фільтр
+  виходу моделі). По ходу задачі не пояснювалось; дві пастки знайдені перевіркою
+  (retry strategy забороняє `BeginTransaction`; модель вигадує лінки).
 - 2026-09-08: усе, позначене `[~]`, розібрано під час задачі «Google-вхід за флагом».
   Пояснення було одноразовим, по ходу — тому пункти лишились відкритими.
 - 2026-09-08: пункти про стан з'єднання додано за підсумком задачі «фронт має

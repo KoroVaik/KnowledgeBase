@@ -1,0 +1,7 @@
+@host = http://localhost:5244
+
+GET {{host}}/health
+
+###
+
+GET {{host}}/api/notes

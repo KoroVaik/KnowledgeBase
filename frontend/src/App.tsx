@@ -6,6 +6,7 @@ import type { FeatureFlags } from './api/features'
 import { AssetList } from './components/AssetList'
 import { FileUploadForm } from './components/FileUploadForm'
 import { LoginForm } from './components/LoginForm'
+import { NotesList } from './components/NotesList'
 import { useConnectionStatus } from './hooks/useConnectionStatus'
 import './App.css'
 
@@ -159,6 +160,7 @@ function App() {
             uploadEnabled={features.uploadEnabled}
           />
           <AssetList reloadToken={uploadCount} downloadEnabled={features.downloadEnabled} />
+          <NotesList />
         </>
       )}
     </main>

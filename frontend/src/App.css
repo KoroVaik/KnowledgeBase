@@ -250,3 +250,80 @@
   background: var(--accent-bg);
   border: 1px solid var(--accent-border);
 }
+
+.notes {
+  margin-top: 40px;
+}
+
+.notes h2 {
+  margin-bottom: 16px;
+  font-size: 20px;
+}
+
+.notes-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.note {
+  border-bottom: 1px solid var(--border);
+}
+
+/* The whole row is the toggle: title on its own line, category and date under it. */
+.note-head {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  padding: 12px 0;
+  border: 0;
+  background: none;
+  text-align: left;
+  cursor: pointer;
+  color: inherit;
+}
+
+.note-title {
+  font-size: 15px;
+  color: var(--text-h);
+}
+
+.note-meta {
+  font-size: 13px;
+}
+
+.note-loading {
+  margin: 0 0 12px;
+}
+
+/* Rendered Markdown - keep the block spacing sane inside the row. */
+.note-body {
+  margin: 4px 0 16px;
+  overflow-wrap: anywhere;
+}
+
+.note-body > :first-child {
+  margin-top: 0;
+}
+
+.note-body pre {
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow-x: auto;
+}
+
+.note-body code {
+  font-family: var(--mono);
+  font-size: 13px;
+}
+
+.note-body a {
+  color: var(--accent);
+}
+
+.notes-error {
+  margin-bottom: 16px;
+  color: #dc2626;
+}

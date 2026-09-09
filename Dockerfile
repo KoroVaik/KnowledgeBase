@@ -1,5 +1,8 @@
 # Frontend and backend build in parallel stages, then meet in the runtime image:
 # ASP.NET serves the SPA itself, so the browser stays on one origin and there is no CORS.
+#
+# Only KnowledgeBase.Api ships here. The AI worker (KnowledgeBase.Worker) runs on the home PC
+# next to Ollama - see DEPLOYMENT.md - and is deliberately not part of this image.
 
 FROM node:24-alpine AS frontend
 WORKDIR /src/frontend
@@ -10,10 +13,12 @@ RUN npm run build
 
 FROM mcr.microsoft.com/dotnet/sdk:8.0-alpine AS backend
 WORKDIR /src/backend
-COPY backend/Backend.csproj ./
-RUN dotnet restore Backend.csproj
+# csproj first, so a source-only change does not bust the restore layer.
+COPY backend/KnowledgeBase.Api/KnowledgeBase.Api.csproj KnowledgeBase.Api/
+COPY backend/KnowledgeBase.Core/KnowledgeBase.Core.csproj KnowledgeBase.Core/
+RUN dotnet restore KnowledgeBase.Api/KnowledgeBase.Api.csproj
 COPY backend/ ./
-RUN dotnet publish Backend.csproj -c Release -o /app/publish --no-restore
+RUN dotnet publish KnowledgeBase.Api/KnowledgeBase.Api.csproj -c Release -o /app/publish --no-restore
 
 FROM mcr.microsoft.com/dotnet/aspnet:8.0-alpine AS runtime
 WORKDIR /app
@@ -21,4 +26,4 @@ COPY --from=backend /app/publish ./
 COPY --from=frontend /src/frontend/dist ./wwwroot
 ENV ASPNETCORE_ENVIRONMENT=Production
 EXPOSE 8080
-ENTRYPOINT ["dotnet", "Backend.dll"]
+ENTRYPOINT ["dotnet", "KnowledgeBase.Api.dll"]

@@ -5,5 +5,7 @@
 **/obj
 frontend/dist
 backend/data
-backend/wwwroot
-backend/appsettings.Local.json
+backend/KnowledgeBase.Api/wwwroot
+# The worker is not part of the API image.
+backend/KnowledgeBase.Worker
+**/appsettings.Local.json
