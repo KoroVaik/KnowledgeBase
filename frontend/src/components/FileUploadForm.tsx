@@ -4,7 +4,9 @@ import { uploadAsset } from '../api/assets'
 
 type UploadState =
   | { status: 'idle' }
-  | { status: 'uploading' }
+  // `progress` is null while the two small API calls run: they carry no measurable body,
+  // so the bar has nothing to show and stays indeterminate until the PUT starts reporting.
+  | { status: 'uploading'; progress: number | null }
   | { status: 'error'; message: string }
 
 interface FileUploadFormProps {
@@ -32,10 +34,12 @@ export function FileUploadForm({ onUploaded, uploadEnabled }: FileUploadFormProp
       return
     }
 
-    setState({ status: 'uploading' })
+    setState({ status: 'uploading', progress: null })
 
     try {
-      await uploadAsset(selectedFile)
+      await uploadAsset(selectedFile, (fraction) => {
+        setState({ status: 'uploading', progress: fraction })
+      })
       setState({ status: 'idle' })
       setSelectedFile(null)
       if (inputRef.current !== null) {
@@ -53,6 +57,8 @@ export function FileUploadForm({ onUploaded, uploadEnabled }: FileUploadFormProp
 
   const isUploading = state.status === 'uploading'
   const isBlocked = isUploading || !uploadEnabled
+  const progress = state.status === 'uploading' ? state.progress : null
+  const uploadLabel = progress === null ? 'Uploading…' : `Uploading… ${Math.round(progress * 100)}%`
 
   return (
     <section className="upload">
@@ -68,9 +74,20 @@ export function FileUploadForm({ onUploaded, uploadEnabled }: FileUploadFormProp
           disabled={isBlocked}
         />
         <button type="submit" disabled={selectedFile === null || isBlocked}>
-          {isUploading ? 'Uploading…' : 'Upload'}
+          {isUploading ? uploadLabel : 'Upload'}
         </button>
       </form>
+
+      {isUploading && (
+        // No `value` while the fraction is unknown: that is what puts a native <progress>
+        // into its indeterminate look, instead of showing a hard zero.
+        <progress
+          className="upload-progress"
+          max={1}
+          value={progress ?? undefined}
+          aria-label="Upload progress"
+        />
+      )}
 
       {state.status === 'error' && (
         <p className="upload-error" role="alert">
