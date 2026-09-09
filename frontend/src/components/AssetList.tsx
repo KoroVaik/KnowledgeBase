@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { assetDownloadUrl, deleteAsset, fetchAssets, fetchDownloadUrl } from '../api/assets'
+import { deleteAsset, fetchAssets, fetchDownloadUrl } from '../api/assets'
 import type { AssetSummary } from '../api/assets'
 import { useResourceChanges } from '../hooks/useResourceChanges'
 
@@ -16,11 +16,9 @@ interface AssetListProps {
    */
   reloadToken: number
   downloadEnabled: boolean
-  /** Fetch the bytes from the bucket instead of through the API. */
-  directDownload: boolean
 }
 
-export function AssetList({ reloadToken, downloadEnabled, directDownload }: AssetListProps) {
+export function AssetList({ reloadToken, downloadEnabled }: AssetListProps) {
   const [state, setState] = useState<ListState>({ status: 'loading' })
   const [deletingFileName, setDeletingFileName] = useState<string | null>(null)
   const [linkingFileName, setLinkingFileName] = useState<string | null>(null)
@@ -127,7 +125,7 @@ export function AssetList({ reloadToken, downloadEnabled, directDownload }: Asse
 
               {/* A button, not a link: there is no URL to put in href until the API signs
                   one, and it would be stale by the time anyone clicked it. */}
-              {downloadEnabled && directDownload && (
+              {downloadEnabled && (
                 <button
                   type="button"
                   className="asset-name asset-name-button"
@@ -136,12 +134,6 @@ export function AssetList({ reloadToken, downloadEnabled, directDownload }: Asse
                 >
                   {asset.originalFileName}
                 </button>
-              )}
-
-              {downloadEnabled && !directDownload && (
-                <a className="asset-name" href={assetDownloadUrl(asset.storedFileName)}>
-                  {asset.originalFileName}
-                </a>
               )}
               <span className="asset-meta">
                 {formatSize(asset.sizeBytes)} · {new Date(asset.uploadedAtUtc).toLocaleString()}

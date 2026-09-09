@@ -16,6 +16,9 @@ namespace Backend.Controllers.Assets;
 /// <remarks>
 /// The table is the source of truth: the listing comes from it, and the storage only holds
 /// bytes. Bytes without a row are invisible to the API and get collected separately.
+///
+/// The bytes themselves never pass through here - the browser PUTs them to the bucket and
+/// GETs them back over signed URLs. This controller only signs, lists and deletes.
 /// </remarks>
 [ApiController]
 [Route("api/[controller]")]
@@ -23,16 +26,13 @@ namespace Backend.Controllers.Assets;
 [Produces("application/json")]
 // IOptionsSnapshot, not IOptions: it is re-read per request, so a flag flipped in
 // configuration takes effect without a restart.
-//
-// The signer is optional for the same reason it is in FeaturesController: local storage
-// registers none, and a required parameter would break every action, not just signing.
 public sealed class AssetsController(
     IAssetStorage storage,
     KnowledgeBaseDbContext database,
     IChangeNotifier notifier,
     IOptions<StorageOptions> options,
     IOptionsSnapshot<FeatureOptions> features,
-    IAssetLinkSigner? signer = null)
+    IAssetLinkSigner signer)
     : ControllerBase
 {
     private readonly IAssetStorage _storage = storage;
@@ -40,70 +40,7 @@ public sealed class AssetsController(
     private readonly IChangeNotifier _notifier = notifier;
     private readonly StorageOptions _options = options.Value;
     private readonly FeatureOptions _features = features.Value;
-    private readonly IAssetLinkSigner? _signer = signer;
-
-    /// <summary>
-    /// Stores an uploaded file and returns its metadata.
-    /// </summary>
-    /// <param name="file">The PDF or image to store.</param>
-    /// <param name="cancellationToken">Cancels the copy if the client disconnects.</param>
-    /// <returns>Metadata of the stored file.</returns>
-    /// <remarks>
-    /// A stub: the file is kept as is. No AI processing, no .md generation, no indexing yet.
-    /// </remarks>
-    /// <response code="201">The file is stored.</response>
-    /// <response code="400">The file is empty or over the size limit.</response>
-    /// <response code="401">No session, or it has expired.</response>
-    /// <response code="403">Uploading is switched off by the Features:UploadEnabled flag.</response>
-    [HttpPost]
-    [ProducesResponseType(typeof(UploadedAssetResponse), StatusCodes.Status201Created)]
-    [ProducesResponseType(StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(StatusCodes.Status403Forbidden)]
-    public async Task<IActionResult> Upload(IFormFile file, CancellationToken cancellationToken)
-    {
-        // A disabled control in the UI is a hint, not a restriction: the refusal has to live here.
-        if (!_features.UploadEnabled)
-        {
-            return StatusCode(StatusCodes.Status403Forbidden, new { error = "Uploading is turned off." });
-        }
-
-        if (file.Length == 0)
-        {
-            return BadRequest(new { error = "File is empty." });
-        }
-
-        if (file.Length > _options.MaxUploadBytes)
-        {
-            return BadRequest(new { error = $"File exceeds the {_options.MaxUploadBytes / (1024 * 1024)} MB limit." });
-        }
-
-        await using var content = file.OpenReadStream();
-
-        // Bytes first, row second: a crash in between leaves an unreferenced file, which is
-        // waste. The other order would leave a row the storage cannot answer for.
-        var stored = await _storage.SaveAsync(content, file.FileName, cancellationToken);
-
-        var record = AssetRecord.For(stored, file.FileName, file.ContentType, file.Length);
-
-        _database.Assets.Add(record);
-
-        // Deliberately not the request token: the bytes are already on disk, and a client that
-        // walked away mid-request must not cost us the row that makes them findable.
-        await _database.SaveChangesAsync(CancellationToken.None);
-
-        var response = new UploadedAssetResponse(
-            record.Id,
-            record.StoredFileName,
-            record.OriginalFileName,
-            record.ContentType,
-            record.SizeBytes,
-            record.UploadedAtUtc);
-
-        _notifier.Publish(new ChangeEvent(ChangeResources.Assets, ChangeActions.Created, stored.FileName));
-
-        return CreatedAtAction(nameof(Download), new { fileName = stored.FileName }, response);
-    }
+    private readonly IAssetLinkSigner _signer = signer;
 
     /// <summary>
     /// Lists every stored file, newest first.
@@ -130,52 +67,6 @@ public sealed class AssetsController(
     }
 
     /// <summary>
-    /// Returns the bytes of one stored file.
-    /// </summary>
-    /// <param name="fileName">The stored name, as returned by the listing.</param>
-    /// <param name="cancellationToken">Cancels the transfer if the client disconnects.</param>
-    /// <returns>The file itself.</returns>
-    /// <remarks>
-    /// The bytes travel through the API even when they live in object storage. Handing out a
-    /// presigned URL instead is a separate step.
-    /// </remarks>
-    /// <response code="200">The file.</response>
-    /// <response code="401">No session, or it has expired.</response>
-    /// <response code="403">Downloading is switched off by the Features:DownloadEnabled flag.</response>
-    /// <response code="404">No such file.</response>
-    [HttpGet("{fileName}")]
-    [Produces("application/octet-stream")]
-    [ProducesResponseType(typeof(FileResult), StatusCodes.Status200OK)]
-    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(StatusCodes.Status403Forbidden)]
-    [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> Download(string fileName, CancellationToken cancellationToken)
-    {
-        if (!_features.DownloadEnabled)
-        {
-            return StatusCode(StatusCodes.Status403Forbidden, new { error = "Downloading is turned off." });
-        }
-
-        var record = await FindAsync(fileName, cancellationToken);
-
-        if (record is null)
-        {
-            return NotFound();
-        }
-
-        var content = await _storage.OpenReadAsync(record.StoredFileName, cancellationToken);
-
-        if (content is null)
-        {
-            return NotFound();
-        }
-
-        // The browser saves it under the name the user picked, not under the GUID it is
-        // stored as.
-        return File(content, record.ContentType, record.OriginalFileName);
-    }
-
-    /// <summary>
     /// Returns a short-lived URL the browser fetches the bytes from directly.
     /// </summary>
     /// <param name="fileName">The stored name, as returned by the listing.</param>
@@ -191,27 +82,18 @@ public sealed class AssetsController(
     /// </remarks>
     /// <response code="200">The signed URL.</response>
     /// <response code="401">No session, or it has expired.</response>
-    /// <response code="403">Downloading, or direct access, is switched off by a flag.</response>
+    /// <response code="403">Downloading is switched off by the Features:DownloadEnabled flag.</response>
     /// <response code="404">No such file.</response>
-    /// <response code="503">This instance stores bytes locally and cannot sign anything.</response>
     [HttpGet("{fileName}/link")]
     [ProducesResponseType(typeof(AssetLinkResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    [ProducesResponseType(StatusCodes.Status503ServiceUnavailable)]
     public async Task<IActionResult> DownloadLink(string fileName, CancellationToken cancellationToken)
     {
         if (!_features.DownloadEnabled)
         {
             return StatusCode(StatusCodes.Status403Forbidden, new { error = "Downloading is turned off." });
-        }
-
-        var refusal = RefuseWhenCannotSign();
-
-        if (refusal is not null)
-        {
-            return refusal;
         }
 
         var record = await FindAsync(fileName, cancellationToken);
@@ -221,15 +103,14 @@ public sealed class AssetsController(
             return NotFound();
         }
 
-        // Costs a HEAD per click, and buys the caller the same answer the streaming endpoint
-        // gives: a row whose object is gone is a 404 here, not a link that hands the browser
-        // an XML error page from the bucket.
+        // Costs a HEAD per click: a row whose object is gone is a 404 here, not a link that
+        // hands the browser an XML error page from the bucket.
         if (await _storage.GetAsync(record.StoredFileName, cancellationToken) is null)
         {
             return NotFound();
         }
 
-        var link = _signer!.SignDownload(record.StoredFileName, record.OriginalFileName, record.ContentType);
+        var link = _signer.SignDownload(record.StoredFileName, record.OriginalFileName, record.ContentType);
 
         return Ok(new AssetLinkResponse(link.Url, link.ExpiresAtUtc));
     }
@@ -247,26 +128,17 @@ public sealed class AssetsController(
     /// <response code="200">The signed URL.</response>
     /// <response code="400">The file is empty or over the size limit.</response>
     /// <response code="401">No session, or it has expired.</response>
-    /// <response code="403">Uploading, or direct access, is switched off by a flag.</response>
-    /// <response code="503">This instance stores bytes locally and cannot sign anything.</response>
+    /// <response code="403">Uploading is switched off by the Features:UploadEnabled flag.</response>
     [HttpPost("upload-link")]
     [ProducesResponseType(typeof(UploadLinkResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
-    [ProducesResponseType(StatusCodes.Status503ServiceUnavailable)]
     public IActionResult UploadLink([FromBody] UploadLinkRequest request)
     {
         if (!_features.UploadEnabled)
         {
             return StatusCode(StatusCodes.Status403Forbidden, new { error = "Uploading is turned off." });
-        }
-
-        var refusal = RefuseWhenCannotSign();
-
-        if (refusal is not null)
-        {
-            return refusal;
         }
 
         if (request.SizeBytes <= 0)
@@ -279,7 +151,7 @@ public sealed class AssetsController(
             return BadRequest(new { error = $"File exceeds the {_options.MaxUploadBytes / (1024 * 1024)} MB limit." });
         }
 
-        var upload = _signer!.SignUpload(request.FileName, request.ContentType);
+        var upload = _signer.SignUpload(request.FileName, request.ContentType);
 
         return Ok(new UploadLinkResponse(upload.FileName, upload.Url, upload.ContentType, upload.ExpiresAtUtc));
     }
@@ -301,7 +173,7 @@ public sealed class AssetsController(
     /// <response code="201">The row exists; the file is now in the listing.</response>
     /// <response code="400">The object is empty or over the size limit; it has been removed.</response>
     /// <response code="401">No session, or it has expired.</response>
-    /// <response code="403">Uploading, or direct access, is switched off by a flag.</response>
+    /// <response code="403">Uploading is switched off by the Features:UploadEnabled flag.</response>
     /// <response code="404">No such object in the bucket.</response>
     /// <response code="409">This key was already confirmed.</response>
     [HttpPost("{fileName}/confirm")]
@@ -319,11 +191,6 @@ public sealed class AssetsController(
         if (!_features.UploadEnabled)
         {
             return StatusCode(StatusCodes.Status403Forbidden, new { error = "Uploading is turned off." });
-        }
-
-        if (!_features.DirectAssetAccessEnabled)
-        {
-            return StatusCode(StatusCodes.Status403Forbidden, new { error = "Direct bucket access is turned off." });
         }
 
         // A retried confirm - the answer got lost, the user pressed the button again - must not
@@ -374,7 +241,7 @@ public sealed class AssetsController(
 
         _notifier.Publish(new ChangeEvent(ChangeResources.Assets, ChangeActions.Created, fileName));
 
-        return CreatedAtAction(nameof(Download), new { fileName }, response);
+        return CreatedAtAction(nameof(DownloadLink), new { fileName }, response);
     }
 
     /// <summary>
@@ -412,20 +279,4 @@ public sealed class AssetsController(
 
     private Task<AssetRecord?> FindAsync(string fileName, CancellationToken cancellationToken) =>
         _database.Assets.FirstOrDefaultAsync(asset => asset.StoredFileName == fileName, cancellationToken);
-
-    // Two separate reasons the browser cannot be sent to the bucket, and they deserve
-    // different statuses: the flag is a decision, a missing signer is a misconfiguration.
-    private IActionResult? RefuseWhenCannotSign()
-    {
-        if (!_features.DirectAssetAccessEnabled)
-        {
-            return StatusCode(StatusCodes.Status403Forbidden, new { error = "Direct bucket access is turned off." });
-        }
-
-        return _signer is null
-            ? StatusCode(
-                StatusCodes.Status503ServiceUnavailable,
-                new { error = "This instance stores files locally and cannot sign bucket links." })
-            : null;
-    }
 }

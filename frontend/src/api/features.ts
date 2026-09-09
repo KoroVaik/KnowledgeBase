@@ -5,7 +5,6 @@ export interface FeatureFlags {
   uploadEnabled: boolean
   downloadEnabled: boolean
   googleSignInEnabled: boolean
-  directAssetAccessEnabled: boolean
 }
 
 export async function fetchFeatures(): Promise<FeatureFlags> {

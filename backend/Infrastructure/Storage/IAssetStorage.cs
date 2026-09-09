@@ -6,13 +6,10 @@ public sealed record AssetSummary(string FileName, long SizeBytes, DateTimeOffse
 
 public interface IAssetStorage
 {
-    Task<StoredAsset> SaveAsync(Stream content, string? originalFileName, CancellationToken cancellationToken);
-
+    // Kept for the orphan sweep (objects in the bucket with no row); nothing calls it yet.
     Task<IReadOnlyList<AssetSummary>> ListAsync(CancellationToken cancellationToken);
 
     Task<AssetSummary?> GetAsync(string fileName, CancellationToken cancellationToken);
-
-    Task<Stream?> OpenReadAsync(string fileName, CancellationToken cancellationToken);
 
     Task<bool> DeleteAsync(string fileName, CancellationToken cancellationToken);
 }

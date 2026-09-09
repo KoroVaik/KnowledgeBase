@@ -10,31 +10,6 @@ public sealed class S3AssetStorage(IAmazonS3 client, IOptions<S3StorageOptions> 
     private readonly IAmazonS3 _client = client;
     private readonly string _bucketName = options.Value.BucketName;
 
-    public async Task<StoredAsset> SaveAsync(
-        Stream content,
-        string? originalFileName,
-        CancellationToken cancellationToken)
-    {
-        var id = Guid.NewGuid().ToString("N");
-        var key = AssetFileName.For(id, originalFileName);
-
-        await _client.PutObjectAsync(
-            new PutObjectRequest
-            {
-                BucketName = _bucketName,
-                Key = key,
-                InputStream = content,
-
-                // Cloudflare R2 answers chunked payload signing with
-                // "STREAMING-AWS4-HMAC-SHA256-PAYLOAD not implemented"; one signature over the
-                // whole body is understood by every S3-compatible provider.
-                UseChunkEncoding = false,
-            },
-            cancellationToken);
-
-        return new StoredAsset(id, key);
-    }
-
     public async Task<IReadOnlyList<AssetSummary>> ListAsync(CancellationToken cancellationToken)
     {
         var assets = new List<AssetSummary>();
@@ -71,25 +46,6 @@ public sealed class S3AssetStorage(IAmazonS3 client, IOptions<S3StorageOptions> 
             var metadata = await _client.GetObjectMetadataAsync(_bucketName, fileName, cancellationToken);
 
             return new AssetSummary(fileName, metadata.ContentLength, AsUtc(metadata.LastModified));
-        }
-        catch (AmazonS3Exception exception) when (exception.StatusCode == HttpStatusCode.NotFound)
-        {
-            return null;
-        }
-    }
-
-    public async Task<Stream?> OpenReadAsync(string fileName, CancellationToken cancellationToken)
-    {
-        if (!AssetFileName.IsSafe(fileName))
-        {
-            return null;
-        }
-
-        try
-        {
-            var response = await _client.GetObjectAsync(_bucketName, fileName, cancellationToken);
-
-            return response.ResponseStream;
         }
         catch (AmazonS3Exception exception) when (exception.StatusCode == HttpStatusCode.NotFound)
         {

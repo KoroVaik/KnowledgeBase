@@ -32,11 +32,8 @@ interface UploadLink {
   expiresAtUtc: string
 }
 
-/**
- * Plain <a href> target rather than a fetch: the API shares the origin, so the browser
- * attaches the session cookie and offers the file itself.
- */
-export function assetDownloadUrl(storedFileName: string): string {
+/** The API-side resource for one stored file: base for /link, /confirm and DELETE. */
+function assetPath(storedFileName: string): string {
   return `/api/assets/${encodeURIComponent(storedFileName)}`
 }
 
@@ -45,7 +42,7 @@ export function assetDownloadUrl(storedFileName: string): string {
  * answer is a signed URL that works for anyone holding it, and it expires in minutes.
  */
 export async function fetchDownloadUrl(storedFileName: string): Promise<string> {
-  const response = await apiFetch(`${assetDownloadUrl(storedFileName)}/link`)
+  const response = await apiFetch(`${assetPath(storedFileName)}/link`)
 
   if (!response.ok) {
     throw new Error(await readErrorMessage(response, 'Could not get the download link'))
@@ -54,31 +51,12 @@ export async function fetchDownloadUrl(storedFileName: string): Promise<string> 
   return ((await response.json()) as AssetLink).url
 }
 
-export async function uploadAsset(file: File): Promise<UploadedAsset> {
-  const formData = new FormData()
-  // The field name must stay "file" - it binds to the IFormFile parameter name.
-  formData.append('file', file)
-
-  const response = await apiFetch('/api/assets', {
-    method: 'POST',
-    // No Content-Type header on purpose: the browser has to set it itself so the
-    // multipart boundary is included.
-    body: formData,
-  })
-
-  if (!response.ok) {
-    throw new Error(await readErrorMessage(response, 'Upload failed'))
-  }
-
-  return (await response.json()) as UploadedAsset
-}
-
 /**
  * Three steps, because no single party can do the job: only the API may sign, only the
  * bucket takes the bytes, and only the API can write the row that makes them visible.
- * Nothing exists in the listing until the last step succeeds.
+ * Nothing exists in the listing until the last step succeeds. The bytes never touch the API.
  */
-export async function uploadAssetToBucket(file: File): Promise<UploadedAsset> {
+export async function uploadAsset(file: File): Promise<UploadedAsset> {
   const link = await requestUploadLink(file)
   await putToBucket(link, file)
 
@@ -129,7 +107,7 @@ async function putToBucket(link: UploadLink, file: File): Promise<void> {
 }
 
 async function confirmUpload(link: UploadLink, file: File): Promise<UploadedAsset> {
-  const response = await apiFetch(`${assetDownloadUrl(link.fileName)}/confirm`, {
+  const response = await apiFetch(`${assetPath(link.fileName)}/confirm`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ originalFileName: file.name, contentType: link.contentType }),
@@ -153,7 +131,7 @@ export async function fetchAssets(): Promise<AssetSummary[]> {
 }
 
 export async function deleteAsset(storedFileName: string): Promise<void> {
-  const response = await apiFetch(assetDownloadUrl(storedFileName), { method: 'DELETE' })
+  const response = await apiFetch(assetPath(storedFileName), { method: 'DELETE' })
 
   if (!response.ok) {
     throw new Error(await readErrorMessage(response, 'Delete failed'))

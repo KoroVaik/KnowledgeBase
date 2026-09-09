@@ -1,6 +1,5 @@
 using Amazon.Runtime;
 using Amazon.S3;
-using Backend.Infrastructure.Features;
 using Microsoft.Extensions.Options;
 
 namespace Backend.Infrastructure.Storage;
@@ -11,34 +10,10 @@ public static class StorageRegistration
         this IServiceCollection services,
         IConfiguration configuration)
     {
-        var section = configuration.GetSection(StorageOptions.SectionName);
-        services.Configure<StorageOptions>(section);
+        services.Configure<StorageOptions>(configuration.GetSection(StorageOptions.SectionName));
 
-        // Singleton in both cases: the local one creates its directory at startup rather than
-        // on the first upload, and an S3 client is meant to be shared and reused.
-        if (section.GetValue<AssetStorageProvider>(nameof(StorageOptions.Provider)) == AssetStorageProvider.S3)
-        {
-            services.AddS3AssetStorage(configuration);
-        }
-        else
-        {
-            // Signing needs a bucket. Caught here rather than at the first click, where it
-            // would look like a broken endpoint instead of a contradictory configuration.
-            if (configuration.GetValue<bool>(
-                    $"{FeatureOptions.SectionName}:{nameof(FeatureOptions.DirectAssetAccessEnabled)}"))
-            {
-                throw new InvalidOperationException(
-                    "Features:DirectAssetAccessEnabled needs Storage:Provider=S3 - only a bucket can sign links.");
-            }
-
-            services.AddSingleton<IAssetStorage, LocalFileAssetStorage>();
-        }
-
-        return services;
-    }
-
-    private static void AddS3AssetStorage(this IServiceCollection services, IConfiguration configuration)
-    {
+        // A bucket is the only storage there is: the browser PUTs and GETs the bytes itself,
+        // and an instance that cannot sign those URLs cannot serve files at all.
         services
             .AddOptions<S3StorageOptions>()
             .Bind(configuration.GetSection(S3StorageOptions.SectionName))
@@ -48,7 +23,7 @@ public static class StorageRegistration
                     && !string.IsNullOrWhiteSpace(options.AccessKeyId)
                     && !string.IsNullOrWhiteSpace(options.SecretAccessKey),
                 "Storage:S3 needs ServiceUrl, BucketName, AccessKeyId and SecretAccessKey.")
-            // Without this the app starts happily and only the first upload reveals the gap.
+            // Without this the app starts happily and only the first request reveals the gap.
             .ValidateOnStart();
 
         services.AddSingleton<IAmazonS3>(provider =>
@@ -73,9 +48,8 @@ public static class StorageRegistration
         });
 
         services.AddSingleton<IAssetStorage, S3AssetStorage>();
-
-        // Registered only on this branch: its absence from the container is what tells the
-        // rest of the app that nothing here can sign.
         services.AddSingleton<IAssetLinkSigner, S3AssetLinkSigner>();
+
+        return services;
     }
 }

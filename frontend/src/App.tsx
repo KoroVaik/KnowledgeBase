@@ -28,7 +28,6 @@ function App() {
     uploadEnabled: false,
     downloadEnabled: false,
     googleSignInEnabled: false,
-    directAssetAccessEnabled: false,
   })
 
   const connection = useConnectionStatus()
@@ -158,13 +157,8 @@ function App() {
           <FileUploadForm
             onUploaded={() => setUploadCount((count) => count + 1)}
             uploadEnabled={features.uploadEnabled}
-            directUpload={features.directAssetAccessEnabled}
           />
-          <AssetList
-            reloadToken={uploadCount}
-            downloadEnabled={features.downloadEnabled}
-            directDownload={features.directAssetAccessEnabled}
-          />
+          <AssetList reloadToken={uploadCount} downloadEnabled={features.downloadEnabled} />
         </>
       )}
     </main>
