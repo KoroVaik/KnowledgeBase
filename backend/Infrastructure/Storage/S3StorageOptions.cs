@@ -16,6 +16,11 @@ public sealed class S3StorageOptions
 
     public string SecretAccessKey { get; set; } = string.Empty;
 
+    // A presigned URL is a bearer credential in a query string: whoever sees it (browser
+    // history, proxy logs) downloads without a session. Short life is the only thing limiting
+    // that, since the bucket cannot be told to forget one link.
+    public TimeSpan LinkLifetime { get; set; } = TimeSpan.FromMinutes(5);
+
     // Vhost-style (bucket.host/key) needs wildcard DNS, which a single tunnel hostname
     // cannot provide, so path-style is the default rather than an escape hatch.
     public bool ForcePathStyle { get; set; } = true;

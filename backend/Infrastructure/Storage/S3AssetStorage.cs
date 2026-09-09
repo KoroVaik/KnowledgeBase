@@ -65,6 +65,25 @@ public sealed class S3AssetStorage : IAssetStorage
         return assets.OrderByDescending(asset => asset.LastModifiedUtc).ToList();
     }
 
+    public async Task<AssetSummary?> GetAsync(string fileName, CancellationToken cancellationToken)
+    {
+        if (!AssetFileName.IsSafe(fileName))
+        {
+            return null;
+        }
+
+        try
+        {
+            var metadata = await _client.GetObjectMetadataAsync(_bucketName, fileName, cancellationToken);
+
+            return new AssetSummary(fileName, metadata.ContentLength, AsUtc(metadata.LastModified));
+        }
+        catch (AmazonS3Exception exception) when (exception.StatusCode == HttpStatusCode.NotFound)
+        {
+            return null;
+        }
+    }
+
     public async Task<Stream?> OpenReadAsync(string fileName, CancellationToken cancellationToken)
     {
         if (!AssetFileName.IsSafe(fileName))

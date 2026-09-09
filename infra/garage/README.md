@@ -34,6 +34,42 @@ docker exec knowledgebase-garage /garage bucket allow --read --write knowledgeba
 У Git Bash `docker exec` ламається на `/garage` — MSYS підставляє Windows-шлях.
 Лікується `export MSYS_NO_PATHCONV=1`.
 
+## CORS: дозвіл браузеру писати в бакет напряму
+
+Потрібен рівно для прямого upload'у. Скачування ним не користується — там звичайна
+навігація по підписаному посиланню, а не `fetch`, і браузер дозволу не питає.
+
+Дозвіл видає **сховище**, не ASP.NET: запит іде на `localhost:3900`, тобто на чужий
+origin, і хто його приймає, той і вирішує. Окремої CLI-команди в Garage немає —
+правило ставиться через S3 API.
+
+Ключ бекенду має лише RW, а зміна конфігурації бакета — операція власника: з RW-ключем
+`PutBucketCors` відповідає `AccessDenied: Operation is not allowed for this key`. Тому
+owner видається на час правки і одразу забирається — постійно бекенду він не потрібен.
+
+```bash
+docker exec knowledgebase-garage /garage bucket allow --owner knowledgebase-assets --key GK...
+```
+
+```bash
+docker run --rm --network container:knowledgebase-garage -e AWS_ACCESS_KEY_ID=GK... -e AWS_SECRET_ACCESS_KEY=... -v "$PWD/cors.json:/cors.json:ro" amazon/aws-cli s3api put-bucket-cors --endpoint-url http://localhost:3900 --region garage --bucket knowledgebase-assets --cors-configuration file:///cors.json
+```
+
+```bash
+docker exec knowledgebase-garage /garage bucket deny --owner knowledgebase-assets --key GK...
+```
+
+`--network container:` кладе aws-cli в мережевий простір самого Garage, тож
+`localhost:3900` там означає те саме, що й усередині контейнера — інакше довелось би
+відв'язувати порт від loopback.
+
+Перевірити правило: `s3api get-bucket-cors` — теж потребує owner. На самі запити
+браузера воно діє й без нього: preflight неавтентифікований, ключа в ньому немає.
+Прибрати: `s3api delete-bucket-cors`.
+
+`cors.json` дозволяє лише `PUT` і лише з `http://localhost:5173`. Захід із телефона по
+LAN-IP цим правилом не покритий — там знадобиться другий origin у списку.
+
 ## Підключення бекенду
 
 Локально ключі живуть у `backend/appsettings.Local.json` — файл поза git, читається

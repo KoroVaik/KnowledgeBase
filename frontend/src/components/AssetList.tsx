@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { assetDownloadUrl, deleteAsset, fetchAssets } from '../api/assets'
+import { assetDownloadUrl, deleteAsset, fetchAssets, fetchDownloadUrl } from '../api/assets'
 import type { AssetSummary } from '../api/assets'
 import { useResourceChanges } from '../hooks/useResourceChanges'
 
@@ -16,11 +16,14 @@ interface AssetListProps {
    */
   reloadToken: number
   downloadEnabled: boolean
+  /** Fetch the bytes from the bucket instead of through the API. */
+  directDownload: boolean
 }
 
-export function AssetList({ reloadToken, downloadEnabled }: AssetListProps) {
+export function AssetList({ reloadToken, downloadEnabled, directDownload }: AssetListProps) {
   const [state, setState] = useState<ListState>({ status: 'loading' })
   const [deletingFileName, setDeletingFileName] = useState<string | null>(null)
+  const [linkingFileName, setLinkingFileName] = useState<string | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
 
   // Reloads are no longer triggered by this component alone - the change stream fires them
@@ -55,6 +58,19 @@ export function AssetList({ reloadToken, downloadEnabled }: AssetListProps) {
   useEffect(reload, [reload, reloadToken])
 
   useResourceChanges('assets', reload)
+
+  async function handleDownload(asset: AssetSummary) {
+    setActionError(null)
+    setLinkingFileName(asset.storedFileName)
+
+    try {
+      startDownload(await fetchDownloadUrl(asset.storedFileName))
+    } catch (error) {
+      setActionError(messageOf(error))
+    } finally {
+      setLinkingFileName(null)
+    }
+  }
 
   async function handleDelete(asset: AssetSummary) {
     if (!window.confirm(`Delete ${asset.originalFileName}? This cannot be undone.`)) {
@@ -107,12 +123,25 @@ export function AssetList({ reloadToken, downloadEnabled }: AssetListProps) {
         <ul className="assets-list">
           {state.assets.map((asset) => (
             <li className="asset" key={asset.storedFileName}>
-              {downloadEnabled ? (
+              {!downloadEnabled && <span className="asset-name">{asset.originalFileName}</span>}
+
+              {/* A button, not a link: there is no URL to put in href until the API signs
+                  one, and it would be stale by the time anyone clicked it. */}
+              {downloadEnabled && directDownload && (
+                <button
+                  type="button"
+                  className="asset-name asset-name-button"
+                  onClick={() => void handleDownload(asset)}
+                  disabled={linkingFileName === asset.storedFileName}
+                >
+                  {asset.originalFileName}
+                </button>
+              )}
+
+              {downloadEnabled && !directDownload && (
                 <a className="asset-name" href={assetDownloadUrl(asset.storedFileName)}>
                   {asset.originalFileName}
                 </a>
-              ) : (
-                <span className="asset-name">{asset.originalFileName}</span>
               )}
               <span className="asset-meta">
                 {formatSize(asset.sizeBytes)} · {new Date(asset.uploadedAtUtc).toLocaleString()}
@@ -131,6 +160,23 @@ export function AssetList({ reloadToken, downloadEnabled }: AssetListProps) {
       )}
     </section>
   )
+}
+
+/**
+ * A hidden frame rather than window.location: an attachment response downloads either way,
+ * but anything else - an expired link, an object the bucket no longer has - is an XML error
+ * page, and top-level navigation would replace the whole app with it. In a frame that answer
+ * is simply discarded.
+ */
+function startDownload(url: string) {
+  const frame = document.createElement('iframe')
+  frame.hidden = true
+  frame.src = url
+  document.body.appendChild(frame)
+
+  // The download outlives the frame once the browser has seen the headers; the delay only has
+  // to cover the round trip to the bucket.
+  window.setTimeout(() => frame.remove(), 60_000)
 }
 
 function formatSize(bytes: number): string {

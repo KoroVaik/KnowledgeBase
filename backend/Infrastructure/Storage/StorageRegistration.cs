@@ -1,5 +1,6 @@
 using Amazon.Runtime;
 using Amazon.S3;
+using Backend.Infrastructure.Features;
 using Microsoft.Extensions.Options;
 
 namespace Backend.Infrastructure.Storage;
@@ -21,6 +22,15 @@ public static class StorageRegistration
         }
         else
         {
+            // Signing needs a bucket. Caught here rather than at the first click, where it
+            // would look like a broken endpoint instead of a contradictory configuration.
+            if (configuration.GetValue<bool>(
+                    $"{FeatureOptions.SectionName}:{nameof(FeatureOptions.DirectAssetAccessEnabled)}"))
+            {
+                throw new InvalidOperationException(
+                    "Features:DirectAssetAccessEnabled needs Storage:Provider=S3 - only a bucket can sign links.");
+            }
+
             services.AddSingleton<IAssetStorage, LocalFileAssetStorage>();
         }
 
@@ -63,5 +73,9 @@ public static class StorageRegistration
         });
 
         services.AddSingleton<IAssetStorage, S3AssetStorage>();
+
+        // Registered only on this branch: its absence from the container is what tells the
+        // rest of the app that nothing here can sign.
+        services.AddSingleton<IAssetLinkSigner, S3AssetLinkSigner>();
     }
 }

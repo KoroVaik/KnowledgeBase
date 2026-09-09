@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react'
 import type { ChangeEvent, FormEvent } from 'react'
-import { uploadAsset } from '../api/assets'
+import { uploadAsset, uploadAssetToBucket } from '../api/assets'
 
 type UploadState =
   | { status: 'idle' }
@@ -10,9 +10,11 @@ type UploadState =
 interface FileUploadFormProps {
   onUploaded: () => void
   uploadEnabled: boolean
+  /** Send the bytes straight to the bucket instead of through the API. */
+  directUpload: boolean
 }
 
-export function FileUploadForm({ onUploaded, uploadEnabled }: FileUploadFormProps) {
+export function FileUploadForm({ onUploaded, uploadEnabled, directUpload }: FileUploadFormProps) {
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [state, setState] = useState<UploadState>({ status: 'idle' })
 
@@ -35,7 +37,7 @@ export function FileUploadForm({ onUploaded, uploadEnabled }: FileUploadFormProp
     setState({ status: 'uploading' })
 
     try {
-      await uploadAsset(selectedFile)
+      await (directUpload ? uploadAssetToBucket(selectedFile) : uploadAsset(selectedFile))
       setState({ status: 'idle' })
       setSelectedFile(null)
       if (inputRef.current !== null) {

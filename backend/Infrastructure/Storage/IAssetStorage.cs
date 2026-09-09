@@ -10,6 +10,8 @@ public interface IAssetStorage
 
     Task<IReadOnlyList<AssetSummary>> ListAsync(CancellationToken cancellationToken);
 
+    Task<AssetSummary?> GetAsync(string fileName, CancellationToken cancellationToken);
+
     Task<Stream?> OpenReadAsync(string fileName, CancellationToken cancellationToken);
 
     Task<bool> DeleteAsync(string fileName, CancellationToken cancellationToken);

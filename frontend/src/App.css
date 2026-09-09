@@ -147,6 +147,23 @@
   overflow-wrap: anywhere;
 }
 
+/* The download target is a button now, because the URL only exists after the API signs it.
+   It still has to read as the link it replaced. */
+.asset-name-button {
+  padding: 0;
+  border: 0;
+  background: none;
+  text-align: left;
+  cursor: pointer;
+  color: var(--accent);
+  text-decoration: underline;
+}
+
+.asset-name-button:disabled {
+  cursor: progress;
+  opacity: 0.5;
+}
+
 .asset-meta {
   font-size: 14px;
   white-space: nowrap;

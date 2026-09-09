@@ -46,6 +46,21 @@ public sealed class LocalFileAssetStorage : IAssetStorage
         return Task.FromResult(assets);
     }
 
+    public Task<AssetSummary?> GetAsync(string fileName, CancellationToken cancellationToken)
+    {
+        var path = Resolve(fileName);
+
+        if (path is null || !File.Exists(path))
+        {
+            return Task.FromResult<AssetSummary?>(null);
+        }
+
+        var file = new FileInfo(path);
+
+        return Task.FromResult<AssetSummary?>(
+            new AssetSummary(file.Name, file.Length, new DateTimeOffset(file.LastWriteTimeUtc, TimeSpan.Zero)));
+    }
+
     public Task<Stream?> OpenReadAsync(string fileName, CancellationToken cancellationToken)
     {
         var path = Resolve(fileName);
