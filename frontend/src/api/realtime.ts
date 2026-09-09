@@ -27,6 +27,9 @@ const IDLE_LIMIT_MS = 15 * 60_000
 const REOPEN_MIN_MS = 2_000
 const REOPEN_MAX_MS = 60_000
 
+/** A reconnect quicker than this stays silent; a slower one raises the outage banner. */
+const RECONNECT_GRACE_MS = 1_500
+
 const ACTIVITY_EVENTS = ['pointerdown', 'pointermove', 'keydown', 'scroll', 'wheel'] as const
 
 const listeners = new Map<string, Set<ChangeListener>>()
@@ -39,6 +42,7 @@ let hasConnected = false
 let lastActivityAt = Date.now()
 let idleTimer: number | undefined
 let hiddenTimer: number | undefined
+let connectingTimer: number | undefined
 let reopenTimer: number | undefined
 let reopenDelayMs = REOPEN_MIN_MS
 
@@ -110,7 +114,22 @@ function sync() {
 function open() {
   source = new EventSource('/api/events')
 
+  // A reconnect that drags on is worth surfacing: locally it means nothing, but in production
+  // the API scales to zero and a cold start takes the better part of a minute, during which
+  // the page would otherwise look connected and just be stale. The first connection is exempt
+  // - the page is already showing its own "loading" then.
+  clearTimer(connectingTimer)
+  connectingTimer = hasConnected
+    ? window.setTimeout(() => {
+        if (source?.readyState === EventSource.CONNECTING) {
+          setStatus('offline')
+        }
+      }, RECONNECT_GRACE_MS)
+    : undefined
+
   source.onopen = () => {
+    clearTimer(connectingTimer)
+    connectingTimer = undefined
     reopenDelayMs = REOPEN_MIN_MS
     setStatus('online')
 
@@ -132,6 +151,9 @@ function open() {
   }
 
   source.onerror = () => {
+    clearTimer(connectingTimer)
+    connectingTimer = undefined
+
     // Offline either way: CONNECTING means the browser is retrying on its own, and until it
     // succeeds the page is just as cut off as on a hard failure.
     setStatus('offline')
@@ -147,6 +169,8 @@ function open() {
 function close() {
   source?.close()
   source = null
+  clearTimer(connectingTimer)
+  connectingTimer = undefined
   clearTimer(reopenTimer)
   reopenTimer = undefined
   reopenDelayMs = REOPEN_MIN_MS

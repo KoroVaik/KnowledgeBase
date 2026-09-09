@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { fetchCurrentUser, logout } from './api/auth'
 import type { CurrentUser } from './api/auth'
 import { fetchFeatures } from './api/features'
@@ -66,6 +66,34 @@ function App() {
       cancelled = true
     }
   }, [attempt])
+
+  // The session cookie can expire and a flag can be flipped while the tab sits in the
+  // background. When the change stream comes back after being down, re-check both - but
+  // quietly: unlike the first load this must not blank the page to "checking", and a failure
+  // is left to the connection banner rather than replacing the view with an error.
+  const seenOnline = useRef(false)
+
+  useEffect(() => {
+    if (connection !== 'online') {
+      return
+    }
+
+    if (seenOnline.current) {
+      void fetchCurrentUser()
+        .then((user) => {
+          setAuth(user === null ? { status: 'anonymous' } : { status: 'authenticated', user })
+        })
+        .catch(() => {
+          // Keep whatever is on screen - the banner already reports the outage.
+        })
+
+      void fetchFeatures()
+        .then(setFeatures)
+        .catch(() => {})
+    }
+
+    seenOnline.current = true
+  }, [connection])
 
   // The state is reset here rather than inside the effect: the effect synchronises with the
   // server, and the click is what actually put the page back into "checking".
