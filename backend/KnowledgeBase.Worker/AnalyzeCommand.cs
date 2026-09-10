@@ -5,10 +5,8 @@ using KnowledgeBase.Core.Pipeline.Extraction;
 
 namespace KnowledgeBase.Worker;
 
-// A throwaway smoke test for the analyzer, kept until the worker has its own integration test:
-//   dotnet run --project backend/KnowledgeBase.Worker -- analyze <path-to-file>
-// Reads the file, runs it through the matching extractor and IContentAnalyzer, prints the
-// AnalysisResult. Accepts anything ProcessableContent recognises - text, image or PDF.
+// Throwaway analyzer smoke test, kept until the worker has an integration test:
+//   dotnet run --project backend/KnowledgeBase.Worker -- analyze <file>
 public static class AnalyzeCommand
 {
     public static bool Matches(string[] args) => args is ["analyze", ..];

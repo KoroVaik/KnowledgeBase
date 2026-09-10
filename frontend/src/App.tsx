@@ -18,19 +18,15 @@ type AuthState =
 
 function App() {
   const [auth, setAuth] = useState<AuthState>({ status: 'checking' })
-  // The form and the list are siblings, so what they share lives in their parent.
   const [uploadCount, setUploadCount] = useState(0)
-  // Bumped by "Try again": the load lives in an effect, and a new value is how a button
-  // outside it asks for another run.
+  // Bumped by "Try again" to re-run the load effect.
   const [attempt, setAttempt] = useState(0)
-  // Until the flags arrive, assume the feature is off: showing a working control that
-  // the server then refuses is worse than showing a disabled one for a moment.
+  // Assume every feature off until the flags arrive: a working control the server then
+  // refuses is worse than a briefly disabled one. maxSourceChars 0 keeps the size hint off.
   const [features, setFeatures] = useState<FeatureFlags>({
     uploadEnabled: false,
     downloadEnabled: false,
     googleSignInEnabled: false,
-    // 0 until the real limit arrives: the "possibly too large" hint stays off rather than
-    // firing against a wrong threshold.
     maxSourceChars: 0,
     maxUploadBytes: 0,
   })
@@ -48,10 +44,8 @@ function App() {
       })
       .catch((error: unknown) => {
         if (!cancelled) {
-          // Not `anonymous`: the one case that means "nobody is signed in" is a 401, and
-          // fetchCurrentUser answers that with null. Everything else leaves the session
-          // genuinely unknown, and the sign-in form would be a claim we cannot make - with
-          // the API down there is nothing to sign in to.
+          // Not `anonymous`: only a 401 means "nobody signed in" (and that returns null).
+          // Anything else leaves the session unknown - nothing to sign in to.
           setAuth({ status: 'unreachable', message: messageOf(error) })
         }
       })
@@ -71,10 +65,8 @@ function App() {
     }
   }, [attempt])
 
-  // The session cookie can expire and a flag can be flipped while the tab sits in the
-  // background. When the change stream comes back after being down, re-check both - but
-  // quietly: unlike the first load this must not blank the page to "checking", and a failure
-  // is left to the connection banner rather than replacing the view with an error.
+  // The cookie can expire while the tab is backgrounded. Re-check on stream recovery, but
+  // quietly: no blank "checking", and a failure is left to the connection banner.
   const seenOnline = useRef(false)
 
   useEffect(() => {
@@ -99,8 +91,7 @@ function App() {
     seenOnline.current = true
   }, [connection])
 
-  // The state is reset here rather than inside the effect: the effect synchronises with the
-  // server, and the click is what actually put the page back into "checking".
+  // "checking" is set here, not in the effect: the click is what triggers the re-check.
   function retry() {
     setAuth({ status: 'checking' })
     setAttempt((count) => count + 1)
@@ -126,8 +117,7 @@ function App() {
       </header>
 
       {connection === 'offline' && (
-        // role="status", not "alert": this is not the answer to something the user just did,
-        // and a screen reader should finish what it is saying first.
+        // role="status", not "alert": not a response to a user action.
         <p className="connection-banner" role="status">
           No connection to the server — reconnecting. What you see may be out of date.
         </p>

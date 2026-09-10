@@ -7,10 +7,8 @@ namespace KnowledgeBase.Core.RealTime;
 /// </summary>
 public sealed class ChangeSubscription : IDisposable
 {
-    // Bounded, and the oldest entry goes first when it overflows: a browser that stopped
-    // reading - a phone that fell asleep mid-stream - must never hold up the upload that
-    // published the event. Events are only "re-read the list" hints, so losing the older
-    // ones costs nothing.
+    // Bounded, drop-oldest: a browser that stopped reading must not hold up the upload that
+    // published. Events are only "re-read" hints, so losing old ones costs nothing.
     private readonly Channel<ChangeEvent> _pending = Channel.CreateBounded<ChangeEvent>(
         new BoundedChannelOptions(32)
         {

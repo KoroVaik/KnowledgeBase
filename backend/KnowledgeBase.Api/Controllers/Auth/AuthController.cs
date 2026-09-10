@@ -27,11 +27,7 @@ public sealed class AuthController(
 {
     private readonly AuthOptions _options = options.Value;
 
-    /// <summary>
-    /// Signs the owner in and issues the session cookie.
-    /// </summary>
-    /// <param name="request">The owner password.</param>
-    /// <returns>The signed-in user.</returns>
+    /// <summary>Signs the owner in and issues the session cookie.</summary>
     /// <response code="200">Signed in; the session cookie is set.</response>
     /// <response code="401">Wrong password.</response>
     /// <response code="429">Too many failed attempts from this address.</response>
@@ -44,8 +40,7 @@ public sealed class AuthController(
     {
         var client = HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
 
-        // Checked before the password is verified, so a client that has run out of attempts gets
-        // no guessing feedback at all.
+        // Before the password check, so an exhausted client gets no guessing feedback.
         if (limiter.IsBlocked(client))
         {
             return StatusCode(
@@ -72,13 +67,9 @@ public sealed class AuthController(
     }
 
     /// <summary>
-    /// Sends the browser to Google's consent screen.
+    /// Redirects the browser to Google's consent screen. A redirect, not JSON: OAuth is a
+    /// chain of top-level navigations. Google returns to the callback, which issues the cookie.
     /// </summary>
-    /// <remarks>
-    /// A redirect, not JSON: an OAuth flow is a chain of top-level navigations, and fetch()
-    /// cannot carry the user through Google's own pages. Google returns to the callback path,
-    /// where the handler issues the same session cookie the password login does.
-    /// </remarks>
     /// <response code="302">Redirecting to Google.</response>
     /// <response code="404">Google sign-in is switched off or has no credentials.</response>
     [HttpGet("google/start")]
@@ -87,7 +78,7 @@ public sealed class AuthController(
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public IActionResult StartGoogleSignIn()
     {
-        // Checked here too, not only in the UI: a flag that merely hides a button is decoration.
+        // Checked here, not only in the UI: a flag that only hides a button is decoration.
         if (!features.Value.GoogleSignInEnabled || !_options.Google.IsConfigured)
         {
             return NotFound();
@@ -98,9 +89,7 @@ public sealed class AuthController(
             GoogleDefaults.AuthenticationScheme);
     }
 
-    /// <summary>
-    /// Clears the session cookie.
-    /// </summary>
+    /// <summary>Clears the session cookie.</summary>
     /// <response code="204">Signed out.</response>
     [HttpPost("logout")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
@@ -112,10 +101,7 @@ public sealed class AuthController(
         return NoContent();
     }
 
-    /// <summary>
-    /// Returns the user behind the current session cookie.
-    /// </summary>
-    /// <returns>The signed-in user.</returns>
+    /// <summary>Returns the user behind the current session cookie.</summary>
     /// <response code="200">The session is valid.</response>
     /// <response code="401">No session, or it has expired.</response>
     [HttpGet("me")]

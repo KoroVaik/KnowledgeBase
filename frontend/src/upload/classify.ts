@@ -1,12 +1,7 @@
 import { formatSize } from '../format'
 
-/**
- * What is wrong with a dropped file, decided before anything leaves the browser.
- *
- * `blocked` is a wall: upload-link would answer 400, so there is no button to offer.
- * `warning` is a guess: the bytes upload fine and the file is stored, the pipeline just
- * probably will not turn it into a note. Only the user can say whether that is acceptable.
- */
+// `blocked` = upload-link would answer 400, no button to offer. `warning` = uploads and is
+// stored, the pipeline just probably will not make a note; the user decides.
 export interface UploadProblem {
   kind: 'blocked' | 'warning'
   message: string
@@ -21,11 +16,7 @@ export interface UploadLimits {
 
 const TEXT_FILE = /\.(txt|md|markdown)$/i
 
-/**
- * Both limits are skipped while they are 0: the flags have not arrived, and refusing a file
- * against a threshold we do not know yet would be a guess in the one direction that costs
- * the user something.
- */
+// A limit of 0 means the flags have not arrived - skip that check rather than guess.
 export function classify(file: File, limits: UploadLimits): UploadProblem | null {
   if (file.size === 0) {
     return { kind: 'blocked', message: 'The file is empty.' }
@@ -38,8 +29,7 @@ export function classify(file: File, limits: UploadLimits): UploadProblem | null
     }
   }
 
-  // Bytes against a character budget, which is why this stays a "likely": the worker decides
-  // for real, after it has extracted the text.
+  // Bytes against a character budget - only a "likely"; the worker decides after extraction.
   if (limits.maxSourceChars > 0 && TEXT_FILE.test(file.name) && file.size > limits.maxSourceChars) {
     return {
       kind: 'warning',

@@ -20,17 +20,14 @@ public static class AuthRegistration
         var section = configuration.GetSection(AuthOptions.SectionName);
         services.Configure<AuthOptions>(section);
 
-        // Singleton because the limiter *is* the state: a per-request instance would start every
-        // client back at a full window and the limit would never trigger.
+        // Singleton: the limiter *is* the state; per-request would reset every client's window.
         services.AddSingleton<ILoginAttemptLimiter, LoginAttemptLimiter>();
 
-        // The session cookie is encrypted with Data Protection keys, and their default home is
-        // the filesystem the app runs on — which in a container is thrown away on every deploy,
-        // signing everyone out. In the database they outlive the container.
+        // Data Protection keys default to disk, thrown away on each container deploy (= logout).
         services.AddDataProtection().PersistKeysToDbContext<KnowledgeBaseDbContext>();
 
-        // Bound a second time by hand: the cookie scheme is configured while the container is
-        // still being built, so IOptions<AuthOptions> cannot be resolved yet.
+        // By hand: the cookie scheme is configured before the container is built, so IOptions
+        // is not resolvable yet.
         var auth = section.Get<AuthOptions>() ?? new AuthOptions();
 
         var authentication = services
@@ -44,8 +41,8 @@ public static class AuthRegistration
                 options.ExpireTimeSpan = auth.SessionLifetime;
                 options.SlidingExpiration = true;
 
-                // Cookie auth defaults to redirecting a browser to a login page; fetch() would
-                // follow that 302 and read HTML as success. An API has to answer with the status.
+                // Cookie auth redirects to a login page by default; fetch() would read that
+                // HTML as success. An API answers with the status.
                 options.Events.OnRedirectToLogin = context =>
                 {
                     context.Response.StatusCode = StatusCodes.Status401Unauthorized;
@@ -58,10 +55,8 @@ public static class AuthRegistration
                 };
             });
 
-        // Registered only when the credentials exist. The Google handler inspects its callback
-        // path on every request, so the authentication middleware builds it every time — and the
-        // OAuth options validator throws on an empty ClientId. An unconfigured scheme would take
-        // the whole API down, not just sign-in.
+        // Only with credentials: the handler checks its callback on every request, and the
+        // OAuth validator throws on an empty ClientId - an unconfigured scheme downs the API.
         if (auth.Google.IsConfigured)
         {
             authentication.AddGoogle(options =>
@@ -69,18 +64,16 @@ public static class AuthRegistration
                 options.ClientId = auth.Google.ClientId;
                 options.ClientSecret = auth.Google.ClientSecret;
 
-                // Google is only a source of identity: the session it produces is the same
-                // cookie the password login issues, so /me, logout and [Authorize] stay untouched.
+                // Google is only identity: the session is the same kb.auth cookie the password
+                // login issues.
                 options.SignInScheme = CookieAuthenticationDefaults.AuthenticationScheme;
 
-                // Not the default /signin-google: in dev the Vite proxy forwards only /api, and
-                // the callback would land in the SPA instead of the backend.
+                // Not /signin-google: the Vite proxy forwards only /api.
                 options.CallbackPath = GoogleCallbackPath;
 
-                // Defaults are SameSite=None + Secure, which together demand https - so the
-                // flow would break on plain http, both on a dev machine and from a phone on the
-                // LAN. Google comes back through a top-level navigation, so Lax still carries
-                // the correlation cookie, and SameAsRequest keeps it Secure wherever https is.
+                // Defaults (SameSite=None + Secure) demand https and break on plain http (LAN
+                // phone). Lax still carries the correlation cookie on Google's top-level return;
+                // SameAsRequest keeps it Secure on https.
                 options.CorrelationCookie.SameSite = SameSiteMode.Lax;
                 options.CorrelationCookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
 
@@ -91,16 +84,14 @@ public static class AuthRegistration
                         return Task.CompletedTask;
                     }
 
-                    // HandleResponse stops the handler before it signs anyone in; Fail would
-                    // surface as a 500 instead of an answer the SPA can read.
+                    // HandleResponse stops the handler before sign-in; Fail would be a 500.
                     context.HandleResponse();
                     context.Response.Redirect($"/?authError={NotAllowedError}");
 
                     return Task.CompletedTask;
                 };
 
-                // Covers a denied consent screen and a lost correlation cookie; the default
-                // rethrows and the user lands on an error page instead of the sign-in form.
+                // Denied consent or a lost correlation cookie; the default rethrows to an error page.
                 options.Events.OnRemoteFailure = context =>
                 {
                     context.HandleResponse();

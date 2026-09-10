@@ -6,8 +6,7 @@ public sealed class S3StorageOptions
 
     public string ServiceUrl { get; set; } = string.Empty;
 
-    // SigV4 signs the region, but Garage v2.3.0 accepts any value — verified. Kept
-    // configurable for providers that do check it (AWS, R2).
+    // SigV4 signs the region; Garage v2.3.0 accepts any value. AWS and R2 do check it.
     public string Region { get; set; } = "garage";
 
     public string BucketName { get; set; } = string.Empty;
@@ -16,12 +15,10 @@ public sealed class S3StorageOptions
 
     public string SecretAccessKey { get; set; } = string.Empty;
 
-    // A presigned URL is a bearer credential in a query string: whoever sees it (browser
-    // history, proxy logs) downloads without a session. Short life is the only thing limiting
-    // that, since the bucket cannot be told to forget one link.
+    // A presigned URL is a bearer credential in a query string. Short life is the only limit -
+    // the bucket cannot forget one.
     public TimeSpan LinkLifetime { get; set; } = TimeSpan.FromMinutes(5);
 
-    // Vhost-style (bucket.host/key) needs wildcard DNS, which a single tunnel hostname
-    // cannot provide, so path-style is the default rather than an escape hatch.
+    // Vhost-style needs wildcard DNS a tunnel hostname cannot provide.
     public bool ForcePathStyle { get; set; } = true;
 }

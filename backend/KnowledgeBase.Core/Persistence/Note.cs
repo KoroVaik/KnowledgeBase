@@ -14,17 +14,14 @@ public sealed class Note
 
     public string? SourceAssetId { get; init; }
 
-    // Kept verbatim from the asset at creation time. SourceAssetId is a foreign key and gets
-    // nulled when the file is deleted; this stays, so the entry left in the bin can still say
-    // which file it came from.
+    // Copied from the asset. SourceAssetId (the FK) is nulled when the file is deleted; this
+    // stays, so the bin entry can still name the file.
     public string? SourceFileName { get; init; }
 
     public required DateTime CreatedAtUtc { get; init; }
 
     public required DateTime UpdatedAtUtc { get; set; }
 
-    // Set instead of deleting the row. Without it "the note was deleted" and "there never was
-    // such a note" look identical to a link pointing here, and the reader cannot be told apart
-    // which of the two happened.
+    // Soft delete: without it "deleted" and "never existed" look identical to a link here.
     public DateTime? DeletedAtUtc { get; set; }
 }

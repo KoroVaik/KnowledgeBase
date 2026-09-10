@@ -1,33 +1,29 @@
-/** Mirrors ChangeEvent in backend/Infrastructure/RealTime. */
+/** Mirrors ChangeEvent in backend Core/RealTime. */
 export interface ResourceChange {
   resource: string
   action: string
   id: string | null
 }
 
-/** `null` means the stream just (re)connected: anything that happened while it was down was
- *  never queued, so the listener has to re-read its collection. */
+/** `null` = the stream just (re)connected; re-read the collection, nothing was queued. */
 export type ChangeListener = (change: ResourceChange | null) => void
 
-/**
- * `paused` is not a failure: the stream is deliberately closed while nobody is listening,
- * the tab is hidden or the user has gone idle. Only `offline` means the API did not answer.
- */
+/** `paused` = deliberately closed (nobody listening / tab hidden / idle). `offline` = no answer. */
 export type ConnectionStatus = 'online' | 'offline' | 'paused'
 
 export type ConnectionListener = (status: ConnectionStatus) => void
 
-/** Long enough to sit out an Alt-Tab without tearing the stream down and building it up again. */
+/** Long enough to sit out an Alt-Tab without tearing the stream down. */
 const HIDDEN_GRACE_MS = 30_000
 
-/** A tab left open on screen but untouched stops holding a connection. */
+/** A tab left on screen but untouched stops holding a connection. */
 const IDLE_LIMIT_MS = 15 * 60_000
 
-/** The browser retries a dropped connection itself, but gives up for good on an HTTP error. */
+/** The browser retries a drop itself, but gives up for good on an HTTP error. */
 const REOPEN_MIN_MS = 2_000
 const REOPEN_MAX_MS = 60_000
 
-/** A reconnect quicker than this stays silent; a slower one raises the outage banner. */
+/** A reconnect quicker than this stays silent; a slower one raises the banner. */
 const RECONNECT_GRACE_MS = 1_500
 
 const ACTIVITY_EVENTS = ['pointerdown', 'pointermove', 'keydown', 'scroll', 'wheel'] as const
@@ -46,11 +42,7 @@ let connectingTimer: number | undefined
 let reopenTimer: number | undefined
 let reopenDelayMs = REOPEN_MIN_MS
 
-/**
- * Subscribes to changes of one collection. The whole tab shares a single EventSource: over
- * HTTP/1.1 a browser allows six connections per origin, and a stream per component would
- * spend that budget on nothing.
- */
+/** One EventSource per tab: a browser allows six connections per origin. */
 export function subscribeToChanges(resource: string, listener: ChangeListener): () => void {
   const forResource = listeners.get(resource) ?? new Set<ChangeListener>()
   forResource.add(listener)
@@ -71,10 +63,7 @@ export function subscribeToChanges(resource: string, listener: ChangeListener): 
   }
 }
 
-/**
- * Reports whether the stream is up. The listener is called at once with the current status,
- * so a component that mounts into an already broken connection still learns about it.
- */
+/** Calls the listener at once with the current status. */
 export function subscribeToConnection(listener: ConnectionListener): () => void {
   connectionListeners.add(listener)
   listener(status)
@@ -93,11 +82,7 @@ function setStatus(next: ConnectionStatus) {
   connectionListeners.forEach((listener) => listener(next))
 }
 
-/**
- * Opens or closes the stream to match the three conditions worth holding one open for:
- * somebody is listening, the tab is on screen, and the user is still around. Every event
- * handler below just changes one of those and calls back in here.
- */
+/** Open/close to match: someone listening, tab visible, user not idle. */
 function sync() {
   const wanted =
     listeners.size > 0 && document.visibilityState === 'visible' && !hasGoneIdle()
@@ -105,8 +90,7 @@ function sync() {
   if (wanted && source === null && reopenTimer === undefined) {
     open()
   } else if (!wanted) {
-    // Also when there is no stream to close: a reconnect may be pending, and a stream nobody
-    // wants must not report itself offline while it waits out a backoff nobody is watching.
+    // Also cancels a pending reconnect nobody is waiting on.
     close()
   }
 }
@@ -114,10 +98,8 @@ function sync() {
 function open() {
   source = new EventSource('/api/events')
 
-  // A reconnect that drags on is worth surfacing: locally it means nothing, but in production
-  // the API scales to zero and a cold start takes the better part of a minute, during which
-  // the page would otherwise look connected and just be stale. The first connection is exempt
-  // - the page is already showing its own "loading" then.
+  // A slow reconnect (Render cold start) should raise the banner; a quick one should not.
+  // The first connection is exempt - the page shows its own "loading" then.
   clearTimer(connectingTimer)
   connectingTimer = hasConnected
     ? window.setTimeout(() => {
@@ -133,8 +115,7 @@ function open() {
     reopenDelayMs = REOPEN_MIN_MS
     setStatus('online')
 
-    // Skipped on the very first connection: a component loads its own data when it mounts,
-    // and this would only duplicate that request.
+    // Not on the first connection: a component loads its own data on mount.
     if (hasConnected) {
       dispatch(null)
     }
@@ -146,7 +127,7 @@ function open() {
     try {
       dispatch(JSON.parse(event.data) as ResourceChange)
     } catch {
-      // A truncated frame is not worth taking the stream down for.
+      // A truncated frame is not worth dropping the stream.
     }
   }
 
@@ -154,12 +135,10 @@ function open() {
     clearTimer(connectingTimer)
     connectingTimer = undefined
 
-    // Offline either way: CONNECTING means the browser is retrying on its own, and until it
-    // succeeds the page is just as cut off as on a hard failure.
+    // CONNECTING = browser retrying; the page is just as cut off as on a hard fail.
     setStatus('offline')
 
-    // CLOSED means the browser refuses to retry: an HTTP error, typically a 502 while the
-    // API restarts or an expired session.
+    // CLOSED = browser will not retry (HTTP error: 502 on API restart, dead session).
     if (source?.readyState === EventSource.CLOSED) {
       reopenLater()
     }
@@ -211,9 +190,7 @@ function startWatchingTab() {
 
   watching = true
 
-  // visibilitychange, not window blur: blur also fires when the window is still on screen on
-  // a second monitor and the user clicked into another app, and a page in plain sight should
-  // keep updating.
+  // visibilitychange, not blur: blur also fires for a window still visible on a 2nd monitor.
   document.addEventListener('visibilitychange', () => {
     clearTimer(hiddenTimer)
     hiddenTimer = undefined
@@ -227,7 +204,7 @@ function startWatchingTab() {
   })
 
   ACTIVITY_EVENTS.forEach((name) =>
-    // Passive: these fire constantly and must never delay scrolling.
+    // Passive: these fire constantly, must not delay scrolling.
     window.addEventListener(name, markActive, { passive: true }),
   )
 }

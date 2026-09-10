@@ -20,9 +20,8 @@ export interface QueuedItem {
   state: ItemState
 }
 
-// A counter, not crypto.randomUUID(): that one is only defined in a secure context, and this
-// app is opened over plain http on a LAN address from a phone. Uniqueness within one dialog
-// is all an id is ever asked for here.
+// A counter, not crypto.randomUUID(): that needs a secure context, and this app opens over
+// plain http on a LAN address.
 let lastId = 0
 
 type Action =
@@ -41,8 +40,7 @@ function reduce(items: QueuedItem[], action: Action): QueuedItem[] {
     case 'started':
       return patch(items, action.id, { status: 'uploading', progress: null })
     case 'progress':
-      // Only while it is still the upload we think it is. A progress event can arrive after
-      // the request has already been settled some other way, and it must not resurrect a row.
+      // Ignore a progress event that arrives after the request settled some other way.
       return items.map((item) =>
         item.id === action.id && item.state.status === 'uploading'
           ? { ...item, state: { status: 'uploading', progress: action.fraction } }
@@ -66,20 +64,14 @@ function patch(items: QueuedItem[], id: string, state: ItemState): QueuedItem[] 
 export function useUploadQueue(limits: UploadLimits, onUploaded: () => void) {
   const [items, dispatch] = useReducer(reduce, [])
 
-  // App passes a fresh arrow every render. Kept in a ref so the callbacks below can stay
-  // stable instead of being rebuilt - and rebuilding them mid-upload would be a real bug,
-  // not just churn.
+  // In a ref so the callbacks below stay stable - rebuilding them mid-upload would be a bug.
   const onUploadedRef = useRef(onUploaded)
   useEffect(() => {
     onUploadedRef.current = onUploaded
   })
 
-  /**
-   * Every file starts at once, no pool: this is a single-user app and a drop is tens of
-   * files, not thousands. Uploads are launched here rather than from an effect watching for
-   * queued rows, because StrictMode runs effects twice in development and the second run
-   * would upload every file a second time.
-   */
+  // Every file at once, no pool (single-user, tens of files). Launched here, not from an
+  // effect: StrictMode runs effects twice in dev and would upload each file a second time.
   const uploadNow = useCallback((targets: QueuedItem[]) => {
     for (const target of targets) {
       dispatch({ type: 'started', id: target.id })

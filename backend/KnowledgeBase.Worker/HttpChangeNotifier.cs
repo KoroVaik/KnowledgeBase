@@ -4,9 +4,8 @@ using Microsoft.Extensions.Options;
 
 namespace KnowledgeBase.Worker;
 
-// The worker runs on a different machine from the API and cannot reach its in-memory notifier,
-// so it posts each change hint to the API over HTTP. The API fans it out to every open browser
-// through its SSE stream. This is the one registration the split from the API changed.
+// The worker cannot reach the API's in-memory notifier, so it posts each change hint over
+// HTTP; the API fans it out over SSE. See docs/worker.md.
 public sealed class HttpChangeNotifier(
     IHttpClientFactory clientFactory,
     IOptions<EventsBridgeOptions> options,
@@ -23,9 +22,8 @@ public sealed class HttpChangeNotifier(
             return;
         }
 
-        // Fire-and-forget: the note is already committed. If the API is asleep or unreachable
-        // the browser still picks the note up when its event stream reconnects, so a failed
-        // ping costs only a missed live update - never the note, and never the job.
+        // Fire-and-forget: the note is already committed, so a failed ping costs only a missed
+        // live update - the browser picks it up on reconnect.
         _ = SendAsync(change);
     }
 

@@ -1,8 +1,6 @@
-# Frontend and backend build in parallel stages, then meet in the runtime image:
-# ASP.NET serves the SPA itself, so the browser stays on one origin and there is no CORS.
-#
-# Only KnowledgeBase.Api ships here. The AI worker (KnowledgeBase.Worker) runs on the home PC
-# next to Ollama - see DEPLOYMENT.md - and is deliberately not part of this image.
+# Frontend and backend build in parallel stages, then meet in the runtime image: ASP.NET
+# serves the SPA, so the browser stays on one origin and there is no CORS. Only
+# KnowledgeBase.Api ships here - the worker runs on the home PC (docs/infra.md).
 
 FROM node:24-alpine AS frontend
 WORKDIR /src/frontend

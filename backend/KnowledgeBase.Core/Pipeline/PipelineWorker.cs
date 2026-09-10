@@ -8,9 +8,7 @@ using Microsoft.Extensions.Options;
 
 namespace KnowledgeBase.Core.Pipeline;
 
-// Polls ProcessingJobs, turns each queued file into a Note. One instance for now, living
-// inside the API process; splitting it into its own service later changes only where it is
-// hosted, not what it does.
+// Polls ProcessingJobs, turns each queued file into a Note. See docs/ai-pipeline.md.
 public sealed class PipelineWorker(
     IServiceScopeFactory scopeFactory,
     IOptions<PipelineOptions> options,
@@ -47,9 +45,8 @@ public sealed class PipelineWorker(
         }
     }
 
-    // A worker that crashed mid-job left its row in Running. On a fresh start nothing is
-    // actually running, so anything still marked so is safe to requeue. Multiple instances
-    // would need a lease instead.
+    // A crash mid-job leaves a row in Running; on a fresh start nothing runs, so requeue it.
+    // Multiple instances would need a lease instead.
     private async Task ResetStuckJobsAsync(CancellationToken cancellationToken)
     {
         using var scope = scopeFactory.CreateScope();
@@ -107,8 +104,7 @@ public sealed class PipelineWorker(
             job.CompletedAtUtc = DateTime.UtcNow;
             job.Error = null;
 
-            // One SaveChanges: the note, its links, the resolved dangling links and the job
-            // status all commit together, or none do.
+            // One SaveChanges: note, links, dangling-link fixes, job status - all or nothing.
             await database.SaveChangesAsync(cancellationToken);
 
             services.GetRequiredService<IChangeNotifier>()
@@ -116,7 +112,7 @@ public sealed class PipelineWorker(
         }
         catch (ContentTooLargeException error)
         {
-            // Not a failure to retry: the input cannot fit however many times we try it.
+            // Not retriable: the input will not fit however many times we try.
             logger.LogWarning("Job {JobId} skipped: {Reason}", job.Id, error.Message);
 
             job.Status = ProcessingStatus.Skipped;
@@ -150,18 +146,17 @@ public sealed class PipelineWorker(
         KnowledgeBaseDbContext database,
         CancellationToken cancellationToken)
     {
-        // The connection retries on failure, and that execution strategy refuses a bare
-        // BeginTransaction - the whole unit has to be handed to it so a retry replays all of it.
+        // The retry strategy refuses a bare BeginTransaction - hand it the whole unit so a
+        // retry replays all of it.
         var strategy = database.Database.CreateExecutionStrategy();
 
         return strategy.ExecuteAsync(async () =>
         {
             await using var transaction = await database.Database.BeginTransactionAsync(cancellationToken);
 
-            // FOR UPDATE SKIP LOCKED: a second worker steps over this row instead of blocking on
-            // it, and the lock is held until this transaction commits the Running flip. Raw SQL
-            // because EF has no expression for it; LIMIT 1 is in the SQL and the result is
-            // materialised as-is so EF does not wrap it in a composing subquery.
+            // FOR UPDATE SKIP LOCKED: a second worker steps over this row; the lock holds until
+            // the Running flip commits. Raw SQL - EF has no expression for it - and materialised
+            // as-is so EF adds no composing subquery.
             var claimed = await database.ProcessingJobs
                 .FromSqlRaw(
                     """
@@ -208,8 +203,7 @@ public sealed class PipelineWorker(
         var extractor = services.GetRequiredService<SourceExtractorSelector>().For(kind);
         var maxSourceChars = services.GetRequiredService<IOptions<PipelineOptions>>().Value.MaxSourceChars;
 
-        // A second run over the same file replaces its note rather than adding a sibling. The
-        // old one is not offered to the model as a link target - it is about to be binned.
+        // A re-run replaces the note, not adds a sibling; the old one is not offered as a link target.
         var previous = await database.Notes
             .FirstOrDefaultAsync(existing => existing.SourceAssetId == asset.Id, cancellationToken);
 
@@ -225,10 +219,8 @@ public sealed class PipelineWorker(
         var extracted = await extractor.ExtractAsync(
             new SourceAsset(bytes, asset.ContentType, asset.OriginalFileName), cancellationToken);
 
-        // Caught here rather than left to Ollama's silent truncation: a bounded slice of a huge
-        // document would produce a note that looks fine but was written from a fraction of the
-        // source. Applies to every text-yielding kind - a .txt, a PDF's text layer, later a
-        // transcript. Skip it and let the user split the file.
+        // Caught here, not left to Ollama's silent truncation: a bounded slice would make a
+        // note that looks fine but came from a fraction of the source.
         if (extracted.Text is { Length: var length } && length > maxSourceChars)
         {
             throw new ContentTooLargeException(
@@ -240,9 +232,8 @@ public sealed class PipelineWorker(
 
         var result = await analyzer.AnalyzeAsync(request, cancellationToken);
 
-        // The model is asked to link only to titles it was given, but a 14B model does not
-        // always obey - it invents titles, and it links a note to itself. Keep only links to
-        // notes that actually existed before this one.
+        // A 14B model does not obey "link only to these titles" - it invents titles and
+        // self-links. Keep only links to notes that existed before this one.
         var known = titles.ToHashSet(StringComparer.OrdinalIgnoreCase);
         var links = result.Links
             .Where(known.Contains)
@@ -253,9 +244,8 @@ public sealed class PipelineWorker(
 
         if (previous is not null)
         {
-            // Saved on its own rather than with everything below: a re-run usually produces the
-            // same title, and the unique index over live titles would reject the insert if EF
-            // happened to order it before this update.
+            // On its own: a re-run usually reuses the title, and the live-title unique index
+            // would reject the insert if EF ordered it before this update.
             previous.DeletedAtUtc = now;
             await database.SaveChangesAsync(cancellationToken);
         }
@@ -291,8 +281,8 @@ public sealed class PipelineWorker(
             });
         }
 
-        // Links elsewhere that named this note before it existed. Loaded as tracked entities so
-        // the update rides the same SaveChanges as the insert above.
+        // Links elsewhere that named this note before it existed. Tracked, so the fix rides
+        // the insert's SaveChanges.
         var dangling = await database.NoteLinks
             .Where(link => link.TargetNoteId == null && link.TargetTitle == note.Title)
             .ToListAsync(cancellationToken);
@@ -304,9 +294,8 @@ public sealed class PipelineWorker(
 
         if (previous is not null)
         {
-            // Links elsewhere followed the note, not the version: pointing them at the binned
-            // one would grey them out for no reason the reader could see. Only the id moves -
-            // TargetTitle is the literal text in the other note's body and is not ours to edit.
+            // Inbound links follow the note, not the version. Only the id moves - TargetTitle
+            // is literal text in the other body.
             var inherited = await database.NoteLinks
                 .Where(link => link.TargetNoteId == previous.Id)
                 .ToListAsync(cancellationToken);

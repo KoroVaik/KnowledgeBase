@@ -1,6 +1,6 @@
 import { apiFetch, readErrorMessage } from './http'
 
-/** Mirrors UploadedAssetResponse in backend/Controllers/Assets (ASP.NET serialises camelCase). */
+/** Mirrors UploadedAssetResponse in backend Controllers/Assets. */
 export interface UploadedAsset {
   id: string
   storedFileName: string
@@ -16,14 +16,10 @@ export interface AssetSummary {
   originalFileName: string
   sizeBytes: number
   uploadedAtUtc: string
-  /**
-   * The pipeline job's state: 'Pending' | 'Running' | 'Done' | 'Failed' | 'Skipped', or null
-   * when the file is not a type the pipeline picks up.
-   */
+  /** 'Pending' | 'Running' | 'Done' | 'Failed' | 'Skipped', or null if not a pipeline type. */
   processingStatus: string | null
-  /** The job's error text, for 'Failed' and 'Skipped'. Null otherwise. */
+  /** Error text for 'Failed' / 'Skipped'. */
   processingError: string | null
-  /** The note produced from this file, once it exists. */
   noteId: string | null
 }
 
@@ -41,15 +37,11 @@ interface UploadLink {
   expiresAtUtc: string
 }
 
-/** The API-side resource for one stored file: base for /link, /confirm and DELETE. */
 function assetPath(storedFileName: string): string {
   return `/api/assets/${encodeURIComponent(storedFileName)}`
 }
 
-/**
- * Where the bytes actually are. Asked for on click rather than when the row renders: the
- * answer is a signed URL that works for anyone holding it, and it expires in minutes.
- */
+/** Asked for on click, not at render: the answer is a signed URL that expires in minutes. */
 export async function fetchDownloadUrl(storedFileName: string): Promise<string> {
   const response = await apiFetch(`${assetPath(storedFileName)}/link`)
 
@@ -60,11 +52,8 @@ export async function fetchDownloadUrl(storedFileName: string): Promise<string> 
   return ((await response.json()) as AssetLink).url
 }
 
-/**
- * Three steps, because no single party can do the job: only the API may sign, only the
- * bucket takes the bytes, and only the API can write the row that makes them visible.
- * Nothing exists in the listing until the last step succeeds. The bytes never touch the API.
- */
+// Three steps: only the API may sign, only the bucket takes bytes, only the API writes the
+// row that makes them visible. Nothing shows in the listing until confirm succeeds.
 export async function uploadAsset(
   file: File,
   onProgress?: (fraction: number) => void,
@@ -93,11 +82,7 @@ async function requestUploadLink(file: File): Promise<UploadLink> {
   return (await response.json()) as UploadLink
 }
 
-/**
- * XMLHttpRequest rather than fetch for one reason: only `xhr.upload` reports how much of
- * the request body has left the browser. fetch hands the body over and says nothing until
- * the response comes back, so a progress bar over a fetch PUT is not possible.
- */
+// XMLHttpRequest, not fetch: only `xhr.upload` reports request-body progress.
 function putToBucket(
   link: UploadLink,
   file: File,
@@ -107,8 +92,7 @@ function putToBucket(
     const request = new XMLHttpRequest()
 
     request.open('PUT', link.url)
-    // The only header we may send. It is signed into the URL, so it has to match exactly;
-    // any extra header widens the CORS preflight the bucket has no rule for.
+    // The only header allowed: it is in the signature, and any extra widens the CORS preflight.
     request.setRequestHeader('Content-Type', link.contentType)
 
     request.upload.addEventListener('progress', (event) => {
@@ -117,8 +101,7 @@ function putToBucket(
       }
     })
 
-    // A cross-origin PUT the bucket has no CORS rule for fails before any response exists,
-    // and looks identical to the network being down - status stays 0 either way.
+    // A blocked cross-origin PUT and a dead network both leave status 0.
     request.addEventListener('error', () => {
       reject(unreachableBucketError())
     })
@@ -177,10 +160,7 @@ export async function deleteAsset(storedFileName: string): Promise<void> {
   }
 }
 
-/**
- * Puts the file back in front of the worker: for one it failed on, or one whose note has been
- * deleted while the file itself was kept.
- */
+/** Re-queues a file the worker failed on, or whose note was deleted while the file was kept. */
 export async function processAsset(storedFileName: string): Promise<void> {
   const response = await apiFetch(`${assetPath(storedFileName)}/process`, { method: 'POST' })
 

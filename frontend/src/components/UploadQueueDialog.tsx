@@ -11,12 +11,8 @@ interface UploadQueueDialogProps {
   onClose: () => void
 }
 
-/**
- * A native <dialog> opened with showModal(), rather than a div with a hand-rolled overlay.
- * That call is what puts it in the browser's top layer (so no z-index or `overflow: hidden`
- * on an ancestor can clip it), dims the page through ::backdrop, marks everything behind it
- * inert - unclickable and out of the tab order - and traps focus inside. All of it for free.
- */
+// Native <dialog> + showModal(): top layer (no ancestor clips it), ::backdrop, inert page,
+// focus trap - all free. See docs/frontend.md.
 export function UploadQueueDialog({
   open,
   items,
@@ -26,9 +22,7 @@ export function UploadQueueDialog({
 }: UploadQueueDialogProps) {
   const dialogRef = useRef<HTMLDialogElement>(null)
 
-  // The `open` attribute alone would render the dialog inline, without any of the above:
-  // modality only exists as an imperative call, so this is one of the rare places where
-  // React has to reach into the DOM instead of describing it.
+  // Modality only exists as an imperative call - React has to reach into the DOM here.
   useEffect(() => {
     const dialog = dialogRef.current
 
@@ -53,9 +47,8 @@ export function UploadQueueDialog({
       ref={dialogRef}
       className="queue-dialog"
       aria-labelledby="queue-title"
-      // Escape is the only way out a <dialog> offers by default, and the `cancel` event is
-      // cancelable - which is exactly how it gets refused mid-flight. A click on the backdrop
-      // needs no guard: <dialog> does not close on one at all.
+      // Refuse Escape mid-upload via the cancelable `cancel` event. Backdrop clicks need no
+      // guard - <dialog> does not close on them.
       onCancel={(event) => {
         if (busy) {
           event.preventDefault()
@@ -110,8 +103,7 @@ export function UploadQueueDialog({
           </button>
         )}
 
-        {/* close() rather than the parent's handler directly, so every exit - Escape, this
-            button, the parent closing it - arrives through the same `close` event. */}
+        {/* close(), so every exit path arrives through the same `close` event. */}
         <button type="button" onClick={() => dialogRef.current?.close()} disabled={busy}>
           Close
         </button>
@@ -136,8 +128,7 @@ function StatusCell({ item, onUploadNow, onDismiss }: StatusCellProps) {
 
       return (
         <>
-          {/* No `value` while the fraction is unknown - that is what gives a native <progress>
-              its indeterminate look instead of a hard zero. */}
+          {/* No `value` while unknown - that is the native indeterminate look, not a hard zero. */}
           <progress
             className="upload-progress"
             max={1}
@@ -185,8 +176,7 @@ function StatusCell({ item, onUploadNow, onDismiss }: StatusCellProps) {
       )
 
     case 'blocked':
-      // No upload button on purpose: upload-link would answer 400, and offering a button that
-      // can only fail is worse than saying why up front.
+      // No upload button: upload-link would answer 400.
       return (
         <>
           <span className="queue-error">{item.problem?.message}</span>

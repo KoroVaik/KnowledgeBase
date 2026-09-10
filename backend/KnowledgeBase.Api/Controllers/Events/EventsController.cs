@@ -10,9 +10,7 @@ using Microsoft.Extensions.Options;
 
 namespace KnowledgeBase.Api.Controllers.Events;
 
-/// <summary>
-/// The live change stream every open tab listens to.
-/// </summary>
+/// <summary>The live change stream every open tab listens to.</summary>
 [ApiController]
 [Route("api/[controller]")]
 [Authorize]
@@ -20,24 +18,17 @@ public sealed class EventsController(IChangeNotifier notifier, IOptions<EventsOp
 {
     private readonly EventsOptions _options = options.Value;
 
-    // Long enough to stay cheap, short enough to beat the idle timeout of a proxy or a mobile
-    // network - those start dropping a silent connection at about a minute.
+    // Under a minute, or a proxy / mobile network starts dropping the silent connection.
     private static readonly TimeSpan KeepAliveInterval = TimeSpan.FromSeconds(20);
 
-    // Web defaults, so the payload is camelCase like every other response here.
     private static readonly JsonSerializerOptions EventJson = new(JsonSerializerDefaults.Web);
 
     private readonly IChangeNotifier _notifier = notifier;
 
     /// <summary>
-    /// Streams change events until the caller goes away (Server-Sent Events).
+    /// Streams change events as Server-Sent Events: one GET whose response never ends, a
+    /// <c>data: {json}</c> block per change. Browser side is <c>EventSource</c>.
     /// </summary>
-    /// <param name="cancellationToken">Fires when the browser closes the tab or the connection drops.</param>
-    /// <remarks>
-    /// One ordinary GET whose response never ends: the body keeps growing, one
-    /// <c>data: {json}</c> block per change. The browser side is <c>EventSource</c>.
-    /// Events carry no payload beyond what changed - see <see cref="ChangeEvent"/>.
-    /// </remarks>
     /// <response code="200">The stream is open.</response>
     /// <response code="401">No session, or it has expired.</response>
     [HttpGet]
@@ -49,16 +40,15 @@ public sealed class EventsController(IChangeNotifier notifier, IOptions<EventsOp
         Response.ContentType = "text/event-stream";
         Response.Headers.CacheControl = "no-cache";
 
-        // nginx-style proxies hold a response back until it ends, which for this one is never.
+        // nginx-style proxies hold a response back until it ends - never, for this one.
         Response.Headers["X-Accel-Buffering"] = "no";
 
-        // Kestrel would otherwise keep each event in its write buffer until the buffer fills.
+        // Or Kestrel buffers each event until the buffer fills.
         HttpContext.Features.Get<IHttpResponseBodyFeature>()?.DisableBuffering();
 
         using var subscription = _notifier.Subscribe();
 
-        // Pushes the headers out now, so the browser reports the stream as open instead of
-        // waiting for the first change - which may be hours away.
+        // Flush headers now so the browser reports the stream open before the first change.
         await Response.Body.FlushAsync(cancellationToken);
 
         try
@@ -75,20 +65,15 @@ public sealed class EventsController(IChangeNotifier notifier, IOptions<EventsOp
         }
         catch (OperationCanceledException)
         {
-            // The tab was closed or the connection died - the only normal way out of this loop.
-            // A write to a socket that is already gone lands here too, which is how a client
-            // that vanished without saying goodbye gets cleaned up.
+            // Tab closed or connection died - the normal way out. A write to a dead socket
+            // lands here too, cleaning up a client that vanished silently.
         }
     }
 
     /// <summary>
-    /// Accepts a change hint from the worker and fans it out to every open stream (Server-Sent Events).
+    /// Accepts a change hint from the worker (a separate process, no access to the in-memory
+    /// notifier) and fans it out to every open stream. Guarded by a shared token, not a session.
     /// </summary>
-    /// <remarks>
-    /// The worker runs in its own process and cannot reach the in-memory notifier directly, so it
-    /// posts here instead. Guarded by a shared token, not a session: there is no user behind this
-    /// call. A lost hint is harmless - the browser re-reads on its next reconnect either way.
-    /// </remarks>
     /// <response code="204">The hint was fanned out.</response>
     /// <response code="401">The token is missing or wrong.</response>
     /// <response code="503">No ingest token is configured, so the endpoint is closed.</response>
@@ -123,8 +108,7 @@ public sealed class EventsController(IChangeNotifier notifier, IOptions<EventsOp
 
     private async Task<bool> WriteNextAsync(ChangeSubscription subscription, CancellationToken cancellationToken)
     {
-        // Cancelling the wait rather than racing it against a timer: an abandoned
-        // WaitToReadAsync would pile up a second reader on every quiet interval.
+        // Cancel the wait, don't race a timer: an abandoned WaitToReadAsync stacks readers.
         using var idle = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         idle.CancelAfter(KeepAliveInterval);
 
@@ -137,9 +121,8 @@ public sealed class EventsController(IChangeNotifier notifier, IOptions<EventsOp
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
-            // Nothing changed for a while. A comment line - the browser drops it silently -
-            // keeps the connection off the idle-timeout list, and fails right here if the
-            // client is already gone.
+            // Quiet interval: a comment line keeps the connection alive and fails if the
+            // client is already gone. The browser drops it silently.
             await Response.WriteAsync(": ping\n\n", cancellationToken);
 
             return true;

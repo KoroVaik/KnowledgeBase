@@ -3,26 +3,22 @@ import { apiFetch, readErrorMessage } from './http'
 /** A note made from one uploaded file, or one written from many of those. */
 export type NoteKind = 'Source' | 'Synthesis'
 
-/** Mirrors NoteSummaryResponse in backend/Controllers/Notes (ASP.NET serialises camelCase). */
+/** Mirrors NoteSummaryResponse in backend Controllers/Notes. */
 export interface NoteSummary {
   id: string
   title: string
   category: string
   kind: NoteKind
-  /** A source note is deleted together with its file, so this is null only for a binned one. */
   sourceAssetId: string | null
-  /** Kept when the file goes, so the entry in the bin can still name it. */
+  /** Kept when the file goes, so the bin entry can still name it. */
   sourceFileName: string | null
   createdAtUtc: string
   updatedAtUtc: string
-  /** Set means binned: out of the listing, still there to restore or point a link at. */
+  /** Set means binned. */
   deletedAtUtc: string | null
 }
 
-/**
- * What one [[title]] in a body points at. The body itself never says - it holds the same text
- * whatever happens to the target - so the server works this out per read.
- */
+/** What one [[title]] points at. The body holds the same text either way; the server resolves. */
 export type LinkState = 'resolved' | 'deleted' | 'missing'
 
 export interface NoteLinkState {
@@ -31,7 +27,7 @@ export interface NoteLinkState {
   targetId: string | null
 }
 
-/** Mirrors NoteResponse in backend/Controllers/Notes: the summary plus body and link states. */
+/** Mirrors NoteResponse in backend Controllers/Notes. */
 export interface Note extends NoteSummary {
   body: string
   links: NoteLinkState[]
@@ -92,11 +88,8 @@ export async function fetchBacklinks(id: string): Promise<Backlink[]> {
   return (await response.json()) as Backlink[]
 }
 
-/**
- * Moves the note to the bin. The file it was made from goes too unless told otherwise - the
- * note is a description of that file, and a description of a file that is gone describes
- * nothing. Keeping the file puts it back in the unprocessed state, ready to run again.
- */
+/** To the bin. The source file goes too unless `deleteSource` is false, which leaves it
+ *  unprocessed and ready to run again. */
 export async function deleteNote(id: string, deleteSource: boolean): Promise<void> {
   const response = await apiFetch(`${notePath(id)}?deleteSource=${String(deleteSource)}`, {
     method: 'DELETE',
@@ -124,10 +117,8 @@ export async function purgeNote(id: string): Promise<void> {
   }
 }
 
-/**
- * Runs the pipeline over this note's file again. The note stays until the new one is ready,
- * then moves to the bin while the fresh one takes its place - links included.
- */
+/** Re-runs the pipeline over the file. The note stays until the new one is ready, then moves
+ *  to the bin while the fresh one takes its place, links included. */
 export async function processNoteAgain(id: string): Promise<void> {
   const response = await apiFetch(`${notePath(id)}/process-again`, { method: 'POST' })
 

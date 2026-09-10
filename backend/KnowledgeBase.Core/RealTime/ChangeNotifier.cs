@@ -4,9 +4,7 @@ namespace KnowledgeBase.Core.RealTime;
 
 public sealed class ChangeNotifier : IChangeNotifier
 {
-    // A set, spelled as a dictionary because there is no concurrent set in the BCL. Publishing
-    // happens on a request thread while another request subscribes or leaves, so plain
-    // HashSet + lock would be the alternative.
+    // A concurrent set (the BCL has none): publish races subscribe/leave on request threads.
     private readonly ConcurrentDictionary<ChangeSubscription, byte> _subscriptions = new();
 
     public ChangeSubscription Subscribe()
@@ -17,8 +15,7 @@ public sealed class ChangeNotifier : IChangeNotifier
         return subscription;
     }
 
-    // Never awaits and never throws: an upload must not slow down or fail because a listener
-    // is slow or has just gone away.
+    // Never awaits, never throws: a slow or gone listener must not affect the upload.
     public void Publish(ChangeEvent change)
     {
         foreach (var subscription in _subscriptions.Keys)

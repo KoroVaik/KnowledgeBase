@@ -3,8 +3,7 @@ using System.Text.Json.Serialization;
 
 namespace KnowledgeBase.Core.Ai;
 
-// The wire shapes for Ollama's HTTP API. Keys are snake_case on the wire, hence the explicit
-// names. Kept internal to this slice - nothing outside the analyzer speaks Ollama.
+// Ollama's HTTP wire shapes. snake_case keys. Internal - only the analyzer speaks Ollama.
 
 internal sealed record OllamaChatRequest
 {
@@ -14,12 +13,11 @@ internal sealed record OllamaChatRequest
     [JsonPropertyName("messages")]
     public required IReadOnlyList<OllamaMessage> Messages { get; init; }
 
-    // Ollama streams token-by-token by default; we want one complete JSON body.
+    // Ollama streams by default; we want one complete body.
     [JsonPropertyName("stream")]
     public bool Stream => false;
 
-    // A JSON schema here makes Ollama return content that matches it, instead of free prose
-    // we would have to salvage.
+    // A JSON schema makes Ollama return matching content, not free prose.
     [JsonPropertyName("format")]
     public required JsonObject Format { get; init; }
 
@@ -37,13 +35,11 @@ internal sealed record OllamaMessage(
 
 internal sealed record OllamaChatResponse
 {
-    // The assistant turn. Its Content is itself a JSON string matching the requested schema.
+    // Content is itself a JSON string matching the requested schema.
     [JsonPropertyName("message")]
     public OllamaMessage? Message { get; init; }
 
-    // Why generation stopped. "stop" is a clean finish; "length" means it ran into the
-    // context or token limit and the content is cut off - for our schema-constrained output
-    // that is an unterminated JSON string, so we catch it before trying to parse it.
+    // "length" = hit the context/token limit, so the JSON is cut - caught before parsing.
     [JsonPropertyName("done_reason")]
     public string? DoneReason { get; init; }
 }

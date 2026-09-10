@@ -1,13 +1,9 @@
 namespace KnowledgeBase.Core.RealTime;
 
 /// <summary>
-/// A hint that a collection changed, sent to every browser with the app open.
+/// A hint that a collection changed, sent to every open browser. Not the data itself - there
+/// is no event log, so a client that missed one just re-reads the collection.
 /// </summary>
-/// <remarks>
-/// Deliberately not the changed data itself. Nothing keeps a log of past events, so a client
-/// that was disconnected for a second cannot be handed what it missed - it re-reads the whole
-/// collection instead. That makes a lost event harmless and keeps this contract stable.
-/// </remarks>
 public sealed record ChangeEvent(string Resource, string Action, string? Id = null);
 
 public static class ChangeResources

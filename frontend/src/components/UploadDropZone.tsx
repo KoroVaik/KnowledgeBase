@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-// Aliased because the DOM has a DragEvent of its own, and the window listener below needs it.
+// The DOM has its own DragEvent; the window listener below needs it.
 import type { ChangeEvent, DragEvent as ReactDragEvent } from 'react'
 import { useUploadQueue } from '../upload/useUploadQueue'
 import { UploadQueueDialog } from './UploadQueueDialog'
@@ -38,12 +38,8 @@ export function UploadDropZone({
     reset()
   }, [reset])
 
-  /**
-   * Missing the zone is easy, and a file dropped anywhere else makes the browser navigate away
-   * to display it - taking the whole SPA, the session and any upload in flight with it. This
-   * also covers the zone while it is disabled, where the button swallows the event and our own
-   * handler never runs.
-   */
+  // A file dropped past the zone makes the browser navigate to it, taking the SPA with it.
+  // Also covers the disabled zone, where the button swallows the event.
   useEffect(() => {
     const swallow = (event: DragEvent) => event.preventDefault()
 
@@ -56,9 +52,8 @@ export function UploadDropZone({
     }
   }, [])
 
-  // Closing itself is the whole point of the queue: it is done when no row is left waiting on
-  // the user. `every` on an empty list is true, so dismissing the last row closes it too.
-  // The pause is only so the last row can be seen turning green.
+  // Done when no row is still waiting on the user (`every` on [] is true). The pause lets the
+  // last row be seen turning green.
   useEffect(() => {
     if (!open || !items.every((item) => item.state.status === 'done')) {
       return
@@ -97,14 +92,9 @@ export function UploadDropZone({
     [accept],
   )
 
-  /**
-   * Ctrl+V anywhere on the page, and with it the Windows clipboard history (Win+V pastes the
-   * chosen entry into the focused window, which reaches us as this same event). The listener
-   * sits on the window rather than on the field below so that neither needs focus.
-   *
-   * The default is only prevented once files were taken: pasting text into some other input
-   * has to keep working.
-   */
+  // Ctrl+V anywhere, and with it the Windows clipboard history (Win+V arrives as a paste).
+  // On the window, not the field, so neither needs focus. preventDefault only once files were
+  // taken, or pasting text elsewhere breaks.
   useEffect(() => {
     if (!uploadEnabled) {
       return
@@ -113,8 +103,7 @@ export function UploadDropZone({
     const onPaste = (event: ClipboardEvent) => {
       const accepted = acceptPasted(event.clipboardData)
 
-      // The field is a target for the paste gesture, not a text box: whatever was pasted,
-      // it never lands in it.
+      // The field is a paste target, not a text box - nothing lands in it.
       if (accepted || event.target === pasteRef.current) {
         event.preventDefault()
       }
@@ -129,7 +118,7 @@ export function UploadDropZone({
   }, [uploadEnabled, acceptPasted])
 
   function handleDrop(event: ReactDragEvent<HTMLElement>) {
-    // Without this the browser navigates away to display the dropped file.
+    // Without this the browser navigates to the dropped file.
     event.preventDefault()
     setDragging(false)
     setClipboardNote(null)
@@ -144,17 +133,12 @@ export function UploadDropZone({
     setSkippedFolders(0)
     setClipboardNote(null)
     accept(Array.from(event.target.files ?? []))
-    // <input type="file"> is uncontrolled, and picking the same file twice in a row raises no
-    // change event unless the value is cleared in between.
+    // Uncontrolled input: re-picking the same file raises no change event unless value is cleared.
     event.target.value = ''
   }
 
-  /**
-   * The button stays enabled whatever the clipboard holds: what is in there can only be learned
-   * by reading it, and reading is what asks the user for permission - Safari puts up its own
-   * "Paste" prompt, Chrome a permission one. Probing to decide whether to grey out the button
-   * would raise that prompt on its own, so an empty clipboard is reported after the click.
-   */
+  // Not disabled by clipboard content: reading is what raises the permission prompt, so probing
+  // to disable the button would raise it anyway. An empty clipboard is reported after the click.
   async function pasteFromClipboard() {
     setSkippedFolders(0)
     setClipboardNote(null)
@@ -169,8 +153,7 @@ export function UploadDropZone({
     try {
       files = await readClipboardImages()
     } catch {
-      // Both a denied permission and a dismissed Safari prompt land here, and the browser tells
-      // them apart nowhere - hence one message covering the whole "did not get the bytes" case.
+      // A denied permission and a dismissed Safari prompt are indistinguishable - one message.
       setClipboardNote('The browser did not grant access to the clipboard.')
       return
     }
@@ -187,24 +170,20 @@ export function UploadDropZone({
     <section className="upload">
       {!uploadEnabled && <p className="upload-disabled">Uploading is turned off.</p>}
 
-      {/* A button, so a keyboard reaches the picker and a screen reader calls it what it is.
-          The input is a sibling rather than a child on purpose: input.click() dispatches a
-          click that bubbles, and from inside the button that would re-enter this handler. */}
+      {/* Input is a sibling, not a child: input.click() bubbles, and from inside the button
+          that re-enters this handler. */}
       <button
         type="button"
         className={dragging ? 'drop-zone drop-zone-active' : 'drop-zone'}
         disabled={!uploadEnabled}
         onClick={() => inputRef.current?.click()}
         onDragOver={(event) => {
-          // A drop target is defined by preventing the default on dragover, not by the handler
-          // on drop - without this the drop event never fires at all.
+          // preventDefault on dragover is what makes this a drop target; without it drop never fires.
           event.preventDefault()
           setDragging(true)
         }}
         onDragLeave={(event) => {
-          // dragleave also fires when the cursor crosses onto a child element, which on its
-          // own makes the highlight flicker. It is a real leave only when the cursor has
-          // landed outside the zone entirely.
+          // dragleave also fires crossing onto a child - real leave only if the cursor left the zone.
           if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
             setDragging(false)
           }
@@ -224,10 +203,8 @@ export function UploadDropZone({
         onChange={handleFileChange}
       />
 
-      {/* A real focusable field, because that is the only thing the clipboard history of a
-          phone can paste into: Gboard's clipboard tab and the long-press "Paste" menu both
-          insert into the focused input. On a desktop the window listener above covers Ctrl+V
-          and Win+V without it. */}
+      {/* A focusable field: the only thing a phone's clipboard history can paste into. On
+          desktop the window listener above covers Ctrl+V and Win+V without it. */}
       <div className="upload-actions">
         <button
           type="button"
@@ -275,10 +252,7 @@ export function UploadDropZone({
   )
 }
 
-/**
- * Clipboard images arrive as bare blobs, so a name has to be made up here - the queue, the
- * classifier and the API all key off one, and a screenshot has none.
- */
+/** Clipboard images are bare blobs; a name has to be made up - the queue and API key off one. */
 async function readClipboardImages(): Promise<File[]> {
   const stamp = clipboardStamp()
   const files: File[] = []
@@ -299,11 +273,8 @@ async function readClipboardImages(): Promise<File[]> {
   return files
 }
 
-/**
- * A paste carries whole files too - a file copied in Explorer or Finder arrives here with its
- * real name, and that one is kept. A screenshot arrives as a blob the browser calls `image.png`
- * no matter when it was taken, so those get the same synthetic name as the button's path.
- */
+/** A pasted whole file (copied in Explorer/Finder) keeps its real name; a screenshot blob
+ *  (always `image.png`) is renamed like the button's path. */
 function readPastedFiles(transfer: DataTransfer): File[] {
   const stamp = clipboardStamp()
 
@@ -332,12 +303,8 @@ function extensionOf(mime: string): string {
   return subtype === 'jpeg' ? 'jpg' : subtype === '' ? 'bin' : subtype
 }
 
-/**
- * A dropped folder arrives in `dataTransfer.files` as an entry with size 0, indistinguishable
- * from an empty file - so it would land in the queue as "The file is empty", which is a lie.
- * `webkitGetAsEntry` is the only way to tell them apart, and it has to be called synchronously:
- * the item list is emptied as soon as the drop handler returns.
- */
+/** A dropped folder is a size-0 entry, same as an empty file. `webkitGetAsEntry` tells them
+ *  apart and must be called synchronously - the item list empties when the handler returns. */
 function readDrop(transfer: DataTransfer): { files: File[]; folders: number } {
   const items = Array.from(transfer.items).filter((item) => item.kind === 'file')
 

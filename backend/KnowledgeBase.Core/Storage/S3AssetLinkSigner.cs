@@ -17,8 +17,7 @@ public sealed class S3AssetLinkSigner : IAssetLinkSigner
         _client = client;
         _options = options.Value;
 
-        // The SDK signs https by default and ignores the scheme of ServiceUrl, so a local
-        // Garage on plain http would be handed links to a port that speaks no TLS.
+        // The SDK signs https and ignores the ServiceUrl scheme; a local Garage on http needs HTTP.
         _protocol = Uri.TryCreate(_options.ServiceUrl, UriKind.Absolute, out var serviceUrl)
             && serviceUrl.Scheme == Uri.UriSchemeHttp
                 ? Protocol.HTTP
@@ -37,9 +36,7 @@ public sealed class S3AssetLinkSigner : IAssetLinkSigner
             Expires = expiresAt.UtcDateTime,
             Protocol = _protocol,
 
-            // The object sits under a GUID, and objects stored before direct uploads carry no
-            // useful type at all. These overrides are what still makes the browser save
-            // "my report.pdf" - the metadata lives in the table, so the link has to carry it.
+            // The object is stored under a GUID; these overrides make the browser save the real name.
             ResponseHeaderOverrides = new ResponseHeaderOverrides
             {
                 ContentDisposition = AttachmentFor(originalFileName),
@@ -64,17 +61,14 @@ public sealed class S3AssetLinkSigner : IAssetLinkSigner
             Expires = expiresAt.UtcDateTime,
             Protocol = _protocol,
 
-            // Part of the signature, so the browser must send exactly this header - and the
-            // object lands in the bucket already carrying the type, which SaveAsync never set.
+            // Part of the signature, so the browser must send exactly this.
             ContentType = effectiveContentType,
         });
 
         return new SignedUpload(fileName, url, effectiveContentType, expiresAt);
     }
 
-    // RFC 6266: the quoted filename is what old clients read, filename* carries everything
-    // outside ASCII. Sending only the first would mangle a Cyrillic name, only the second
-    // would leave some clients with nothing.
+    // RFC 6266: quoted filename for old clients, filename* for non-ASCII names.
     private static string AttachmentFor(string originalFileName)
     {
         var ascii = new string(originalFileName

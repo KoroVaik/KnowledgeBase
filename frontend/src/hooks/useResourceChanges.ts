@@ -1,14 +1,10 @@
 import { useEffect, useRef } from 'react'
 import { subscribeToChanges } from '../api/realtime'
 
-/**
- * Calls `onChange` whenever the server reports that this collection changed, and after the
- * stream reconnects. The argument is not passed on: an event says what changed, never what it
- * changed to, so the only correct reaction is to re-read the collection.
- */
+/** Calls `onChange` when the server reports this collection changed, and after a reconnect.
+ *  An event says what changed, not to what - so re-read the collection. */
 export function useResourceChanges(resource: string, onChange: () => void) {
-  // Held in a ref so that a handler rebuilt on every render does not close the stream and
-  // open it again on every render with it.
+  // In a ref so a handler rebuilt each render does not re-open the stream.
   const handler = useRef(onChange)
 
   useEffect(() => {

@@ -8,13 +8,8 @@ interface WikiLinkToken extends Tokens.Generic {
   title: string
 }
 
-/**
- * Renders a note body, turning every [[title]] into the state the server resolved it to:
- * a working link, a note that was deleted, or a note that does not exist yet.
- *
- * A marked extension rather than a replace over the raw text: the tokenizer knows what is
- * code, so a [[title]] inside a fenced block stays the literal text it is meant to be.
- */
+// A marked extension, not a raw-text replace: the tokenizer knows what is code, so a
+// [[title]] inside a fenced block stays literal text.
 export function renderNoteBody(markdown: string, links: NoteLinkState[]): string {
   const states = new Map(links.map((link) => [link.title.toLowerCase(), link]))
 
@@ -22,8 +17,7 @@ export function renderNoteBody(markdown: string, links: NoteLinkState[]): string
     name: 'wikiLink',
     level: 'inline',
 
-    // Without this, marked scans for the extension only after other inline rules have had
-    // their say, and the brackets are already gone.
+    // Without this, other inline rules consume the brackets before the extension runs.
     start: (source: string) => source.indexOf('[['),
 
     tokenizer(source: string) {
@@ -46,14 +40,12 @@ export function renderNoteBody(markdown: string, links: NoteLinkState[]): string
       const text = escapeHtml(title)
 
       if (link?.state === 'resolved' && link.targetId !== null) {
-        // A button, not an anchor: there is no URL for a note - the list expands it in place.
+        // A button, not an anchor: a note has no URL, the list expands it in place.
         return `<button type="button" class="wiki-link" data-note-id="${escapeHtml(link.targetId)}">${text}</button>`
       }
 
       if (link?.state === 'deleted') {
-        // The strike sits on an inner span, not the wrapper: text-decoration inherits down
-        // and a descendant cannot switch it off, so a wrapper-level strike would cross out
-        // the "deleted" tag as well.
+        // Strike on the inner span, not the wrapper: it inherits down and would cross the tag too.
         return (
           `<span class="wiki-link wiki-link-deleted">` +
           `<span class="wiki-link-text">${text}</span>` +

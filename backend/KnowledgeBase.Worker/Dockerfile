@@ -1,5 +1,5 @@
-# AI worker image for the home PC. Build context is backend/.
-# Not part of the prod (Render) deploy - see DEPLOYMENT.md.
+# AI worker image for the home PC. Build context is backend/. Not part of the Render
+# deploy (docs/infra.md, infra/worker/README.md).
 
 FROM mcr.microsoft.com/dotnet/sdk:8.0-alpine AS build
 WORKDIR /src

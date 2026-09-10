@@ -15,17 +15,13 @@ type BacklinkState =
   | { status: 'ready'; backlinks: Backlink[] }
   | { status: 'error' }
 
-/**
- * The confirmation for deleting a note. Says what it takes with it rather than asking whether
- * the user is sure: which notes lose a working link, and which file goes along.
- */
+// Names what the delete takes with it - which notes lose a link, which file goes along.
 export function DeleteNoteDialog({ note, busy, onCancel, onConfirm }: DeleteNoteDialogProps) {
   const dialogRef = useRef<HTMLDialogElement>(null)
   const [deleteSource, setDeleteSource] = useState(true)
   const [backlinks, setBacklinks] = useState<BacklinkState>({ status: 'loading' })
 
-  // Modality only exists as an imperative call - the `open` attribute renders the dialog
-  // inline, without the top layer, the backdrop or the focus trap.
+  // Modality only exists as an imperative call - React has to reach into the DOM here.
   useEffect(() => {
     const dialog = dialogRef.current
 
@@ -56,8 +52,7 @@ export function DeleteNoteDialog({ note, busy, onCancel, onConfirm }: DeleteNote
         }
       })
       .catch(() => {
-        // The count is context, not a precondition: failing to fetch it must not block the
-        // delete the user came here for.
+        // The count is context, not a precondition - a failed fetch must not block the delete.
         if (!cancelled) {
           setBacklinks({ status: 'error' })
         }

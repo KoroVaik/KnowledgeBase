@@ -11,18 +11,15 @@ public static class MiddlewarePipeline
         }
         else
         {
-            // Must run before anything reads the scheme or the client address: behind the proxy
-            // Kestrel sees plain http and the balancer's IP, so redirection would loop and the
-            // login limiter would bucket every client together.
+            // Before anything reads the scheme or client IP: behind the proxy Kestrel sees http
+            // and the balancer IP, so redirects loop and the login limiter buckets everyone.
             app.UseForwardedHeaders();
 
-            // Skipped in Development on purpose: the Vite proxy forwards to http://localhost:5244,
-            // and a 307 to the HTTPS endpoint would break it on the dev certificate.
+            // Skipped in Development: a 307 to https would break the Vite proxy on the dev cert.
             app.UseHttpsRedirection();
         }
 
-        // The SPA lives in wwwroot in the container image; in Development it is absent and Vite
-        // serves it instead.
+        // SPA is in wwwroot in the image; in Development Vite serves it instead.
         app.UseDefaultFiles();
         app.UseStaticFiles();
 

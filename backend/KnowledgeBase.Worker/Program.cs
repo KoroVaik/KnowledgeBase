@@ -15,20 +15,17 @@ builder.UseLocalOverrides();
 
 builder.Services.AddDatabase(builder.Configuration);
 
-// Registers IAssetContentReader (the worker's real need) plus IAssetStorage / IAssetLinkSigner,
-// which it never resolves - cheap singletons, and one registration path shared with the API.
+// The worker only needs IAssetContentReader; IAssetStorage / IAssetLinkSigner come with it.
 builder.Services.AddAssetStorage(builder.Configuration);
 
 builder.Services.AddContentAnalyzer(builder.Configuration);
 builder.Services.AddContentPipeline(builder.Configuration);
 
-// The PDF extractor and its PdfPig dependency live in the worker, not Core, so the API image
-// stays free of them. AddContentPipeline registered the text and image extractors.
+// PDF extractor + PdfPig live here, not Core, so the API image stays free of them.
 builder.Services.AddSingleton<IPdfTextExtractor, PdfPigTextExtractor>();
 builder.Services.AddSingleton<ISourceExtractor, PdfSourceExtractor>();
 
-// Posts PipelineWorker's change hints to the API so open browsers refresh live. With no
-// ApiBaseUrl / IngestToken configured it is a no-op - see HttpChangeNotifier.
+// Posts PipelineWorker's change hints to the API. No-op without ApiBaseUrl / IngestToken.
 builder.Services.Configure<EventsBridgeOptions>(builder.Configuration.GetSection(EventsBridgeOptions.SectionName));
 builder.Services.AddHttpClient(HttpChangeNotifier.ClientName, (serviceProvider, client) =>
 {
@@ -39,16 +36,14 @@ builder.Services.AddHttpClient(HttpChangeNotifier.ClientName, (serviceProvider, 
         client.BaseAddress = new Uri(bridge.ApiBaseUrl);
     }
 
-    // Short on purpose: a slow or cold-starting API must not hold up the poll loop. The note
-    // is saved regardless of whether this ping lands.
+    // Short: a slow / cold API must not hold up the poll loop. The note is saved either way.
     client.Timeout = TimeSpan.FromSeconds(5);
 });
 builder.Services.AddSingleton<IChangeNotifier, HttpChangeNotifier>();
 
 var host = builder.Build();
 
-// Borrows the built container for a one-off analyzer smoke test, then exits before the
-// polling loop starts.
+// One-off analyzer smoke test, then exit before the poll loop.
 if (AnalyzeCommand.Matches(args))
 {
     await AnalyzeCommand.RunAsync(host.Services, args);

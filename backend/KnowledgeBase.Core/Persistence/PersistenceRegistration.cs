@@ -10,8 +10,7 @@ public static class PersistenceRegistration
     {
         var connectionString = configuration.GetConnectionString(ConnectionName);
 
-        // Fail on start rather than on the first request: a missing connection string is a
-        // deployment mistake, and a 500 an hour later hides it.
+        // Fail on start, not on the first request: a missing string is a deployment mistake.
         if (string.IsNullOrWhiteSpace(connectionString))
         {
             throw new InvalidOperationException(
@@ -20,18 +19,16 @@ public static class PersistenceRegistration
                 + "environment variable.");
         }
 
-        // Scoped by default: a DbContext is not thread-safe, so it lives one HTTP request long.
+        // Scoped: a DbContext is not thread-safe, so it lives one HTTP request long.
         services.AddDbContext<KnowledgeBaseDbContext>(options =>
-            // The managed database sleeps when idle and takes a moment to wake; without retries
-            // the request that wakes it is the one that fails.
+            // The managed DB sleeps when idle; without retries the request that wakes it fails.
             options.UseNpgsql(connectionString, npgsql => npgsql.EnableRetryOnFailure()));
 
         return services;
     }
 
-    // Migrating on start is safe only because one process owns the schema: the API. The worker
-    // takes AddDatabase but never this - it runs against tables the API has already created.
-    // Typed as IHost so it does not drag the ASP.NET types into this project.
+    // Safe on start only because the API owns the schema (the worker never calls this).
+    // IHost, not the ASP.NET types, so it stays usable from Core.
     public static IHost MigrateDatabase(this IHost app)
     {
         using var scope = app.Services.CreateScope();

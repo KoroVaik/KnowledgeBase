@@ -12,21 +12,14 @@ using Microsoft.Extensions.Options;
 namespace KnowledgeBase.Api.Controllers.Assets;
 
 /// <summary>
-/// Uploaded files: the raw PDFs and images notes will be built from.
+/// Uploaded files: the raw PDFs and images notes are built from. The table is the source of
+/// truth; the bytes go browser ↔ bucket over signed URLs and never pass through here.
 /// </summary>
-/// <remarks>
-/// The table is the source of truth: the listing comes from it, and the storage only holds
-/// bytes. Bytes without a row are invisible to the API and get collected separately.
-///
-/// The bytes themselves never pass through here - the browser PUTs them to the bucket and
-/// GETs them back over signed URLs. This controller only signs, lists and deletes.
-/// </remarks>
 [ApiController]
 [Route("api/[controller]")]
 [Authorize]
 [Produces("application/json")]
-// IOptionsSnapshot, not IOptions: it is re-read per request, so a flag flipped in
-// configuration takes effect without a restart.
+// IOptionsSnapshot, not IOptions: re-read per request, so a flipped flag needs no restart.
 public sealed class AssetsController(
     IAssetStorage storage,
     KnowledgeBaseDbContext database,
@@ -43,11 +36,7 @@ public sealed class AssetsController(
     private readonly FeatureOptions _features = features.Value;
     private readonly IAssetLinkSigner _signer = signer;
 
-    /// <summary>
-    /// Lists every stored file, newest first.
-    /// </summary>
-    /// <param name="cancellationToken">Cancels the listing if the client disconnects.</param>
-    /// <returns>Stored name, original name, size and upload time of each file.</returns>
+    /// <summary>Lists every stored file, newest first, with its job state and note id.</summary>
     /// <response code="200">The listing, possibly empty.</response>
     /// <response code="401">No session, or it has expired.</response>
     [HttpGet]
@@ -55,9 +44,8 @@ public sealed class AssetsController(
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> List(CancellationToken cancellationToken)
     {
-        // One row per asset plus, where they exist, its pipeline job and the note it produced.
-        // Left joins, because most of the interesting states are "no job yet" or "no note yet";
-        // GroupJoin + SelectMany with DefaultIfEmpty is how EF spells LEFT JOIN.
+        // LEFT JOIN asset → its job → its note. GroupJoin + SelectMany + DefaultIfEmpty is
+        // how EF spells LEFT JOIN.
         var rows = await _database.Assets
             .GroupJoin(
                 _database.ProcessingJobs,
@@ -93,19 +81,9 @@ public sealed class AssetsController(
     }
 
     /// <summary>
-    /// Returns a short-lived URL the browser fetches the bytes from directly.
+    /// Returns a short-lived signed URL the browser fetches the bytes from directly. Name and
+    /// content type are signed in as response-header overrides. Issued per click.
     /// </summary>
-    /// <param name="fileName">The stored name, as returned by the listing.</param>
-    /// <param name="cancellationToken">Cancels the lookup if the client disconnects.</param>
-    /// <returns>The signed URL and the moment it stops working.</returns>
-    /// <remarks>
-    /// The API never sees these bytes. The original name and content type live in the table,
-    /// so they are signed into the link as response header overrides - that is what makes the
-    /// browser save the file under the name the user picked rather than the GUID it is stored
-    /// under. Issued per click, not per listing: the URL is a credential with a life of minutes.
-    /// The object is checked for before signing, so a link is never handed out for bytes that
-    /// are not there.
-    /// </remarks>
     /// <response code="200">The signed URL.</response>
     /// <response code="401">No session, or it has expired.</response>
     /// <response code="403">Downloading is switched off by the Features:DownloadEnabled flag.</response>
@@ -129,8 +107,7 @@ public sealed class AssetsController(
             return NotFound();
         }
 
-        // Costs a HEAD per click: a row whose object is gone is a 404 here, not a link that
-        // hands the browser an XML error page from the bucket.
+        // A HEAD per click: a row whose object is gone is a 404, not a link to a bucket XML error.
         if (await _storage.GetAsync(record.StoredFileName, cancellationToken) is null)
         {
             return NotFound();
@@ -142,15 +119,9 @@ public sealed class AssetsController(
     }
 
     /// <summary>
-    /// Reserves a key in the bucket and returns a URL the browser PUTs the bytes to.
+    /// Step 1 of 2: reserves a key and returns a signed URL the browser PUTs the bytes to.
+    /// The size here is the client's claim - the real check is in Confirm.
     /// </summary>
-    /// <param name="request">Name, type and size of the file about to be sent.</param>
-    /// <returns>The key, the signed URL, and the content type the PUT must carry.</returns>
-    /// <remarks>
-    /// Step one of two: nothing is stored yet and no row exists. The size here is what the
-    /// client claims - a signed PUT cannot be capped, so the real check happens in Confirm,
-    /// once the object is in the bucket and its size can be read rather than believed.
-    /// </remarks>
     /// <response code="200">The signed URL.</response>
     /// <response code="400">The file is empty or over the size limit.</response>
     /// <response code="401">No session, or it has expired.</response>
@@ -183,19 +154,9 @@ public sealed class AssetsController(
     }
 
     /// <summary>
-    /// Records an object the browser has already put in the bucket.
+    /// Step 2 of 2: records an object already in the bucket - the only step that writes the
+    /// row. Size is read back from the object. An unconfirmed object stays an orphan.
     /// </summary>
-    /// <param name="fileName">The key handed out by upload-link.</param>
-    /// <param name="request">The original name and type to store alongside it.</param>
-    /// <param name="cancellationToken">Cancels the lookup if the client disconnects.</param>
-    /// <returns>Metadata of the stored file.</returns>
-    /// <remarks>
-    /// Step two of two, and the only step that can create the row - a bucket cannot write to
-    /// Postgres. The size is read back from the object rather than taken from the client,
-    /// because the signed PUT accepted whatever was actually sent.
-    /// An object that never gets confirmed stays invisible to the API and is collected
-    /// separately; that is the price of the bytes not passing through here.
-    /// </remarks>
     /// <response code="201">The row exists; the file is now in the listing.</response>
     /// <response code="400">The object is empty or over the size limit; it has been removed.</response>
     /// <response code="401">No session, or it has expired.</response>
@@ -219,8 +180,7 @@ public sealed class AssetsController(
             return StatusCode(StatusCodes.Status403Forbidden, new { error = "Uploading is turned off." });
         }
 
-        // A retried confirm - the answer got lost, the user pressed the button again - must not
-        // leave two rows pointing at one object.
+        // A retried confirm must not leave two rows on one object.
         if (await FindAsync(fileName, cancellationToken) is not null)
         {
             return Conflict(new { error = "This file has already been confirmed." });
@@ -235,8 +195,7 @@ public sealed class AssetsController(
 
         if (stored.SizeBytes <= 0 || stored.SizeBytes > _options.MaxUploadBytes)
         {
-            // Refusing the row is not enough: the bytes are already there, and without a row
-            // nothing would ever look at them again.
+            // The bytes are already in the bucket; without a row nothing would look at them again.
             await _storage.DeleteAsync(fileName, CancellationToken.None);
 
             return BadRequest(new
@@ -255,8 +214,7 @@ public sealed class AssetsController(
 
         _database.Assets.Add(record);
 
-        // Same SaveChanges, so the job and its asset commit together: no queued row without a
-        // file, no file the pipeline never looks at.
+        // Same SaveChanges as the asset row, so job and file commit together.
         if (ProcessableContent.Classify(record.ContentType, record.OriginalFileName) is not null)
         {
             _database.ProcessingJobs.Add(ProcessingJob.Queue(record.Id));
@@ -277,11 +235,7 @@ public sealed class AssetsController(
         return CreatedAtAction(nameof(DownloadLink), new { fileName }, response);
     }
 
-    /// <summary>
-    /// Deletes one stored file.
-    /// </summary>
-    /// <param name="fileName">The stored name, as returned by the listing.</param>
-    /// <param name="cancellationToken">Cancels the call if the client disconnects.</param>
+    /// <summary>Deletes one stored file, binning its note if it has one.</summary>
     /// <response code="204">The file is gone.</response>
     /// <response code="401">No session, or it has expired.</response>
     /// <response code="404">No such file.</response>
@@ -298,8 +252,7 @@ public sealed class AssetsController(
             return NotFound();
         }
 
-        // The note is a structured description of this file, so it goes with it - into the bin,
-        // not out of existence, so links pointing at it can say "deleted" rather than go blank.
+        // The note describes this file, so it goes too - into the bin, so links can say "deleted".
         var note = await _database.Notes
             .FirstOrDefaultAsync(note => note.SourceAssetId == record.Id, cancellationToken);
 
@@ -308,8 +261,7 @@ public sealed class AssetsController(
             note.DeletedAtUtc = DateTime.UtcNow;
         }
 
-        // Row first: the file leaves the listing even if the storage call below fails, and a
-        // leftover object is easier to live with than a row pointing at nothing.
+        // Row first: a leftover object beats a row pointing at nothing if the delete below fails.
         _database.Assets.Remove(record);
         await _database.SaveChangesAsync(CancellationToken.None);
 
@@ -326,14 +278,9 @@ public sealed class AssetsController(
     }
 
     /// <summary>
-    /// Puts the file back in front of the worker.
+    /// Re-queues a file the pipeline failed on, skipped, or whose note has been binned.
+    /// (For a file that still has a note, use process-again on the note.)
     /// </summary>
-    /// <param name="fileName">The stored name, as returned by the listing.</param>
-    /// <param name="cancellationToken">Cancels the call if the client disconnects.</param>
-    /// <remarks>
-    /// For files the pipeline failed on, skipped, or whose note has been binned. Redoing a file
-    /// that still has a note is the same call under a different name on the note itself.
-    /// </remarks>
     /// <response code="202">Queued.</response>
     /// <response code="401">No session, or it has expired.</response>
     /// <response code="404">No such file.</response>

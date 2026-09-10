@@ -10,11 +10,7 @@ type ListState =
   | { status: 'error'; message: string }
 
 interface AssetListProps {
-  /**
-   * Changing this reloads the list - the upload form bumps it after a successful upload.
-   * Kept even though the server announces that upload over the change stream too: it shows
-   * the new row without waiting for the round trip, and it still works if the stream is down.
-   */
+  /** Bumped after a successful upload to reload the list - covers a down change stream. */
   reloadToken: number
   downloadEnabled: boolean
   /** From /api/features: threshold for the "possibly too large" hint on text files. */
@@ -28,15 +24,13 @@ export function AssetList({ reloadToken, downloadEnabled, maxSourceChars }: Asse
   const [processingFileName, setProcessingFileName] = useState<string | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
 
-  // Reloads are no longer triggered by this component alone - the change stream fires them
-  // too, and two can be in flight at once. Only the newest one may write to the state.
+  // The change stream fires reloads too, so two can be in flight - only the newest writes state.
   const latestReload = useRef(0)
 
   const reload = useCallback(() => {
     const reloadId = ++latestReload.current
 
-    // A reload deliberately leaves the current rows on screen instead of flipping back to
-    // "Loading…" - the list would flash on every upload.
+    // Leave the current rows on screen, don't flash "Loading…" on every upload.
     void fetchAssets()
       .then((assets) => {
         if (reloadId === latestReload.current) {
@@ -48,9 +42,7 @@ export function AssetList({ reloadToken, downloadEnabled, maxSourceChars }: Asse
           return
         }
 
-        // A reload nobody asked for is allowed to fail quietly: rows already on screen are
-        // still the best answer available, and blanking them on a flaky connection would be
-        // worse than showing them a minute stale.
+        // Fail quietly: stale rows beat blanking them on a flaky connection.
         setState((current) =>
           current.status === 'ready' ? current : { status: 'error', message: messageOf(error) },
         )
@@ -61,9 +53,7 @@ export function AssetList({ reloadToken, downloadEnabled, maxSourceChars }: Asse
 
   useResourceChanges('assets', reload)
 
-  // The worker runs in its own process with no change stream back to the browser, so a job
-  // finishing is not announced. While anything is still in flight, poll for the status flip;
-  // stop once every row has reached a terminal state.
+  // The worker has no change stream back to the browser, so poll while a job is in flight.
   const hasActiveJob =
     state.status === 'ready' &&
     state.assets.some((asset) => asset.processingStatus === 'Pending' || asset.processingStatus === 'Running')
@@ -166,8 +156,7 @@ export function AssetList({ reloadToken, downloadEnabled, maxSourceChars }: Asse
             <li className="asset" key={asset.storedFileName}>
               {!downloadEnabled && <span className="asset-name">{asset.originalFileName}</span>}
 
-              {/* A button, not a link: there is no URL to put in href until the API signs
-                  one, and it would be stale by the time anyone clicked it. */}
+              {/* A button, not a link: the signed URL does not exist until click and expires fast. */}
               {downloadEnabled && (
                 <button
                   type="button"
@@ -181,8 +170,7 @@ export function AssetList({ reloadToken, downloadEnabled, maxSourceChars }: Asse
               <span className="asset-meta">
                 {formatSize(asset.sizeBytes)} · {new Date(asset.uploadedAtUtc).toLocaleString()}
               </span>
-              {/* One grid cell for both buttons: the row is three columns, and a fourth
-                  child would push the status badge out of its own line. */}
+              {/* Both buttons in one grid cell so the status badge keeps its own line. */}
               <div className="asset-actions">
                 {canProcess(asset) && (
                   <button
@@ -217,20 +205,15 @@ export function AssetList({ reloadToken, downloadEnabled, maxSourceChars }: Asse
   )
 }
 
-/**
- * A hidden frame rather than window.location: an attachment response downloads either way,
- * but anything else - an expired link, an object the bucket no longer has - is an XML error
- * page, and top-level navigation would replace the whole app with it. In a frame that answer
- * is simply discarded.
- */
+/** A hidden frame, not window.location: an attachment downloads either way, but a bucket XML
+ *  error would replace the whole app under top-level navigation. In a frame it is discarded. */
 function startDownload(url: string) {
   const frame = document.createElement('iframe')
   frame.hidden = true
   frame.src = url
   document.body.appendChild(frame)
 
-  // The download outlives the frame once the browser has seen the headers; the delay only has
-  // to cover the round trip to the bucket.
+  // The download outlives the frame once headers are seen; this only covers the round trip.
   window.setTimeout(() => frame.remove(), 60_000)
 }
 
@@ -238,11 +221,7 @@ function messageOf(error: unknown): string {
   return error instanceof Error ? error.message : 'Unexpected error'
 }
 
-/**
- * A file with no note and no job to make one: never processed, or its note was deleted while
- * the file was kept. Not offered for 'Skipped' - the source does not fit, and a rerun cannot
- * change that.
- */
+/** File with no note and no pending job. Not for 'Skipped' - a rerun cannot change the fit. */
 function canProcess(asset: AssetSummary): boolean {
   return (
     asset.noteId === null &&
@@ -254,11 +233,8 @@ const TEXT_FILE = /\.(txt|md|markdown)$/i
 
 type Badge = { text: string; tone: 'info' | 'ok' | 'warn' | 'error' }
 
-/**
- * The processing state to show next to a file. Mirrors the server-side ProcessingStatus once
- * a job exists; before that, a size-based guess for text files the pipeline will likely skip.
- * Byte size, not characters, so it is only ever a "possibly" - the worker decides for real.
- */
+/** Mirrors the server ProcessingStatus once a job exists; before that, a byte-size guess for
+ *  text files - only ever a "possibly", the worker decides for real. */
 function processingBadge(asset: AssetSummary, maxSourceChars: number): Badge | null {
   switch (asset.processingStatus) {
     case 'Pending':

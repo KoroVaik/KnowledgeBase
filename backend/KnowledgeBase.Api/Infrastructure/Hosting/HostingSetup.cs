@@ -23,14 +23,13 @@ public static class HostingSetup
         {
             options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
 
-            // The default known-proxy list is loopback only, and Render's proxy address is
-            // neither fixed nor local — left as is, the headers would be dropped unread.
+            // Render's proxy address is not loopback, so the default known-proxy list would
+            // drop the headers unread.
             options.KnownNetworks.Clear();
             options.KnownProxies.Clear();
         });
 
-        // Without an explicit port the redirect middleware cannot build a target and silently
-        // passes everything through.
+        // Without an explicit port the redirect middleware passes everything through silently.
         services.AddHttpsRedirection(options => options.HttpsPort = 443);
 
         return services;

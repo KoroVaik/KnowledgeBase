@@ -4,12 +4,11 @@ public static class AssetFileName
 {
     public static string For(string id, string? originalFileName) => id + SafeExtension(originalFileName);
 
-    // The inverse of For: after a direct upload the API only ever sees the stored name, and
-    // the row still wants the id that name was built from.
+    // Inverse of For: the API sees only the stored name but the row wants the id it was built from.
     public static string IdOf(string fileName) => Path.GetFileNameWithoutExtension(fileName);
 
-    // The name comes back from the route and turns into a file path or an object key, so a
-    // name that could climb out of the assets folder is rejected before it gets there.
+    // The name comes from the route and becomes a path / object key - reject anything that
+    // could climb out of the folder.
     public static bool IsSafe(string? fileName) =>
         !string.IsNullOrWhiteSpace(fileName)
         && fileName == Path.GetFileName(fileName)

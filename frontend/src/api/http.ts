@@ -1,12 +1,7 @@
-/**
- * The request never reached the API: the process is down, the machine is asleep, the network
- * is gone. Distinct from an error response, because the two need different answers - a 400 is
- * about what was sent, this is about the server not being there at all.
- */
+/** The request never reached the API, as opposed to an error response. */
 export class ApiUnreachableError extends Error {
   constructor(cause: unknown) {
-    // The browser's own wording ("Failed to fetch", "NetworkError when attempting to fetch
-    // resource") differs per engine and means nothing to a reader.
+    // The browser's own wording ("Failed to fetch") differs per engine and means nothing.
     super('No connection to the server', { cause })
     this.name = 'ApiUnreachableError'
   }

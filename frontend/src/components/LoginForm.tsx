@@ -31,16 +31,14 @@ export function LoginForm({ onSignedIn, googleSignInEnabled }: LoginFormProps) {
   const [password, setPassword] = useState('')
   const [state, setState] = useState<LoginState>(readGoogleError)
 
-  // The message has been read into state, so the parameter has done its job - dropping it keeps
-  // a reload from showing a stale error.
+  // Drop the param once read into state, so a reload does not show a stale error.
   useEffect(() => {
     window.history.replaceState(null, '', window.location.pathname)
   }, [])
 
   const inputRef = useRef<HTMLInputElement>(null)
 
-  // Focusing inside the catch block would be a no-op: the input is still disabled until
-  // the failed state has rendered.
+  // After render: the input is still disabled inside the catch block.
   useEffect(() => {
     if (state.status === 'error') {
       inputRef.current?.focus()

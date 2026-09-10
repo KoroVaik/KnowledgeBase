@@ -32,14 +32,11 @@ export function NotesList() {
   const [deleteBusy, setDeleteBusy] = useState(false)
   const [busyId, setBusyId] = useState<string | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
-  // Notes waiting for a fresh version. The worker is a separate process with no change stream
-  // back to the browser, so nothing announces the new note - the list polls until the id it is
-  // watching disappears, which is exactly what being replaced looks like.
+  // Notes waiting for a fresh version. The worker has no change stream to the browser, so
+  // poll until the watched id disappears - which is what being replaced looks like.
   const [reprocessing, setReprocessing] = useState<string[]>([])
 
-  // Two reloads can be in flight at once - the mount and a change-stream event. Only the
-  // newest may write to the list. Same guard on the body: a fast collapse-then-expand of
-  // another note must not be overwritten by the first fetch landing late.
+  // Two reloads (mount + stream event) can race; only the newest writes. Same guard on the body.
   const latestReload = useRef(0)
   const latestBody = useRef(0)
 
@@ -60,8 +57,7 @@ export function NotesList() {
           return
         }
 
-        // A reload nobody asked for may fail quietly: the rows on screen are still the best
-        // answer, and blanking them on a flaky connection would be worse.
+        // Fail quietly: stale rows beat blanking them on a flaky connection.
         setState((current) =>
           current.status === 'ready' ? current : { status: 'error', message: messageOf(error) },
         )
@@ -117,8 +113,7 @@ export function NotesList() {
       return
     }
 
-    // The row already exists whether or not it is expanded, and the note it links to may be
-    // anywhere in the list - including off screen, where opening it would look like nothing.
+    // The target may be off screen, where opening it would look like nothing happened.
     document.querySelector(`[data-note-row="${id}"]`)?.scrollIntoView({ block: 'nearest' })
     void open(id)
   }
@@ -285,9 +280,7 @@ export function NotesList() {
                   <div
                     className="note-body"
                     onClick={followLink}
-                    // Single-user app; the body is Markdown from the local model, the same
-                    // trust level as any other row already rendered. Sanitising is a later
-                    // concern, for when notes take content from elsewhere.
+                    // No sanitising: single-user app, body is Markdown from the local model.
                     dangerouslySetInnerHTML={{
                       __html: renderNoteBody(body.note.body, body.note.links),
                     }}
@@ -359,8 +352,7 @@ export function NotesList() {
         </div>
       )}
 
-      {/* Keyed by the note: a fresh mount is what resets the checkbox and the backlink list
-          between two openings, without an effect writing state on every open. */}
+      {/* Keyed by the note: a fresh mount resets the checkbox and backlinks between openings. */}
       <DeleteNoteDialog
         key={deleting?.id ?? 'closed'}
         note={deleting}

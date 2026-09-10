@@ -3,16 +3,11 @@ using Microsoft.EntityFrameworkCore;
 
 namespace KnowledgeBase.Core.Pipeline;
 
-/// <summary>
-/// Puts an asset back in front of the worker. Used by "process again" on a note and by the
-/// same button on a file whose note has been binned.
-/// </summary>
+/// <summary>Puts an asset back in front of the worker ("process again").</summary>
 public static class ProcessingQueue
 {
-    /// <summary>
-    /// Makes sure the asset has a job waiting. Does not save.
-    /// </summary>
-    /// <returns>False when a job is already queued or running, so the caller can say so.</returns>
+    /// <summary>Ensures the asset has a job waiting. Does not save.</summary>
+    /// <returns>False when a job is already queued or running.</returns>
     public static async Task<bool> EnsurePendingAsync(
         KnowledgeBaseDbContext database,
         string assetId,
@@ -32,8 +27,7 @@ public static class ProcessingQueue
             return false;
         }
 
-        // Reset rather than insert: one job per asset is a unique index, and the row is the
-        // record of the current run, not a history of them.
+        // Reset, not insert: one job per asset (unique index); the row is the current run, not history.
         job.Status = ProcessingStatus.Pending;
         job.Attempts = 0;
         job.StartedAtUtc = null;
