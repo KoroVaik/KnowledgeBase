@@ -1,5 +1,6 @@
 using KnowledgeBase.Core.Ai;
 using KnowledgeBase.Core.Persistence;
+using KnowledgeBase.Core.Pipeline.Extraction;
 using KnowledgeBase.Core.RealTime;
 using KnowledgeBase.Core.Storage;
 using Microsoft.EntityFrameworkCore;
@@ -204,53 +205,28 @@ public sealed class PipelineWorker(
             ?? throw new InvalidOperationException($"{asset.OriginalFileName} is not a supported type.");
 
         var reader = services.GetRequiredService<IAssetContentReader>();
+        var extractor = services.GetRequiredService<SourceExtractorSelector>().For(kind);
         var maxSourceChars = services.GetRequiredService<IOptions<PipelineOptions>>().Value.MaxSourceChars;
 
         var titles = await database.Notes.Select(note => note.Title).ToListAsync(cancellationToken);
         var categories = await database.Notes.Select(note => note.Category).Distinct().ToListAsync(cancellationToken);
 
-        AnalysisRequest request;
+        var bytes = await reader.ReadBytesAsync(asset.StoredFileName, cancellationToken);
+        var extracted = await extractor.ExtractAsync(
+            new SourceAsset(bytes, asset.ContentType, asset.OriginalFileName), cancellationToken);
 
-        switch (kind)
+        // Caught here rather than left to Ollama's silent truncation: a bounded slice of a huge
+        // document would produce a note that looks fine but was written from a fraction of the
+        // source. Applies to every text-yielding kind - a .txt, a PDF's text layer, later a
+        // transcript. Skip it and let the user split the file.
+        if (extracted.Text is { Length: var length } && length > maxSourceChars)
         {
-            case ContentKind.Text:
-                var text = await reader.ReadTextAsync(asset.StoredFileName, cancellationToken);
-
-                if (string.IsNullOrWhiteSpace(text))
-                {
-                    throw new InvalidOperationException("The file has no text content.");
-                }
-
-                // Caught here rather than left to Ollama's silent truncation: a bounded slice
-                // of a huge document would produce a note that looks fine but was written from
-                // a fraction of the source. Skip it and let the user split the file.
-                if (text.Length > maxSourceChars)
-                {
-                    throw new ContentTooLargeException(
-                        $"The text is {text.Length:N0} characters; the pipeline handles up to "
-                        + $"{maxSourceChars:N0}. Split it into smaller files.");
-                }
-
-                request = new AnalysisRequest(titles, categories, Text: text);
-                break;
-
-            case ContentKind.Image:
-                var bytes = await reader.ReadBytesAsync(asset.StoredFileName, cancellationToken);
-
-                if (bytes.Length == 0)
-                {
-                    throw new InvalidOperationException("The image has no content.");
-                }
-
-                request = new AnalysisRequest(
-                    titles,
-                    categories,
-                    Image: new AnalysisImage(bytes, asset.ContentType));
-                break;
-
-            default:
-                throw new InvalidOperationException($"Unhandled content kind {kind}.");
+            throw new ContentTooLargeException(
+                $"The text is {length:N0} characters; the pipeline handles up to "
+                + $"{maxSourceChars:N0}. Split it into smaller files.");
         }
+
+        var request = new AnalysisRequest(titles, categories, extracted.Text, extracted.Image);
 
         var result = await analyzer.AnalyzeAsync(request, cancellationToken);
 

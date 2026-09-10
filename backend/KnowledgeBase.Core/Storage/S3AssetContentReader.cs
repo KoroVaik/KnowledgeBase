@@ -9,14 +9,6 @@ public sealed class S3AssetContentReader(IAmazonS3 client, IOptions<S3StorageOpt
     private readonly IAmazonS3 _client = client;
     private readonly string _bucketName = options.Value.BucketName;
 
-    public async Task<string> ReadTextAsync(string storedFileName, CancellationToken cancellationToken)
-    {
-        using var response = await _client.GetObjectAsync(_bucketName, storedFileName, cancellationToken);
-        using var reader = new StreamReader(response.ResponseStream);
-
-        return await reader.ReadToEndAsync(cancellationToken);
-    }
-
     public async Task<byte[]> ReadBytesAsync(string storedFileName, CancellationToken cancellationToken)
     {
         using var response = await _client.GetObjectAsync(_bucketName, storedFileName, cancellationToken);

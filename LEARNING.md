@@ -293,6 +293,20 @@
       → `PipelineWorker.ProcessAsync`
       → *Чому «попросити ще раз, наполегливіше» — не рішення для продакшену?*
 
+- [ ] **Стратегія за типом файлу замість `switch`.** `ISourceExtractor` (`Kind` +
+      `ExtractAsync`), `SourceExtractorSelector` бере потрібний по `ContentKind`. DI віддає
+      `IEnumerable<ISourceExtractor>`, селектор індексує в словник. Тривіальні екстрактори
+      (текст/фото) — у Core; PDF з пакетом `PdfPig` — у Worker, щоб прод-образ API не роздувати.
+      → `Core/Pipeline/Extraction/`, `Worker/Extraction/`, `Program.cs` воркера
+      → *Чому `IEnumerable<T>` з DI + власний індекс, а не keyed services?*
+      → *Чому PDF-екстрактор реєструє `Program.cs` воркера, а текст/фото — `AddContentPipeline` у Core?*
+
+- [ ] **Ієрархія доменних винятків як керування потоком.** `SkippableContentException` (база) →
+      job `Skipped`; `ContentTooLargeException : SkippableContentException`. Воркер ловить базу.
+      Сканований PDF, порожній файл, завеликий текст — усі кажуть «retry не допоможе» одним `catch`.
+      → `Core/Ai/SkippableContentException.cs`, `PipelineWorker.TickAsync`
+      → *Чому окремий тип, а не прапорець `bool retryable` у полі винятку?*
+
 - [ ] **Multimodal через Ollama.** Vision-модель (`qwen2.5vl`) бачить картинку, якщо в
       повідомленні `/api/chat` є масив `images` з base64. Той самий ендпоінт, та сама
       structured-output схема — змінюється лише вміст повідомлення. Текстова модель
@@ -323,3 +337,6 @@
   ходу не було; доданий пункт «Чому бекендний шлях і абстракцію сховища прибрали цілком».
 - 2026-09-09: `putToBucket` переведений з `fetch` на `XMLHttpRequest` заради смужки
   прогресу; доданий пункт «Чому прогрес відвантаження неможливий на `fetch`».
+- 2026-09-10: обробка PDF у воркері. `switch (kind)` у `PipelineWorker` розібрано на
+  `ISourceExtractor` + `SourceExtractorSelector`; додані пункти про стратегію за типом файлу
+  та ієрархію `SkippableContentException`. По ходу задачі не пояснювалось.

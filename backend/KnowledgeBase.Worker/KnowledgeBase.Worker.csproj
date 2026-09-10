@@ -12,6 +12,12 @@
     <ProjectReference Include="..\KnowledgeBase.Core\KnowledgeBase.Core.csproj" />
   </ItemGroup>
 
+  <!-- PDF text-layer extraction. Pure managed (no native binaries), so it runs on the Alpine
+       worker image as-is. Kept here, not in Core, so the API's deployed image never pulls it. -->
+  <ItemGroup>
+    <PackageReference Include="PdfPig" Version="0.1.16" />
+  </ItemGroup>
+
   <!-- Local Garage keys: read from the project dir during `dotnet run`, but never shipped in a
        `dotnet publish` that goes to the home PC (where Production ignores it anyway). -->
   <ItemGroup>

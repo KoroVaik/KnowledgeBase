@@ -4,31 +4,56 @@ public enum ContentKind
 {
     Text,
     Image,
+    Pdf,
 }
 
-// Decides whether an uploaded file is something the AI pipeline can handle, and how to read
-// it. Text and images for now; PDF and video come later.
+// The single type -> kind map. The API uses it to decide whether an upload gets a
+// ProcessingJob; the worker uses the kind to pick an ISourceExtractor. Adding a file type is
+// one row here plus one extractor - no switch to hunt down.
 public static class ProcessableContent
 {
-    private static readonly string[] TextExtensions = [".txt", ".md", ".markdown"];
-    private static readonly string[] ImageExtensions = [".jpg", ".jpeg", ".png", ".webp", ".gif"];
+    private static readonly Dictionary<string, ContentKind> ByExtension = new(StringComparer.OrdinalIgnoreCase)
+    {
+        [".txt"] = ContentKind.Text,
+        [".md"] = ContentKind.Text,
+        [".markdown"] = ContentKind.Text,
+        [".jpg"] = ContentKind.Image,
+        [".jpeg"] = ContentKind.Image,
+        [".png"] = ContentKind.Image,
+        [".webp"] = ContentKind.Image,
+        [".gif"] = ContentKind.Image,
+        [".pdf"] = ContentKind.Pdf,
+    };
+
+    // Matched before the extension: a MIME type is more reliable when the browser sends one.
+    private static readonly (string Prefix, ContentKind Kind)[] ByContentTypePrefix =
+    [
+        ("text/", ContentKind.Text),
+        ("image/", ContentKind.Image),
+    ];
+
+    private static readonly Dictionary<string, ContentKind> ByContentType = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["application/pdf"] = ContentKind.Pdf,
+    };
 
     public static ContentKind? Classify(string contentType, string fileName)
     {
-        var extension = Path.GetExtension(fileName);
-
-        if (contentType.StartsWith("text/", StringComparison.OrdinalIgnoreCase)
-            || TextExtensions.Contains(extension, StringComparer.OrdinalIgnoreCase))
+        if (ByContentType.TryGetValue(contentType, out var exact))
         {
-            return ContentKind.Text;
+            return exact;
         }
 
-        if (contentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase)
-            || ImageExtensions.Contains(extension, StringComparer.OrdinalIgnoreCase))
+        foreach (var (prefix, kind) in ByContentTypePrefix)
         {
-            return ContentKind.Image;
+            if (contentType.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+            {
+                return kind;
+            }
         }
 
-        return null;
+        return ByExtension.TryGetValue(Path.GetExtension(fileName), out var byExtension)
+            ? byExtension
+            : null;
     }
 }

@@ -2,9 +2,11 @@ using KnowledgeBase.Core.Ai;
 using KnowledgeBase.Core.Hosting;
 using KnowledgeBase.Core.Persistence;
 using KnowledgeBase.Core.Pipeline;
+using KnowledgeBase.Core.Pipeline.Extraction;
 using KnowledgeBase.Core.RealTime;
 using KnowledgeBase.Core.Storage;
 using KnowledgeBase.Worker;
+using KnowledgeBase.Worker.Extraction;
 using Microsoft.Extensions.Options;
 
 var builder = Host.CreateApplicationBuilder(args);
@@ -19,6 +21,11 @@ builder.Services.AddAssetStorage(builder.Configuration);
 
 builder.Services.AddContentAnalyzer(builder.Configuration);
 builder.Services.AddContentPipeline(builder.Configuration);
+
+// The PDF extractor and its PdfPig dependency live in the worker, not Core, so the API image
+// stays free of them. AddContentPipeline registered the text and image extractors.
+builder.Services.AddSingleton<IPdfTextExtractor, PdfPigTextExtractor>();
+builder.Services.AddSingleton<ISourceExtractor, PdfSourceExtractor>();
 
 // Posts PipelineWorker's change hints to the API so open browsers refresh live. With no
 // ApiBaseUrl / IngestToken configured it is a no-op - see HttpChangeNotifier.

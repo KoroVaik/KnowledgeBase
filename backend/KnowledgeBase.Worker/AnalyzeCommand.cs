@@ -1,11 +1,14 @@
 using System.Text.Json;
 using KnowledgeBase.Core.Ai;
+using KnowledgeBase.Core.Pipeline;
+using KnowledgeBase.Core.Pipeline.Extraction;
 
 namespace KnowledgeBase.Worker;
 
 // A throwaway smoke test for the analyzer, kept until the worker has its own integration test:
-//   dotnet run --project backend/KnowledgeBase.Worker -- analyze <path-to-text-file>
-// Reads the file, runs it through IContentAnalyzer, prints the AnalysisResult.
+//   dotnet run --project backend/KnowledgeBase.Worker -- analyze <path-to-file>
+// Reads the file, runs it through the matching extractor and IContentAnalyzer, prints the
+// AnalysisResult. Accepts anything ProcessableContent recognises - text, image or PDF.
 public static class AnalyzeCommand
 {
     public static bool Matches(string[] args) => args is ["analyze", ..];
@@ -14,7 +17,7 @@ public static class AnalyzeCommand
     {
         if (args is not ["analyze", var path])
         {
-            Console.Error.WriteLine("Usage: dotnet run --project backend/KnowledgeBase.Worker -- analyze <path-to-text-file>");
+            Console.Error.WriteLine("Usage: dotnet run --project backend/KnowledgeBase.Worker -- analyze <path-to-file>");
             return;
         }
 
@@ -24,16 +27,30 @@ public static class AnalyzeCommand
             return;
         }
 
+        // The CLI has no MIME type from a browser; the extension carries the classification.
+        var kind = ProcessableContent.Classify(string.Empty, path);
+
+        if (kind is null)
+        {
+            Console.Error.WriteLine($"Unsupported file type: {path}");
+            return;
+        }
+
         using var scope = services.CreateScope();
         var analyzer = scope.ServiceProvider.GetRequiredService<IContentAnalyzer>();
-        var text = await File.ReadAllTextAsync(path);
+        var extractor = scope.ServiceProvider.GetRequiredService<SourceExtractorSelector>().For(kind.Value);
+        var bytes = await File.ReadAllBytesAsync(path);
 
         try
         {
             await analyzer.EnsureModelAvailableAsync(CancellationToken.None);
 
+            var extracted = await extractor.ExtractAsync(
+                new SourceAsset(bytes, string.Empty, path),
+                CancellationToken.None);
+
             var result = await analyzer.AnalyzeAsync(
-                new AnalysisRequest(ExistingTitles: [], KnownCategories: [], Text: text),
+                new AnalysisRequest(ExistingTitles: [], KnownCategories: [], extracted.Text, extracted.Image),
                 CancellationToken.None);
 
             Console.WriteLine(JsonSerializer.Serialize(

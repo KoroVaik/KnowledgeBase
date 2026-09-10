@@ -662,10 +662,11 @@ Postgres. Тіло нотатки — колонка `text`, не `.md`-файл
 - **Фронт** пінгає `GET /api/notes` на завантаженні сторінки; бек читає з БД те, що
   встиг обробити воркер. SSE-мосту воркер→бек поки нема (воркер на іншій машині не
   докличеться до `IChangeNotifier` у памʼяті).
-- **Текст і зображення** (перевірка по MIME/розширенню при постановці job). PDF / відео —
-  далі. Аналіз локально через Ollama (`localhost:11434`, звичайний `HttpClient`), одна
-  multimodal-модель `qwen2.5vl:7b` на обидва типи; пріоритизацію моделей (щоб не жонглювати
-  у VRAM) робитимемо потім. Далі — інші агенти за тим самим інтерфейсом.
+- **Текст, зображення, PDF** (перевірка по MIME/розширенню при постановці job — `ProcessableContent`).
+  PDF поки тільки текстовим шаром; відео — далі. Аналіз локально через Ollama
+  (`localhost:11434`, звичайний `HttpClient`), одна multimodal-модель `qwen2.5vl:7b` на текст
+  і фото; пріоритизацію моделей (щоб не жонглювати у VRAM) робитимемо потім. Кожен тип —
+  окремий `ISourceExtractor` (`ContentKind` → екстрактор), новий тип = новий клас, не `case`.
 
 ### Схема БД
 
@@ -894,7 +895,25 @@ Postgres. Тіло нотатки — колонка `text`, не `.md`-файл
 - [ ] Ключ моделі (коли підуть хмарні агенти) через user-secrets / змінні оточення
 - [ ] Пріоритизація моделей: коли типів більше, ніж одна модель тягне в VRAM — черга/лізинг
       під модель, щоб Ollama не свопала ваги на кожному job
-- [ ] Аналіз PDF → генерація нотатки (текстовий шар + рендер сторінок у зображення)
+- [ ] **Аналіз PDF — текстовий шар зроблено.** `switch (kind)` у `PipelineWorker` розібрано на
+      стратегії: `ISourceExtractor` (`Kind` + `ExtractAsync(SourceAsset)`) у `Core/Pipeline/Extraction/`,
+      `SourceExtractorSelector` індексує їх по `ContentKind`. `TextSourceExtractor` /
+      `ImageSourceExtractor` — у Core; `PdfSourceExtractor` + `IPdfTextExtractor` /
+      `PdfPigTextExtractor` (пакет `PdfPig` 0.1.16, чистий managed, працює на Alpine) — у
+      `KnowledgeBase.Worker`, щоб прод-образ API їх не тягнув. `ProcessableContent` — таблиця
+      `тип → ContentKind`, додано `Pdf` (`application/pdf` / `.pdf`); API ставить job тим самим
+      `Classify`, правок в `AssetsController` не треба. `IAssetContentReader.ReadTextAsync`
+      прибрано — воркер завжди читає байти, декодує екстрактор. Сканований PDF без тексту →
+      `SkippableContentException` (нова база для `ContentTooLargeException`) → job `Skipped`,
+      не `Failed`. Ліміт `MaxSourceChars` тепер на будь-який текст (у т.ч. витягнутий із PDF).
+      `AnalyzeCommand` приймає pdf/зображення. `dotnet build` зелений.
+      **Перевірено наскрізь** (локальний Postgres + Garage, воркер через `dotnet run`, Ollama
+      `qwen2.5vl:7b`): `login` → `upload-link` → `PUT` PDF у Garage → `confirm` `201` → за ~13 с
+      `Note` («Neon Postgres Backup Strategy», Category `Database`, `sourceFileName` на місці,
+      тіло вірне тексту), `ProcessingJob` `Done`/`Attempts=1`. CLI: PDF без текстового шару і
+      битий PDF → `SkippableContentException` → `Skipped`. Тестові дані прибрано
+  - [ ] Рендер сторінок у зображення для сканованих PDF (без текстового шару) → vision-модель.
+        Потребує рендер-бібліотеки з нативними бінарниками — окремо, разом із чанкінгом (map-reduce)
 - [ ] Обробка помилок моделі: битий вихід не повинен псувати наявні нотатки
 
 ## Фронтенд
