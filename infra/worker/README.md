@@ -23,6 +23,10 @@ Ollama чіпати не треба: на Docker Desktop for Windows конте�
 - Скопіювати `worker.env.example` → `worker.env` (gitignored) і заповнити: рядок
   підключення Neon (формат ADO.NET `ключ=значення`, **без лапок**, не URL),
   `ServiceUrl` / `BucketName` / ключі R2.
+- `Events__IngestToken` — той самий рядок, що `Events__IngestToken` у змінних Render.
+  Воркер шле хінт «нова нотатка» на `POST /api/events/ingest`, і фронт оновлює список
+  без перезавантаження. Порожній → нотатки з'являються лише після F5, решта працює.
+  Згенерувати: `openssl rand -hex 32` (будь-який довгий випадковий рядок).
 
 ## Запуск
 

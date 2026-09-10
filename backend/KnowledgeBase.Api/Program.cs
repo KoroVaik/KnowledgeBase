@@ -1,4 +1,5 @@
 using KnowledgeBase.Api.Controllers.Auth.Configuration;
+using KnowledgeBase.Api.Controllers.Events.Configuration;
 using KnowledgeBase.Api.Infrastructure.Features;
 using KnowledgeBase.Api.Infrastructure.Hosting;
 using KnowledgeBase.Core.Hosting;
@@ -27,6 +28,7 @@ builder.Services.AddFeatureFlags(builder.Configuration);
 builder.Services.AddAuthFeature(builder.Configuration);
 builder.Services.AddAssetStorage(builder.Configuration);
 builder.Services.AddRealTimeUpdates();
+builder.Services.Configure<EventsOptions>(builder.Configuration.GetSection(EventsOptions.SectionName));
 
 // The pipeline itself runs in the Worker process, but the API advertises its text-size limit
 // through /api/features so the UI can warn before a too-large upload. Options only - no worker.

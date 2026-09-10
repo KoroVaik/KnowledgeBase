@@ -1,8 +1,12 @@
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
+using KnowledgeBase.Api.Controllers.Events.Configuration;
 using KnowledgeBase.Core.RealTime;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Options;
 
 namespace KnowledgeBase.Api.Controllers.Events;
 
@@ -12,8 +16,10 @@ namespace KnowledgeBase.Api.Controllers.Events;
 [ApiController]
 [Route("api/[controller]")]
 [Authorize]
-public sealed class EventsController(IChangeNotifier notifier) : ControllerBase
+public sealed class EventsController(IChangeNotifier notifier, IOptions<EventsOptions> options) : ControllerBase
 {
+    private readonly EventsOptions _options = options.Value;
+
     // Long enough to stay cheap, short enough to beat the idle timeout of a proxy or a mobile
     // network - those start dropping a silent connection at about a minute.
     private static readonly TimeSpan KeepAliveInterval = TimeSpan.FromSeconds(20);
@@ -74,6 +80,46 @@ public sealed class EventsController(IChangeNotifier notifier) : ControllerBase
             // that vanished without saying goodbye gets cleaned up.
         }
     }
+
+    /// <summary>
+    /// Accepts a change hint from the worker and fans it out to every open stream (Server-Sent Events).
+    /// </summary>
+    /// <remarks>
+    /// The worker runs in its own process and cannot reach the in-memory notifier directly, so it
+    /// posts here instead. Guarded by a shared token, not a session: there is no user behind this
+    /// call. A lost hint is harmless - the browser re-reads on its next reconnect either way.
+    /// </remarks>
+    /// <response code="204">The hint was fanned out.</response>
+    /// <response code="401">The token is missing or wrong.</response>
+    /// <response code="503">No ingest token is configured, so the endpoint is closed.</response>
+    [HttpPost("ingest")]
+    [AllowAnonymous]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status503ServiceUnavailable)]
+    public IActionResult Ingest(
+        [FromBody] ChangeEvent change,
+        [FromHeader(Name = "X-Ingest-Token")] string? token)
+    {
+        if (string.IsNullOrEmpty(_options.IngestToken))
+        {
+            return StatusCode(StatusCodes.Status503ServiceUnavailable);
+        }
+
+        if (token is null || !TokenMatches(token))
+        {
+            return Unauthorized();
+        }
+
+        _notifier.Publish(change);
+
+        return NoContent();
+    }
+
+    private bool TokenMatches(string presented) =>
+        CryptographicOperations.FixedTimeEquals(
+            Encoding.UTF8.GetBytes(presented),
+            Encoding.UTF8.GetBytes(_options.IngestToken));
 
     private async Task<bool> WriteNextAsync(ChangeSubscription subscription, CancellationToken cancellationToken)
     {

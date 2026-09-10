@@ -8,7 +8,8 @@
                             Neon          (Postgres: метадані, нотатки, черга, ключі Data Protection)
 
 Домашній ПК ──► KnowledgeBase.Worker ──► Ollama (localhost:11434)
-                                    └──► Neon + R2 по інтернету
+                                    ├──► Neon + R2 по інтернету
+                                    └──► Render /api/events/ingest (хінт «нова нотатка» для SSE)
 ```
 
 ## Структура рішення
@@ -57,6 +58,7 @@ dotnet ef migrations add <Name> \
 | `Storage__S3__ServiceUrl` / `__BucketName` / `__AccessKeyId` / `__SecretAccessKey` / `__Region` | R2 (`Region=auto`), ключ `knowledgebase-render` |
 | `Features__DownloadEnabled` | `true` |
 | `Features__GoogleSignInEnabled` + `Auth__Google__ClientId` / `__ClientSecret` / `Auth__Google__AllowedEmails__0` | Google-вхід (окремий OAuth-клієнт від дев-ного) |
+| `Events__IngestToken` | Спільний секрет для `POST /api/events/ingest`. Те саме значення — у `worker.env`. Порожній → ендпоінт віддає `503`, живі оновлення нотаток вимкнені |
 | `ASPNETCORE_ENVIRONMENT` | `Production` (у Dockerfile уже виставлено) |
 
 Зміна змінної **не** перезапускає сервіс сама — потрібен `Manual Deploy → Deploy
@@ -81,7 +83,8 @@ infra/worker/stop-worker.ps1       # stop it
 
 - `backend/KnowledgeBase.Worker/Dockerfile` + `infra/worker/docker-compose.yml`.
 - Секрети — `infra/worker/worker.env` (gitignored, `env_file`): рядок Neon (ADO.NET,
-  без лапок), ключі R2 (окремий ключ `knowledgebase-worker`).
+  без лапок), ключі R2 (окремий ключ `knowledgebase-worker`), `Events__IngestToken`
+  (те саме значення, що на Render) для живих оновлень нотаток.
 - Ollama: контейнер ходить у `host.docker.internal:11434`. На Docker Desktop це
   працює як є, Ollama чіпати не треба.
 - Хост стартує як Production (немає `DOTNET_ENVIRONMENT`).

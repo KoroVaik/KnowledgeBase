@@ -730,11 +730,34 @@ Postgres. Тіло нотатки — колонка `text`, не `.md`-файл
       `127.0.0.1` без правок (`/api/tags` → `200` — проксі Docker Desktop).
       **На домашньому ПК ще не піднято** — треба ключ R2 `knowledgebase-worker` і
       заповнений `worker.env`.
-- [ ] Живе оновлення нотаток на фронті більше не працюватиме в проді: воркер на
-      домашньому ПК шле `notes/created` у `NullChangeNotifier`, до API-SSE це не
-      доходить. Фронт бачить нову нотатку лише на перезавантаженні. Потрібен
-      воркер→API міст (HTTP-пінг на внутрішній ендпоінт або спільний Redis/pg
-      `LISTEN/NOTIFY` — вирішити пізніше).
+- [ ] **Воркер→API міст для живого оновлення нотаток — HTTP-пінг.** Воркер після
+      коміту нотатки шле `POST /api/events/ingest` з `ChangeEvent` у тілі і спільним
+      секретом у заголовку `X-Ingest-Token`; API кладе подію у свій `ChangeNotifier`,
+      і наявний SSE розсилає її по відкритих вкладках. `NullChangeNotifier` →
+      `HttpChangeNotifier` (fire-and-forget: нотатка вже в БД, невдалий пінг = лише
+      проґавлене живе оновлення, фронт підхопить на перепідключенні; таймаут 5 с, щоб
+      холодний старт Render не тримав цикл поллінгу). Ендпоінт `[AllowAnonymous]` +
+      constant-time звірка токена (`CryptographicOperations.FixedTimeEquals`); порожній
+      `Events:IngestToken` → `503`, міст вимкнений. Пінг не додає навантаження в спокої:
+      нема нових нотаток — нема запитів; апку в Render зазвичай і будити не треба, бо її
+      щойно розбудив upload того ж користувача. `LISTEN/NOTIFY` відкинуто: тримало б
+      постійний конект до Neon і палило CU-години; полінг таблиці з боку API — так само.
+      Конфіг: `Events:IngestToken` (API, на Render — `Events__IngestToken`),
+      `Events:ApiBaseUrl` + `Events:IngestToken` (воркер, `worker.env`); локально —
+      `dev-local-events-token` в обох `appsettings.Development.json`, `ApiBaseUrl`
+      `http://localhost:5244`. Фронт не чіпали — `useResourceChanges('notes', reload)`
+      вже все робить. `dotnet build` зелений. **Перевірено curl'ом** проти запущеного
+      API: без токена → `401`, чужий токен → `401`, правильний → `204`, і паралельний
+      SSE-клієнт (`GET /api/events` під сесією) отримав рівно
+      `data: {"resource":"notes","action":"created","id":...}` на `204` і нічого на
+      відкинуті. **Не перевірено:** наскрізь із живим воркером (API + воркер + Ollama,
+      нова нотатка → рядок без F5) і прод (згенерувати секрет, `Events__IngestToken`
+      на Render, заповнити `worker.env`).
+  - [ ] Оборотність: перехід на «API сам полить БД» пізніше — локальна заміна
+        (`HttpChangeNotifier` → `NullChangeNotifier` + `BackgroundService` в API),
+        контракт `ChangeEvent` і фронт не зачіпає.
+  - [ ] Видалення файлу з нотаткою: `AssetsController.Delete` в API-процесі, тож шле
+        `notes/deleted` напряму через `_notifier` — міст не потрібен (окремий пункт нижче).
 - [ ] Підняти воркер на домашньому ПК: ключ R2 `knowledgebase-worker`, заповнити
       `infra/worker/worker.env` (Neon + R2), `run-worker.ps1`. Ollama чіпати не треба —
       `host.docker.internal` дотягується до неї на `127.0.0.1` через проксі Docker
