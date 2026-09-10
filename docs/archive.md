@@ -18,8 +18,9 @@ not just compiled.
 - `/api/assets` CRUD: `upload-link` → `PUT` to bucket → `confirm`, `GET` list, `GET
   {name}/link`, `DELETE`. Path-traversal names rejected in the store itself.
 - Feature flags: `Features` config → `FeatureOptions`, `GET /api/features` (anonymous).
-  `UploadEnabled`, `DownloadEnabled` — enforced in the controller (403/JSON), not just UI.
-  `IOptionsSnapshot` so a flag flips without a restart.
+  `UploadEnabled` enforced in the controller (403/JSON), not just UI. `IOptionsSnapshot` so
+  a flag flips without a restart. (`DownloadEnabled` existed here too, removed 2026-09-10
+  when the file panel made inline preview a normal part of the UI.)
 - SSE: `IChangeNotifier` singleton, `GET /api/events`, `: ping` every 20 s, bounded
   drop-oldest channels. Verified through the Vite proxy with concurrent streams.
 - Health check `GET /health`, anonymous. Weatherforecast removed.
@@ -73,6 +74,17 @@ not just compiled.
 - Notes list with a `Bin (n)` section, `Process again` (polls every 4 s), delete dialog
   naming what disappears. Verified in the browser by subagent (10 steps, `ZZ`-prefixed
   test data).
+- Bulk select in the file list: per-row checkbox, "select all" with an indeterminate
+  state, "Delete selected" firing the single-file `DELETE` per row via `Promise.allSettled`.
+  Verified in the browser by subagent (select / select-all / indeterminate / confirm text /
+  happy-path delete of `zz-`-prefixed test files / phone layout). Partial-failure and
+  disabled-while-deleting paths still pending — see [`frontend.md`](frontend.md).
+- Files + Notes merged into one "Files" section: a row expands to a `FilePanel` with
+  `Process again` / `Delete` / `Download` and a Note / File preview toggle (inline `<img>`
+  for images, highlighted-but-inert `[[links]]`). The "Notes" section stays for
+  `kind=Synthesis` and hides itself while empty. `DownloadEnabled` flag dropped;
+  `/api/assets` gained `contentType`; `/api/notes?kind=`. Verified in the browser by the
+  owner.
 - Removed the raw-JSON panel after upload. Raw JSON debug panel gone.
 - `mobile-layout-checker` subagent added. Mobile fixes: file-list layout, `h1`
   line-height, Delete button height.

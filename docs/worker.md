@@ -96,3 +96,8 @@ images and PDFs. Remove it once the worker has its first integration test.
       jobs pile up `Pending` in Neon.
 - [ ] Remove the `analyze` CLI and `AnalyzeCommand` — keep until the first worker
       integration test.
+- [ ] Replace the **temporary** title dedup in `PipelineWorker.UniqueTitle` (suffix
+      `(2)`, `(3)`… when the model reuses a live title) with real handling: either the
+      model contract guarantees a fresh title, or a collision is a first-class outcome
+      (`ProcessingStatus` + a UI hint), not a silent rename. Two near-identical source
+      files currently both land as notes with one auto-suffixed.

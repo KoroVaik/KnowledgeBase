@@ -24,15 +24,22 @@ public sealed class NotesController(
     private readonly IAssetStorage _storage = storage;
     private readonly IChangeNotifier _notifier = notifier;
 
-    /// <summary>Lists every note, newest first. No body.</summary>
+    /// <summary>Lists notes, newest first, no body. <c>kind</c> filters to one kind.</summary>
     /// <response code="200">The listing, possibly empty.</response>
     /// <response code="401">No session, or it has expired.</response>
     [HttpGet]
     [ProducesResponseType(typeof(IReadOnlyList<NoteSummaryResponse>), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-    public async Task<IActionResult> List(CancellationToken cancellationToken)
+    public async Task<IActionResult> List(CancellationToken cancellationToken, [FromQuery] NoteKind? kind = null)
     {
-        var notes = await _database.Notes
+        var query = _database.Notes.AsQueryable();
+
+        if (kind is { } wanted)
+        {
+            query = query.Where(note => note.Kind == wanted);
+        }
+
+        var notes = await query
             .OrderByDescending(note => note.UpdatedAtUtc)
             .ToListAsync(cancellationToken);
 

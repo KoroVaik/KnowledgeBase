@@ -250,11 +250,16 @@ public sealed class PipelineWorker(
             await database.SaveChangesAsync(cancellationToken);
         }
 
+        // TEMP: the analyzer gets the live titles as "do not reuse", but a local model does
+        // not always comply and IX_Notes_Title (unique among the living) then rejects the
+        // insert. Suffix until free. Proper handling is an Open item in docs/worker.md.
+        var title = UniqueTitle(result.Title, titles);
+
         var note = new Note
         {
             Id = Guid.NewGuid().ToString("N"),
             Kind = NoteKind.Source,
-            Title = result.Title,
+            Title = title,
             Category = result.Category,
             Body = AppendRelated(result.MarkdownBody, links),
             SourceAssetId = asset.Id,
@@ -307,6 +312,27 @@ public sealed class PipelineWorker(
         }
 
         return note;
+    }
+
+    // TEMP: see the call site. Delete together with the dedup there.
+    private static string UniqueTitle(string proposed, IEnumerable<string> taken)
+    {
+        var used = new HashSet<string>(taken, StringComparer.OrdinalIgnoreCase);
+
+        if (!used.Contains(proposed))
+        {
+            return proposed;
+        }
+
+        for (var suffix = 2; ; suffix++)
+        {
+            var candidate = $"{proposed} ({suffix})";
+
+            if (!used.Contains(candidate))
+            {
+                return candidate;
+            }
+        }
     }
 
     private static string AppendRelated(string body, IReadOnlyList<string> links)

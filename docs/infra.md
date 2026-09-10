@@ -45,7 +45,6 @@ A worker brought up against the old schema fails on the first hit to a new table
 |---|---|
 | `ConnectionStrings__Database` | Neon pooled, ADO.NET `key=value` format (not URL). Add rows with a `=` in the value **one at a time** — bulk `Add from .env` splits on the first `=`. |
 | `Storage__S3__ServiceUrl` / `__BucketName` / `__AccessKeyId` / `__SecretAccessKey` / `__Region` | R2 (`Region=auto`), key `knowledgebase-render`. |
-| `Features__DownloadEnabled` | `true` |
 | `Features__GoogleSignInEnabled` + `Auth__Google__ClientId` / `__ClientSecret` / `Auth__Google__AllowedEmails__0` | Google sign-in (a separate OAuth client from the dev one). |
 | `Events__IngestToken` | Shared secret for `POST /api/events/ingest`. Same value in `worker.env`. Empty → the endpoint returns `503`, live note updates are off. |
 | `ASPNETCORE_ENVIRONMENT` | `Production` (already set in the Dockerfile). |
@@ -156,8 +155,9 @@ in Docker, API, worker (as needed), frontend.
 - [ ] Phone-over-LAN upload verified from the PC (Garage reachable, preflight OK) but
       **not from the phone itself** yet.
 - [ ] R2 CORS end-to-end browser upload on prod — the rule is set, not yet run through.
-- [ ] Remove the dead `Features__DirectAssetAccessEnabled` env var from Render (also in
-      [`backend.md`](backend.md)).
+- [ ] Remove the dead `Features__DirectAssetAccessEnabled` and `Features__DownloadEnabled`
+      env vars from Render — both flags are gone from code, ASP.NET ignores the unknown keys
+      (also in [`backend.md`](backend.md)).
 - [ ] `dotnet test` in backend-CI once the first test project exists.
 - [ ] **CD**: `push to main → build + lint + test → green → curl the Render Deploy Hook`.
       Not Render auto-deploy — it would ship a broken build, it knows nothing about

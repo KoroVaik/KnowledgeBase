@@ -10,7 +10,13 @@ interface WikiLinkToken extends Tokens.Generic {
 
 // A marked extension, not a raw-text replace: the tokenizer knows what is code, so a
 // [[title]] inside a fenced block stays literal text.
-export function renderNoteBody(markdown: string, links: NoteLinkState[]): string {
+// `linkable: false` renders a resolved [[link]] as a highlighted span, not a button - for
+// places that show a note without the accordion behind the click (the file panel).
+export function renderNoteBody(
+  markdown: string,
+  links: NoteLinkState[],
+  { linkable = true }: { linkable?: boolean } = {},
+): string {
   const states = new Map(links.map((link) => [link.title.toLowerCase(), link]))
 
   const wikiLink: TokenizerAndRendererExtension = {
@@ -40,6 +46,10 @@ export function renderNoteBody(markdown: string, links: NoteLinkState[]): string
       const text = escapeHtml(title)
 
       if (link?.state === 'resolved' && link.targetId !== null) {
+        if (!linkable) {
+          return `<span class="wiki-link wiki-link-inert">${text}</span>`
+        }
+
         // A button, not an anchor: a note has no URL, the list expands it in place.
         return `<button type="button" class="wiki-link" data-note-id="${escapeHtml(link.targetId)}">${text}</button>`
       }

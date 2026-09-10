@@ -93,8 +93,21 @@ UTC as local time. Fixed with a value converter in the model; **not needed in Po
       dates and let the active one be switched. Then the bin stops being a bin and becomes
       version history. Current rule: newer wins; `restore` of an older version while a
       newer one is live → 409.
-- [ ] **Second pipeline: synthesis notes** from many source notes. Needs a mark of which
-      source notes are already accounted for, or every run re-reads everything. Deleting a
-      source note does not change the synthesis text — it absorbed the content, it does
-      not point at it.
+      - Backend: an endpoint to list an asset's note versions (live + binned, newest
+        first), and one to activate a chosen version — soft-delete the live one, un-delete
+        the pick, move inbound links. The swap logic is the `process-again` replacement in
+        reverse (separate `SaveChanges` around the partial unique index on `Title`).
+      - UI: a version dropdown in `FilePanel` — see [`frontend.md`](frontend.md).
+- [ ] **Second pipeline: synthesis (aggregation) notes** from many source notes.
+      `NoteKind.Synthesis` already exists as a column; what is missing is the pipeline that
+      writes one — grouping source notes by topic/category, not by file. Needs a mark of
+      which source notes are already accounted for, or every run re-reads everything.
+      Deleting a source note does not change the synthesis text — it absorbed the content,
+      it does not point at it.
+- [ ] **More note kinds, each processed its own way.** After `Source` and `Synthesis`:
+      user-written notes (no AI, or AI only on request), general/standalone notes not tied
+      to any file. `NoteKind` grows; every new kind needs its own trigger, prompt and
+      possibly model in the worker — settle the per-kind routing (a selector by
+      `NoteKind`, the way `SourceExtractorSelector` picks by file type) before the third
+      kind lands. Pipeline side of this is in [`ai-pipeline.md`](ai-pipeline.md).
 - [ ] Orphan sweep — reconcile `Assets` against the store (also in [`backend.md`](backend.md)).

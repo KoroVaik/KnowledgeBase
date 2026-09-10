@@ -44,9 +44,10 @@ function notePath(id: string): string {
   return `/api/notes/${encodeURIComponent(id)}`
 }
 
-/** Every live note, newest first. No body - the front polls this on load. */
-export async function fetchNotes(): Promise<NoteSummary[]> {
-  const response = await apiFetch('/api/notes')
+/** Live notes, newest first, no body. `kind` narrows to one kind (Source lives under its file). */
+export async function fetchNotes(kind?: NoteKind): Promise<NoteSummary[]> {
+  const query = kind === undefined ? '' : `?kind=${kind}`
+  const response = await apiFetch(`/api/notes${query}`)
 
   if (!response.ok) {
     throw new Error(await readErrorMessage(response, 'Could not load the notes'))

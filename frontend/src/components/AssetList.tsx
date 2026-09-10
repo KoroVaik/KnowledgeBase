@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { deleteAsset, fetchAssets, fetchDownloadUrl, processAsset } from '../api/assets'
+import { deleteAsset, fetchAssets } from '../api/assets'
 import type { AssetSummary } from '../api/assets'
 import { formatSize } from '../format'
 import { useResourceChanges } from '../hooks/useResourceChanges'
+import { FilePanel } from './FilePanel'
 
 type ListState =
   | { status: 'loading' }
@@ -12,17 +13,20 @@ type ListState =
 interface AssetListProps {
   /** Bumped after a successful upload to reload the list - covers a down change stream. */
   reloadToken: number
-  downloadEnabled: boolean
   /** From /api/features: threshold for the "possibly too large" hint on text files. */
   maxSourceChars: number
 }
 
-export function AssetList({ reloadToken, downloadEnabled, maxSourceChars }: AssetListProps) {
+export function AssetList({ reloadToken, maxSourceChars }: AssetListProps) {
   const [state, setState] = useState<ListState>({ status: 'loading' })
-  const [deletingFileName, setDeletingFileName] = useState<string | null>(null)
-  const [linkingFileName, setLinkingFileName] = useState<string | null>(null)
-  const [processingFileName, setProcessingFileName] = useState<string | null>(null)
+  const [expanded, setExpanded] = useState<string | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
+
+  // Stray names (a file selected then removed via SSE) stay in the set but are ignored on
+  // render and cleared on the next delete - cheaper than pruning in an effect, which oxlint
+  // react(set-state-in-effect) would flag anyway.
+  const [selected, setSelected] = useState<ReadonlySet<string>>(new Set())
+  const [bulkDeleting, setBulkDeleting] = useState(false)
 
   // The change stream fires reloads too, so two can be in flight - only the newest writes state.
   const latestReload = useRef(0)
@@ -56,7 +60,9 @@ export function AssetList({ reloadToken, downloadEnabled, maxSourceChars }: Asse
   // The worker has no change stream back to the browser, so poll while a job is in flight.
   const hasActiveJob =
     state.status === 'ready' &&
-    state.assets.some((asset) => asset.processingStatus === 'Pending' || asset.processingStatus === 'Running')
+    state.assets.some(
+      (asset) => asset.processingStatus === 'Pending' || asset.processingStatus === 'Running',
+    )
 
   useEffect(() => {
     if (!hasActiveJob) {
@@ -67,69 +73,84 @@ export function AssetList({ reloadToken, downloadEnabled, maxSourceChars }: Asse
     return () => window.clearInterval(timer)
   }, [hasActiveJob, reload])
 
-  async function handleDownload(asset: AssetSummary) {
-    setActionError(null)
-    setLinkingFileName(asset.storedFileName)
+  const assets = state.status === 'ready' ? state.assets : []
+  const selectedAssets = assets.filter((asset) => selected.has(asset.storedFileName))
+  const allSelected = assets.length > 0 && selectedAssets.length === assets.length
 
-    try {
-      startDownload(await fetchDownloadUrl(asset.storedFileName))
-    } catch (error) {
-      setActionError(messageOf(error))
-    } finally {
-      setLinkingFileName(null)
-    }
+  function removeRow(storedFileName: string) {
+    setState((current) =>
+      current.status === 'ready'
+        ? {
+            status: 'ready',
+            assets: current.assets.filter((asset) => asset.storedFileName !== storedFileName),
+          }
+        : current,
+    )
+    setExpanded((current) => (current === storedFileName ? null : current))
   }
 
-  async function handleProcess(asset: AssetSummary) {
-    setActionError(null)
-    setProcessingFileName(asset.storedFileName)
-
-    try {
-      await processAsset(asset.storedFileName)
-      reload()
-    } catch (error) {
-      setActionError(messageOf(error))
-    } finally {
-      setProcessingFileName(null)
-    }
+  function toggleOne(fileName: string) {
+    setSelected((current) => {
+      const next = new Set(current)
+      if (!next.delete(fileName)) {
+        next.add(fileName)
+      }
+      return next
+    })
   }
 
-  async function handleDelete(asset: AssetSummary) {
-    // The note is a description of this file, so it goes too - say so before, not after.
-    const warning =
-      asset.noteId !== null
-        ? `Delete ${asset.originalFileName}? Its note goes to the bin with it.`
-        : `Delete ${asset.originalFileName}? This cannot be undone.`
+  function toggleAll() {
+    setSelected(allSelected ? new Set() : new Set(assets.map((asset) => asset.storedFileName)))
+  }
 
-    if (!window.confirm(warning)) {
+  async function handleBulkDelete() {
+    const targets = selectedAssets
+    if (targets.length === 0) {
       return
     }
 
-    const fileName = asset.storedFileName
+    const withNote = targets.filter((asset) => asset.noteId !== null).length
+    const tail =
+      withNote > 0
+        ? `${withNote} of them ${withNote === 1 ? 'has a note that goes' : 'have notes that go'} to the bin too.`
+        : 'This cannot be undone.'
+
+    if (!window.confirm(`Delete ${targets.length} ${targets.length === 1 ? 'file' : 'files'}? ${tail}`)) {
+      return
+    }
 
     setActionError(null)
-    setDeletingFileName(fileName)
+    setBulkDeleting(true)
 
-    try {
-      await deleteAsset(fileName)
-      setState((current) =>
-        current.status === 'ready'
-          ? {
-              status: 'ready',
-              assets: current.assets.filter((asset) => asset.storedFileName !== fileName),
-            }
-          : current,
-      )
-    } catch (error) {
-      setActionError(messageOf(error))
-    } finally {
-      setDeletingFileName(null)
+    const results = await Promise.allSettled(targets.map((asset) => deleteAsset(asset.storedFileName)))
+    const failed = new Set<string>()
+    results.forEach((result, index) => {
+      if (result.status === 'rejected') {
+        failed.add(targets[index].storedFileName)
+      }
+    })
+
+    setState((current) =>
+      current.status === 'ready'
+        ? {
+            status: 'ready',
+            assets: current.assets.filter(
+              (asset) => !selected.has(asset.storedFileName) || failed.has(asset.storedFileName),
+            ),
+          }
+        : current,
+    )
+    setSelected(failed)
+    setBulkDeleting(false)
+
+    if (failed.size > 0) {
+      setActionError(`Could not delete ${failed.size} of ${targets.length} files.`)
     }
   }
 
   return (
     <section className="assets">
-      <h2>Uploaded files</h2>
+      <h2>Files</h2>
 
       {state.status === 'loading' && <p>Loading…</p>}
 
@@ -148,85 +169,95 @@ export function AssetList({ reloadToken, downloadEnabled, maxSourceChars }: Asse
       {state.status === 'ready' && state.assets.length === 0 && <p>Nothing uploaded yet.</p>}
 
       {state.status === 'ready' && state.assets.length > 0 && (
-        <ul className="assets-list">
-          {state.assets.map((asset) => {
-            const badge = processingBadge(asset, maxSourceChars)
+        <>
+          <div className="assets-selection">
+            <label className="assets-selection-all">
+              <input
+                type="checkbox"
+                checked={allSelected}
+                ref={(node) => {
+                  if (node) {
+                    node.indeterminate = selectedAssets.length > 0 && !allSelected
+                  }
+                }}
+                onChange={toggleAll}
+                disabled={bulkDeleting}
+              />
+              {selectedAssets.length > 0 ? `${selectedAssets.length} selected` : 'Select all'}
+            </label>
 
-            return (
-            <li className="asset" key={asset.storedFileName}>
-              {!downloadEnabled && <span className="asset-name">{asset.originalFileName}</span>}
+            {selectedAssets.length > 0 && (
+              <button
+                type="button"
+                className="asset-delete"
+                onClick={() => void handleBulkDelete()}
+                disabled={bulkDeleting}
+              >
+                {bulkDeleting ? 'Deleting…' : 'Delete selected'}
+              </button>
+            )}
+          </div>
 
-              {/* A button, not a link: the signed URL does not exist until click and expires fast. */}
-              {downloadEnabled && (
-                <button
-                  type="button"
-                  className="asset-name asset-name-button"
-                  onClick={() => void handleDownload(asset)}
-                  disabled={linkingFileName === asset.storedFileName}
-                >
-                  {asset.originalFileName}
-                </button>
-              )}
-              <span className="asset-meta">
-                {formatSize(asset.sizeBytes)} · {new Date(asset.uploadedAtUtc).toLocaleString()}
-              </span>
-              {/* Both buttons in one grid cell so the status badge keeps its own line. */}
-              <div className="asset-actions">
-                {canProcess(asset) && (
+          <ul className="assets-list">
+            {state.assets.map((asset) => {
+              const badge = processingBadge(asset, maxSourceChars)
+              const isOpen = expanded === asset.storedFileName
+
+              return (
+                <li className="asset" key={asset.storedFileName}>
+                  <input
+                    type="checkbox"
+                    className="asset-select"
+                    checked={selected.has(asset.storedFileName)}
+                    onChange={() => toggleOne(asset.storedFileName)}
+                    disabled={bulkDeleting}
+                    aria-label={`Select ${asset.originalFileName}`}
+                  />
+
                   <button
                     type="button"
-                    className="asset-delete"
-                    onClick={() => void handleProcess(asset)}
-                    disabled={processingFileName === asset.storedFileName}
-                    title="Run the pipeline over this file and make a note from it"
+                    className="asset-head"
+                    aria-expanded={isOpen}
+                    onClick={() =>
+                      setExpanded((current) =>
+                        current === asset.storedFileName ? null : asset.storedFileName,
+                      )
+                    }
                   >
-                    {processingFileName === asset.storedFileName ? 'Queueing…' : 'Process'}
+                    <span className="asset-name">{asset.originalFileName}</span>
+                    <span className="asset-meta">
+                      {formatSize(asset.sizeBytes)} · {new Date(asset.uploadedAtUtc).toLocaleString()}
+                    </span>
                   </button>
-                )}
-                <button
-                  type="button"
-                  className="asset-delete"
-                  onClick={() => void handleDelete(asset)}
-                  disabled={deletingFileName === asset.storedFileName}
-                >
-                  {deletingFileName === asset.storedFileName ? 'Deleting…' : 'Delete'}
-                </button>
-              </div>
 
-              {badge && (
-                <span className={`asset-status asset-status-${badge.tone}`}>{badge.text}</span>
-              )}
-            </li>
-            )
-          })}
-        </ul>
+                  {badge && (
+                    <span className={`asset-status asset-status-${badge.tone}`}>{badge.text}</span>
+                  )}
+
+                  {isOpen && (
+                    <div className="asset-detail">
+                      {/* Key on the note id: a re-run makes a new note, and the panel should
+                          reload rather than show the old body. */}
+                      <FilePanel
+                        key={`${asset.storedFileName}:${asset.noteId ?? ''}`}
+                        asset={asset}
+                        onChanged={reload}
+                        onDeleted={removeRow}
+                      />
+                    </div>
+                  )}
+                </li>
+              )
+            })}
+          </ul>
+        </>
       )}
     </section>
   )
 }
 
-/** A hidden frame, not window.location: an attachment downloads either way, but a bucket XML
- *  error would replace the whole app under top-level navigation. In a frame it is discarded. */
-function startDownload(url: string) {
-  const frame = document.createElement('iframe')
-  frame.hidden = true
-  frame.src = url
-  document.body.appendChild(frame)
-
-  // The download outlives the frame once headers are seen; this only covers the round trip.
-  window.setTimeout(() => frame.remove(), 60_000)
-}
-
 function messageOf(error: unknown): string {
   return error instanceof Error ? error.message : 'Unexpected error'
-}
-
-/** File with no note and no pending job. Not for 'Skipped' - a rerun cannot change the fit. */
-function canProcess(asset: AssetSummary): boolean {
-  return (
-    asset.noteId === null &&
-    (asset.processingStatus === null || asset.processingStatus === 'Failed')
-  )
 }
 
 const TEXT_FILE = /\.(txt|md|markdown)$/i

@@ -70,6 +70,7 @@ public sealed class AssetsController(
             .Select(row => new AssetSummaryResponse(
                 row.asset.StoredFileName,
                 row.asset.OriginalFileName,
+                row.asset.ContentType,
                 row.asset.SizeBytes,
                 row.asset.UploadedAtUtc,
                 row.job?.Status.ToString(),
@@ -86,20 +87,13 @@ public sealed class AssetsController(
     /// </summary>
     /// <response code="200">The signed URL.</response>
     /// <response code="401">No session, or it has expired.</response>
-    /// <response code="403">Downloading is switched off by the Features:DownloadEnabled flag.</response>
     /// <response code="404">No such file.</response>
     [HttpGet("{fileName}/link")]
     [ProducesResponseType(typeof(AssetLinkResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> DownloadLink(string fileName, CancellationToken cancellationToken)
     {
-        if (!_features.DownloadEnabled)
-        {
-            return StatusCode(StatusCodes.Status403Forbidden, new { error = "Downloading is turned off." });
-        }
-
         var record = await FindAsync(fileName, cancellationToken);
 
         if (record is null)

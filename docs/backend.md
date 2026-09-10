@@ -124,9 +124,6 @@ re-raise every task.)
 - [ ] Input-model validation (FluentValidation in `Controllers/<feature>/Validators/`).
       Nothing to validate yet — `LoginRequest` has one field. Relevant once note creation
       exists.
-- [ ] `GET /api/assets/{fileName}` with `Features:DownloadEnabled=false` returns **406**,
-      not 403: the action has `[Produces("application/octet-stream")]` and the disabled
-      branch returns a JSON object, so content negotiation fails.
 - [ ] Orphan sweep: reconcile the metadata table against the store. Bytes with no row
       (upload died mid-way) are invisible to the API. `IAssetStorage.ListAsync` is kept
       for exactly this; the controller no longer calls it.

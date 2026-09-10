@@ -157,42 +157,67 @@
   padding: 0;
 }
 
-/* Three columns on a wide screen, so it still reads like a table; on a phone the name
-   takes its own row and the file is not asked to be narrower than its own text. */
+.assets-selection {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.assets-selection-all {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+}
+
+/* Checkbox down the left; the second column holds the row head, then the status badge and
+   the detail panel stacked under it when the row is open. */
 .asset {
   display: grid;
-  grid-template-columns: 1fr auto auto;
-  align-items: center;
-  gap: 4px 16px;
+  grid-template-columns: auto 1fr;
+  align-items: start;
+  gap: 4px 12px;
   padding: 12px 0;
   border-bottom: 1px solid var(--border);
 }
 
-.asset-name {
-  font: 14px/150% var(--mono);
-  overflow-wrap: anywhere;
+.asset-select {
+  grid-column: 1;
+  grid-row: 1;
+  margin-top: 4px;
 }
 
-/* The download target is a button now, because the URL only exists after the API signs it.
-   It still has to read as the link it replaced. */
-.asset-name-button {
+/* The whole head is the toggle: name on its own line, size and date under it. */
+.asset-head {
+  grid-column: 2;
+  grid-row: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  min-width: 0;
   padding: 0;
   border: 0;
   background: none;
   text-align: left;
   cursor: pointer;
-  color: var(--accent);
-  text-decoration: underline;
+  color: inherit;
 }
 
-.asset-name-button:disabled {
-  cursor: progress;
-  opacity: 0.5;
+.asset-name {
+  font: 14px/150% var(--mono);
+  overflow-wrap: anywhere;
+  color: var(--text-h);
 }
 
 .asset-meta {
   font-size: 14px;
-  white-space: nowrap;
+}
+
+.asset-detail {
+  grid-column: 2;
 }
 
 .asset-delete {
@@ -211,24 +236,14 @@
   opacity: 0.5;
 }
 
-@media (max-width: 600px) {
-  .asset {
-    grid-template-columns: 1fr auto;
-  }
-
-  .asset-name {
-    grid-column: 1 / -1;
-  }
-}
-
 .assets-error {
   margin-bottom: 16px;
   color: #dc2626;
 }
 
-/* Full width under the name/meta/delete row of one file. */
+/* Second column, under the head. */
 .asset-status {
-  grid-column: 1 / -1;
+  grid-column: 2;
   font-size: 13px;
   line-height: 150%;
 }
@@ -541,11 +556,74 @@
   color: #dc2626;
 }
 
-/* Both file buttons share one grid cell: the row is three columns wide, and a fourth child
-   would push the status badge off its own line. */
-.asset-actions {
+/* The section that opens under a file row. */
+.file-panel {
+  margin: 8px 0 4px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--accent-bg);
+}
+
+.file-panel-actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
+}
+
+.file-panel-actions button {
+  font: inherit;
+  font-size: 14px;
+  padding: 6px 14px;
+  border-radius: 6px;
+  cursor: pointer;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--border);
+}
+
+.file-panel-actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.file-panel-error {
+  margin: 12px 0 0;
+  font-size: 13px;
+  color: #dc2626;
+}
+
+.file-panel-tabs {
+  display: flex;
+  gap: 4px;
+  margin: 16px 0 8px;
+}
+
+.file-panel-tab {
+  font: inherit;
+  font-size: 13px;
+  padding: 4px 12px;
+  border-radius: 999px;
+  cursor: pointer;
+  color: var(--text);
+  background: transparent;
+  border: 1px solid var(--border);
+}
+
+.file-panel-tab-on {
+  color: var(--text-h);
+  background: var(--bg);
+  border-color: var(--accent-border);
+}
+
+.file-panel-body {
+  font-size: 14px;
+}
+
+.file-panel-image {
+  max-width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 6px;
 }
 
 /* The row is the toggle plus the buttons that act on it; the toggle takes what is left. */
@@ -620,6 +698,13 @@ button.wiki-link {
   cursor: pointer;
   color: var(--accent);
   text-decoration: underline;
+}
+
+/* A resolved link where the click is not wired up (the file panel): show it is a reference,
+   but not as something to press. */
+.wiki-link-inert {
+  color: var(--accent);
+  border-bottom: 1px dashed currentColor;
 }
 
 .wiki-link-deleted,

@@ -43,7 +43,8 @@ export function NotesList() {
   const reload = useCallback(() => {
     const reloadId = ++latestReload.current
 
-    void Promise.all([fetchNotes(), fetchTrash()])
+    // Source notes now live under their file in the Files section; this list is the rest.
+    void Promise.all([fetchNotes('Synthesis'), fetchTrash()])
       .then(([notes, trash]) => {
         if (reloadId !== latestReload.current) {
           return
@@ -199,6 +200,12 @@ export function NotesList() {
     }
   }
 
+  // Nothing to show yet: no aggregated notes and an empty bin. The section reappears once a
+  // synthesis note exists or something is binned.
+  if (state.status === 'ready' && state.notes.length === 0 && state.trash.length === 0) {
+    return null
+  }
+
   return (
     <section className="notes">
       <h2>Notes</h2>
@@ -218,7 +225,7 @@ export function NotesList() {
       )}
 
       {state.status === 'ready' && state.notes.length === 0 && (
-        <p>No notes yet — upload a text file and the pipeline will make one.</p>
+        <p>No aggregated notes yet.</p>
       )}
 
       {state.status === 'ready' && state.notes.length > 0 && (

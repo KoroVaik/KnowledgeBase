@@ -97,6 +97,11 @@ mid-string (`done_reason: "length"`). Fixed:
 
 ## Open
 
+- [ ] **Pipeline routing by `NoteKind`.** Today the worker only builds `Source` notes
+      from an uploaded file. `Synthesis` (aggregate many notes into one, grouped by topic)
+      and later kinds (user notes, general notes) each need their own trigger, prompt and
+      maybe model — a selector keyed by note kind, the way `SourceExtractorSelector` picks
+      by file type. Design the seam before the third kind. See [`database.md`](database.md).
 - [ ] The `Failed` branch (`Attempts >= MaxAttempts`) exists but is unverified live —
       needs an "Ollama answers, but with garbage" scenario. The outage case (does not
       spend attempts) is verified.

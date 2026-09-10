@@ -14,6 +14,8 @@ export interface UploadedAsset {
 export interface AssetSummary {
   storedFileName: string
   originalFileName: string
+  /** Stored MIME type - lets the UI tell an image (previewable inline) from the rest. */
+  contentType: string
   sizeBytes: number
   uploadedAtUtc: string
   /** 'Pending' | 'Running' | 'Done' | 'Failed' | 'Skipped', or null if not a pipeline type. */

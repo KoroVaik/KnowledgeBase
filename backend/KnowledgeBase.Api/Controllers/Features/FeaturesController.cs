@@ -34,7 +34,6 @@ public sealed class FeaturesController(
     public FeatureFlagsResponse Get() =>
         new(
             _features.Value.UploadEnabled,
-            _features.Value.DownloadEnabled,
             // Effective state: the Google scheme registers only with credentials, so a flag on
             // without them would show a button that can only answer 404.
             _features.Value.GoogleSignInEnabled && _auth.Google.IsConfigured,
