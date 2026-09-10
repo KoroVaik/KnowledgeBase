@@ -11,6 +11,7 @@ import {
 import type { Note, NoteSummary } from '../api/notes'
 import { renderNoteBody } from '../notes/renderNoteBody'
 import { DeleteNoteDialog } from './DeleteNoteDialog'
+import { TagChips } from './TagChips'
 import { useResourceChanges } from '../hooks/useResourceChanges'
 
 type ListState =
@@ -246,7 +247,8 @@ export function NotesList() {
                   >
                     <span className="note-title">{note.title}</span>
                     <span className="note-meta">
-                      {note.category} · {new Date(note.updatedAtUtc).toLocaleString()}
+                      <TagChips tags={note.tags} />
+                      {new Date(note.updatedAtUtc).toLocaleString()}
                     </span>
                     {note.sourceAssetId === null && (
                       <span className="note-removed-source">

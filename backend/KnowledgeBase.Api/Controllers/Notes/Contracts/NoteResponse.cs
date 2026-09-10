@@ -3,7 +3,7 @@ namespace KnowledgeBase.Api.Controllers.Notes.Contracts;
 public sealed record NoteResponse(
     string Id,
     string Title,
-    string Category,
+    IReadOnlyList<NoteTagResponse> Tags,
     string Kind,
     string Body,
     IReadOnlyList<NoteLinkStateResponse> Links,

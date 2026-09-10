@@ -22,8 +22,9 @@ The note body is a `text` column with an appended `## Related` section listing t
 - `IContentAnalyzer` (+ `OllamaAnalyzer` on a **typed `HttpClient`**) in `Core/Ai/`.
   `BaseAddress` and `Timeout` are set at registration, not in the analyzer.
 - Input `AnalysisRequest { Text?, Image? { Bytes, ContentType }, ExistingTitles,
-  KnownCategories }` — the worker fills `Text` or `Image` by content kind. Output
-  `AnalysisResult { Title, Category, MarkdownBody, Links[] }` — unchanged since text-only.
+  KnownTags }` — the worker fills `Text` or `Image` by content kind. Output
+  `AnalysisResult { Title, Tags[], MarkdownBody, Links[] }`; `Tags` is 1–5, most relevant
+  first (the worker still filters — see below).
 - Ollama `POST /api/chat`, `stream:false`, **structured output** via `format` = a JSON
   schema (`OllamaAnalyzer.ResultSchema()`) — the model is *required* to return that
   shape. More reliable than "ask for JSON in the prompt and parse whatever comes".
@@ -74,6 +75,12 @@ before any `NoteLink` is created. "Ask again, more firmly" is not a production f
   `TargetNoteId IS NULL AND TargetTitle == note.Title` as tracked entities and sets
   `TargetNoteId` in the same `SaveChanges`. With the filter above no danglers come from
   the analyzer — the code stays for future inline `[[...]]` parsing from body text.
+- **Same stance for tags** (`PipelineWorker.AttachTags`): the model over-tags and coins
+  near-duplicates, so its `Tags` list is not trusted. Keep order, drop blanks/dupes, cap
+  at 5, reuse an existing `Tag` on an **exact** name match (case-insensitive — no fuzzy,
+  a wrong snap loses a relevant tag; near-duplicates are the reconciliation item's job),
+  and allow **at most one** freshly invented tag per run (`Confirmed = false`). No tag
+  survives → the note is untagged, a normal state. `Ordinal` follows the surviving order.
 
 ### Large text broke the worker — size limits + a Skipped state
 
@@ -97,13 +104,13 @@ mid-string (`done_reason: "length"`). Fixed:
 
 ## Open
 
-- [ ] **Tags from the pipeline (with `Category` gone).** `AnalysisResult.Category` →
-      `Tags[]`, ordered by relevance (first = primary by convention, no flag). Prompt: the
-      full existing-tag list + "prefer an existing tag; invent one only if nothing fits".
-      Code guard, same principle as the links intersection — **do not trust the prompt**:
-      cap at 2–5 tags per note, snap each returned tag to an existing one when the string
-      distance is close, allow at most one genuinely new tag per run, mark new tags
-      `Confirmed = false`. Model + storage: [`database.md`](database.md).
+- [ ] **Analyzer over-tags with irrelevant known tags.** With "prefer tags from the known
+      list", `qwen2.5vl:7b` pads the list — a hypercar note came back tagged
+      `Windows Activation` and `Person Portrait` alongside the right ones. The guard stops
+      *proliferation* (no new junk tags) but not a wrong *existing* tag being attached.
+      Options: tighten the prompt ("only tags that genuinely describe the content; fewer is
+      better"), drop `maxItems` to 3, or a relevance re-check. Prompt-tuning loop, needs a
+      few sample files.
 - [ ] **Pipeline routing by `NoteKind`.** Today the worker only builds `Source` notes
       from an uploaded file. `Synthesis` (aggregate many notes into one, grouped by topic)
       and later kinds (user notes, general notes) each need their own trigger, prompt and

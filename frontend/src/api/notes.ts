@@ -3,11 +3,19 @@ import { apiFetch, readErrorMessage } from './http'
 /** A note made from one uploaded file, or one written from many of those. */
 export type NoteKind = 'Source' | 'Synthesis'
 
+/** One tag on a note. `NoteTagResponse` in the backend. */
+export interface NoteTag {
+  name: string
+  /** The user has vouched for it. A pipeline-invented tag is `false` until reviewed. */
+  confirmed: boolean
+}
+
 /** Mirrors NoteSummaryResponse in backend Controllers/Notes. */
 export interface NoteSummary {
   id: string
   title: string
-  category: string
+  /** Ordered by relevance; the first is the primary tag. Empty when the note is untagged. */
+  tags: NoteTag[]
   kind: NoteKind
   sourceAssetId: string | null
   /** Kept when the file goes, so the bin entry can still name it. */

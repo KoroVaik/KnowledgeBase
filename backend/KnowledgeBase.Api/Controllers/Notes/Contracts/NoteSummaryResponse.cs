@@ -3,7 +3,7 @@ namespace KnowledgeBase.Api.Controllers.Notes.Contracts;
 public sealed record NoteSummaryResponse(
     string Id,
     string Title,
-    string Category,
+    IReadOnlyList<NoteTagResponse> Tags,
     string Kind,
     string? SourceAssetId,
     string? SourceFileName,

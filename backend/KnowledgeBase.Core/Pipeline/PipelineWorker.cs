@@ -208,7 +208,7 @@ public sealed class PipelineWorker(
             .FirstOrDefaultAsync(existing => existing.SourceAssetId == asset.Id, cancellationToken);
 
         var titles = await database.Notes.Select(note => note.Title).ToListAsync(cancellationToken);
-        var categories = await database.Notes.Select(note => note.Category).Distinct().ToListAsync(cancellationToken);
+        var existingTags = await database.Tags.ToListAsync(cancellationToken);
 
         if (previous is not null)
         {
@@ -228,7 +228,11 @@ public sealed class PipelineWorker(
                 + $"{maxSourceChars:N0}. Split it into smaller files.");
         }
 
-        var request = new AnalysisRequest(titles, categories, extracted.Text, extracted.Image);
+        var request = new AnalysisRequest(
+            titles,
+            existingTags.Select(tag => tag.Name).ToList(),
+            extracted.Text,
+            extracted.Image);
 
         var result = await analyzer.AnalyzeAsync(request, cancellationToken);
 
@@ -260,7 +264,6 @@ public sealed class PipelineWorker(
             Id = Guid.NewGuid().ToString("N"),
             Kind = NoteKind.Source,
             Title = title,
-            Category = result.Category,
             Body = AppendRelated(result.MarkdownBody, links),
             SourceAssetId = asset.Id,
             SourceFileName = asset.OriginalFileName,
@@ -269,6 +272,8 @@ public sealed class PipelineWorker(
         };
 
         database.Notes.Add(note);
+
+        AttachTags(database, note, result.Tags, existingTags);
 
         foreach (var target in links)
         {
@@ -312,6 +317,52 @@ public sealed class PipelineWorker(
         }
 
         return note;
+    }
+
+    // The model over-tags and coins near-duplicates, so its list is not trusted (same stance as
+    // the link filter): keep order, drop blanks/dupes, cap at 5, reuse an existing tag on an
+    // exact name match (case-insensitive), and allow at most one freshly invented tag per run.
+    // A genuinely new tag lands Confirmed = false - shown everywhere, flagged for review.
+    private static void AttachTags(
+        KnowledgeBaseDbContext database,
+        Note note,
+        IReadOnlyList<string> proposed,
+        List<Tag> existingTags)
+    {
+        var byName = existingTags.ToDictionary(tag => tag.Name, StringComparer.OrdinalIgnoreCase);
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var ordinal = 0;
+        var invented = false;
+
+        foreach (var candidate in proposed)
+        {
+            var name = candidate.Trim();
+
+            if (name.Length == 0 || !seen.Add(name))
+            {
+                continue;
+            }
+
+            if (!byName.TryGetValue(name, out var tag))
+            {
+                if (invented)
+                {
+                    continue;
+                }
+
+                tag = new Tag { Id = Guid.NewGuid().ToString("N"), Name = name, Confirmed = false };
+                database.Tags.Add(tag);
+                byName[name] = tag;
+                invented = true;
+            }
+
+            database.NoteTags.Add(new NoteTag { NoteId = note.Id, TagId = tag.Id, Ordinal = ordinal++ });
+
+            if (ordinal == 5)
+            {
+                break;
+            }
+        }
     }
 
     // TEMP: see the call site. Delete together with the dedup there.

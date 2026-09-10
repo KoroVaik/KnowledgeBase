@@ -84,12 +84,14 @@ public sealed class OllamaAnalyzer(HttpClient http, IOptions<OllamaOptions> opti
 
         var result = JsonSerializer.Deserialize<AnalysisResult>(content, ResultJson);
 
-        if (result is null || string.IsNullOrWhiteSpace(result.Title) || string.IsNullOrWhiteSpace(result.Category))
+        var tags = result?.Tags?.Where(tag => !string.IsNullOrWhiteSpace(tag)).ToList() ?? [];
+
+        if (result is null || string.IsNullOrWhiteSpace(result.Title) || tags.Count == 0)
         {
             throw new InvalidOperationException($"Ollama returned an unusable analysis: {content}");
         }
 
-        return result with { Links = result.Links ?? [] };
+        return result with { Tags = tags, Links = result.Links ?? [] };
     }
 
     private const string SystemPrompt =
@@ -99,8 +101,9 @@ public sealed class OllamaAnalyzer(HttpClient http, IOptions<OllamaOptions> opti
         describe what it shows, then write the note from that.
         Return only JSON matching the schema.
         - title: a short, specific title for this note.
-        - category: pick the single best fit from the known categories the user provides; if
-          none fits, propose a new short category name (one or two words).
+        - tags: 1 to 5 tags, most relevant first. Prefer tags from the known list the user
+          provides; only invent a new one when nothing on the list fits, and never invent
+          more than one new tag. Each tag is one or two words.
         - markdownBody: the note as clean Markdown. Stay faithful to the source and do not
           invent facts.
         - links: titles taken verbatim from the existing-notes list that this note is genuinely
@@ -109,8 +112,8 @@ public sealed class OllamaAnalyzer(HttpClient http, IOptions<OllamaOptions> opti
 
     private static string UserPrompt(AnalysisRequest request)
     {
-        var categories = request.KnownCategories.Count > 0
-            ? string.Join(", ", request.KnownCategories)
+        var knownTags = request.KnownTags.Count > 0
+            ? string.Join(", ", request.KnownTags)
             : "(none yet)";
 
         var titles = request.ExistingTitles.Count > 0
@@ -127,7 +130,7 @@ public sealed class OllamaAnalyzer(HttpClient http, IOptions<OllamaOptions> opti
             : "The source is the attached image.";
 
         return $"""
-            Known categories: {categories}
+            Known tags: {knownTags}
 
             Existing notes:
             {titles}
@@ -142,7 +145,13 @@ public sealed class OllamaAnalyzer(HttpClient http, IOptions<OllamaOptions> opti
         ["properties"] = new JsonObject
         {
             ["title"] = new JsonObject { ["type"] = "string" },
-            ["category"] = new JsonObject { ["type"] = "string" },
+            ["tags"] = new JsonObject
+            {
+                ["type"] = "array",
+                ["items"] = new JsonObject { ["type"] = "string" },
+                ["minItems"] = 1,
+                ["maxItems"] = 5,
+            },
             ["markdownBody"] = new JsonObject { ["type"] = "string" },
             ["links"] = new JsonObject
             {
@@ -150,7 +159,7 @@ public sealed class OllamaAnalyzer(HttpClient http, IOptions<OllamaOptions> opti
                 ["items"] = new JsonObject { ["type"] = "string" },
             },
         },
-        ["required"] = new JsonArray("title", "category", "markdownBody", "links"),
+        ["required"] = new JsonArray("title", "tags", "markdownBody", "links"),
     };
 
     private JsonObject ModelOptions()

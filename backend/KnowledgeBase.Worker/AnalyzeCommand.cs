@@ -48,7 +48,7 @@ public static class AnalyzeCommand
                 CancellationToken.None);
 
             var result = await analyzer.AnalyzeAsync(
-                new AnalysisRequest(ExistingTitles: [], KnownCategories: [], extracted.Text, extracted.Image),
+                new AnalysisRequest(ExistingTitles: [], KnownTags: [], extracted.Text, extracted.Image),
                 CancellationToken.None);
 
             Console.WriteLine(JsonSerializer.Serialize(

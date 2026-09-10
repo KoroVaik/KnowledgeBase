@@ -493,7 +493,39 @@
 }
 
 .note-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
   font-size: 13px;
+}
+
+.tag-chips {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.file-panel-tags {
+  margin-bottom: 12px;
+}
+
+.tag-chip {
+  padding: 1px 8px;
+  font-size: 13px;
+  color: var(--text-h);
+  background: var(--accent-bg);
+  border: 1px solid var(--accent-border);
+  border-radius: 999px;
+}
+
+/* Dashed cue like an unresolved wiki-link: not yet vouched for. Body-text grey, not
+   --text-muted - muted enough against the solid confirmed chip while clearing AA contrast. */
+.tag-chip-unconfirmed {
+  color: var(--text);
+  background: transparent;
+  border-style: dashed;
+  border-color: currentColor;
 }
 
 .note-loading {

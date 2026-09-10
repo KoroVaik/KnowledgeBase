@@ -205,6 +205,8 @@ the Delete button off-screen; it was never tabular data). `h1` needs an explicit
       needs one real keypress.
 - [ ] Notes list: click a note on a live app and render its Markdown (needs one processed
       note).
+- [ ] Tag chips (`FilePanel` note tab + `NotesList` `.note-meta`) — confirmed vs
+      unconfirmed styling, wrapping with a long tag set, both themes.
 - [ ] Bulk select in `AssetList`: still unverified in the browser — the partial-failure
       path (some deletes fail → rows stay ticked + "Could not delete X of N") and
       checkboxes/buttons disabled while a bulk delete runs. (Selection, select-all,
@@ -232,8 +234,11 @@ the Delete button off-screen; it was never tabular data). `h1` needs an explicit
 ### Tagging (design in [`database.md`](database.md))
 
 - [ ] Faceted tag filter on the notes / files lists, plus an "Untagged" filter.
-- [ ] Tag chips in a note row, replacing the `{category}` text in `.note-meta`
-      (`NotesList`) and `FilePanel`; primary = first chip.
+- [ ] Tag chips (`components/TagChips.tsx`): `note.tags` (`{ name, confirmed }[]`, primary
+      first), unconfirmed = grey dashed chip, same cue as an unresolved wiki-link. **Done
+      in code** in `NotesList` `.note-meta` (was `{category}`) and above the note body in
+      `FilePanel`; build + lint pass, **browser run pending**. Faceted / "Untagged" filter
+      and the review UI are the items below.
 - [ ] Unconfirmed-tag review UI: nearest existing tags + one-key merge.
 
 ### Larger features

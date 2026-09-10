@@ -122,6 +122,15 @@ not just compiled.
 - Worker → API bridge (`HttpChangeNotifier` → `POST /api/events/ingest`, `X-Ingest-Token`
   constant-time compare, `503` when unset). Verified with `curl` + a parallel SSE client.
   **Not yet verified with a live worker or in prod.**
+- Tags from the pipeline: `AnalysisResult.Category` → `Tags[]` (1–5, relevance order),
+  JSON schema + prompt to match, `AnalysisRequest.KnownCategories` → `KnownTags`. Guard
+  `PipelineWorker.AttachTags` — trusts the model no more than the link filter does: keep
+  order, drop blanks/dupes, cap 5, reuse an existing `Tag` on an exact case-insensitive
+  name match, at most one freshly invented tag per run (`Confirmed = false`), no survivor
+  → note left untagged. Verified end-to-end against live Ollama `qwen2.5vl:7b`: a hypercar
+  `.txt` uploaded → note got `Automotive`(existing, ord 0) + `Hypercar`(new, unconfirmed,
+  ord 1) + two more existing tags the model padded with; one new tag, no duplicate
+  `Automotive`, `/api/notes/{id}` returned them ordered.
 
 ## Database
 
@@ -139,6 +148,14 @@ not just compiled.
   Inbound links move to the new version on replacement. Verified with `curl` end-to-end.
 - `Note.SourceFileName` (survives the file's deletion) — kept for the bin entry after the
   "note belongs to its file" decision.
+- `ReplaceCategoryWithTags`: `Tag` (`Id`, `Name` unique, `Confirmed`) + `NoteTag`
+  (`NoteId`+`TagId` PK, `Ordinal`, index on `TagId`), `Note.Category` and its index
+  dropped. One migration, order enforced: create tables → seed one `Tag` per distinct
+  `Category` (`Confirmed = true`) + a `NoteTag` at `Ordinal 0` for every note (binned
+  included) → then drop the column. Applied to local Postgres by API startup; verified 4
+  tags / 16 `NoteTag` rows matching the old `Category` counts, zero untagged, and
+  `/api/notes`, `/api/notes/{id}`, `/api/notes/trash` all returning `tags[]` (ordered,
+  `{ name, confirmed }`).
 
 ## Infra & deploy
 
