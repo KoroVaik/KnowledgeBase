@@ -1,28 +1,28 @@
-# Postgres — база для розробки
+# Postgres — the dev database
 
-Той самий рушій, що й у проді (Neon), щоб не ловити багів класу «локально працює,
-у хмарі ні». Дані — у volume `postgres-data`, переживають `docker compose down`.
+The same engine as prod (Neon), so we do not hit "works locally, not in the cloud" bugs.
+Data lives in the `postgres-data` volume and survives `docker compose down`.
 
-## Запуск
+## Running
 
 ```bash
 cd infra/postgres && docker compose up -d
 ```
 
-Рядок підключення для локального запуску вже лежить у `backend/appsettings.Development.json`.
-Пароль тут фіксований і навмисне не секрет: порт прив'язаний до `127.0.0.1`, база
-одноразова, а справжній рядок у проді приходить зі змінної оточення
-`ConnectionStrings__Database`.
+The connection string for local runs is already in
+`backend/appsettings.Development.json`. The password here is fixed and deliberately not a
+secret: the port is bound to `127.0.0.1`, the database is disposable, and the real string
+in prod comes from the `ConnectionStrings__Database` env var.
 
-## Корисне
+## Useful
 
 ```bash
 docker exec -it knowledgebase-postgres psql -U knowledgebase -d knowledgebase
 ```
 
-`\dt` — список таблиць, `\d "Assets"` — структура таблиці, `\q` — вихід.
+`\dt` — list tables, `\d "Assets"` — one table's structure, `\q` — quit.
 
-Знести дані начисто (міграції накотяться заново на старті бекенду):
+Wipe the data clean (migrations re-apply on the next backend start):
 
 ```bash
 docker compose down -v && docker compose up -d

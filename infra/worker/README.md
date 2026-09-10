@@ -1,77 +1,79 @@
-# AI-воркер на домашньому ПК
+# AI worker on the home PC
 
-`KnowledgeBase.Worker` — окремий процес AI-пайплайну. Опитує таблицю `ProcessingJobs`
-у Neon, бере байти з бакета R2, віддає локальній Ollama, пише `Note` + `NoteLink`
-назад у Neon.
+`KnowledgeBase.Worker` is the AI-pipeline process. It polls the `ProcessingJobs` table in
+Neon, pulls bytes from the R2 bucket, hands them to the local Ollama, and writes `Note` +
+`NoteLink` back to Neon.
 
-Живе тут, а не в хмарі, бо йому потрібна Ollama (`localhost:11434`), а Render Free
-до неї не має доступу і засинає без трафіку. У прод-образ (Render) воркер свідомо
-не входить — там тільки API. Ніхто на воркер «не дивиться»: він лише сам виходить у
-Neon і R2, вхідних з'єднань не має.
+It lives here, not in the cloud, because it needs Ollama (`localhost:11434`) and Render
+Free has no access to it and sleeps without traffic. The worker is **not** in the prod
+image (Render runs the API only). Nothing connects *to* the worker — it only reaches out
+to Neon and R2, no inbound connections.
 
-Ollama чіпати не треба: на Docker Desktop for Windows контейнер дотягується до неї
-через `host.docker.internal` навіть коли вона слухає лише `127.0.0.1` (це робить
-проксі самого Docker Desktop). `Ai__Ollama__BaseUrl` уже виставлений у
-`docker-compose.yml`.
+Ollama needs no changes: on Docker Desktop for Windows the container reaches it through
+`host.docker.internal` even when it listens only on `127.0.0.1` (Docker Desktop's own
+proxy). `Ai__Ollama__BaseUrl` is already set in `docker-compose.yml`.
 
-## Разове налаштування
+See [`../../docs/worker.md`](../../docs/worker.md) for the design and
+[`../../docs/infra.md`](../../docs/infra.md) for the wider deployment picture.
 
-### Ключ R2 і креденшели
+## One-time setup
 
-- Окремий ключ R2 **`knowledgebase-worker`** (RW на бакет) — щоб відкликати незалежно
-  від ключа Render.
-- Скопіювати `worker.env.example` → `worker.env` (gitignored) і заповнити: рядок
-  підключення Neon (формат ADO.NET `ключ=значення`, **без лапок**, не URL),
-  `ServiceUrl` / `BucketName` / ключі R2.
-- `Events__IngestToken` — той самий рядок, що `Events__IngestToken` у змінних Render.
-  Воркер шле хінт «нова нотатка» на `POST /api/events/ingest`, і фронт оновлює список
-  без перезавантаження. Порожній → нотатки з'являються лише після F5, решта працює.
-  Згенерувати: `openssl rand -hex 32` (будь-який довгий випадковий рядок).
+### R2 key and credentials
 
-## Запуск
+- A separate R2 key **`knowledgebase-worker`** (RW on the bucket) — revoked independently
+  of the Render key.
+- Copy `worker.env.example` → `worker.env` (gitignored) and fill it: the Neon connection
+  string (ADO.NET `key=value` format, **no quotes**, not a URL), `ServiceUrl` /
+  `BucketName` / R2 keys.
+- `Events__IngestToken` — the same string as `Events__IngestToken` in the Render env
+  vars. The worker sends a "new note" hint to `POST /api/events/ingest` and the frontend
+  updates the list without a reload. Empty → notes appear only after F5, everything else
+  works. Generate: `openssl rand -hex 32` (any long random string).
+
+## Running
 
 ```powershell
 infra/worker/run-worker.ps1
 ```
 
-Скрипт: перевіряє `worker.env` (якщо нема — створює з прикладу й зупиняється),
-зупиняє старий контейнер, збирає образ із поточного коду і піднімає новий контейнер
-`knowledgebase-worker` у фоні. Термінал тримати відкритим не треба.
+The script checks `worker.env` (creates it from the example and stops if missing), stops
+the old container, builds the image from the current code, and starts a new
+`knowledgebase-worker` container in the background. No terminal to keep open.
 
-- Хост стартує як **Production** (немає `DOTNET_ENVIRONMENT`) → бере `appsettings.json`
-  + змінні з `worker.env`, `appsettings.Local.json` в образ не потрапляє взагалі.
-- `restart: unless-stopped` — контейнер сам підніметься після ребуту (якщо Docker
-  Desktop стартує на вході в систему — це його дефолт). Task Scheduler не потрібен.
+- The host starts as **Production** (no `DOTNET_ENVIRONMENT`) → it reads `appsettings.json`
+  + the vars from `worker.env`; `appsettings.Local.json` is not in the image at all.
+- `restart: unless-stopped` — the container comes back up after a reboot (if Docker
+  Desktop starts on login, which is its default). No Task Scheduler needed.
 
-Корисне:
+Useful:
 
 ```powershell
-docker logs -f knowledgebase-worker          # дивитись лог
-infra/worker/run-worker.ps1 -Logs            # перезапустити і одразу підчепитись до логу
-infra/worker/stop-worker.ps1                 # зупинити й прибрати контейнер
+docker logs -f knowledgebase-worker          # watch the log
+infra/worker/run-worker.ps1 -Logs            # restart and attach to the log
+infra/worker/stop-worker.ps1                 # stop and remove the container
 ```
 
-## Оновлення після деплою
+## Updating after a deploy
 
-Порядок: **спершу** викочується API (він накатує міграції в Neon на старті), **потім**
-оновлюється воркер. Воркер, піднятий проти БД зі старою схемою, падав би на перших
-зверненнях до нових таблиць.
+Order: **API first** (it applies migrations to Neon on startup), **then** the worker. A
+worker brought up against the old schema would fail on the first hit to a new table.
 
 ```powershell
 git pull
-infra/worker/run-worker.ps1        # зупинить старий, пересобере образ, підніме новий
+infra/worker/run-worker.ps1        # stop old, rebuild image, start new
 ```
 
-## Якщо воркер не бачить Ollama
+## If the worker cannot see Ollama
 
-`docker logs knowledgebase-worker` покаже `Ollama is not reachable at
-http://host.docker.internal:11434` (виринає, коли воркер бере job, не на старті).
+`docker logs knowledgebase-worker` shows `Ollama is not reachable at
+http://host.docker.internal:11434` (surfaces when the worker takes a job, not at
+startup).
 
-- Ollama взагалі запущена? `curl http://localhost:11434/api/tags` на хості.
-- Те саме з контейнера: `docker run --rm curlimages/curl -sS
-  http://host.docker.internal:11434/api/tags` — на Docker Desktop має бути `200` без
-  жодних додаткових прапорців.
-- Якщо ти **не** на Docker Desktop, а на нативному Docker (Linux) — там
-  `host.docker.internal` веде на реальний IP хоста, і Ollama на `127.0.0.1` його не
-  прийме: `setx OLLAMA_HOST 0.0.0.0` + рестарт Ollama, або перенеси Ollama в ту саму
-  compose-мережу.
+- Is Ollama running at all? `curl http://localhost:11434/api/tags` on the host.
+- The same from a container: `docker run --rm curlimages/curl -sS
+  http://host.docker.internal:11434/api/tags` — on Docker Desktop this should be `200`
+  with no extra flags.
+- If you are **not** on Docker Desktop but on native Docker (Linux), `host.docker.internal`
+  points at the real host IP and Ollama on `127.0.0.1` will refuse it:
+  `setx OLLAMA_HOST 0.0.0.0` + restart Ollama, or move Ollama into the same compose
+  network.

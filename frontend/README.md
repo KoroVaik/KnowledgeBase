@@ -1,32 +1,30 @@
-# React + TypeScript + Vite
+# Frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+React + TypeScript + Vite SPA for the Knowledge Base. `strict: true`, avoid `any`.
+Lint is **oxlint** (`.oxlintrc.json`), not ESLint.
 
-Currently, two official plugins are available:
+Design notes and open items: [`../docs/frontend.md`](../docs/frontend.md).
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## Run
 
-## React Compiler
-
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the Oxlint configuration
-
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
-
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
+```bash
+npm run dev      # http://localhost:5173, proxies /api → http://localhost:5244
 ```
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+The API must be running too — see [`../CLAUDE.md`](../CLAUDE.md) → "Running locally".
+
+## Checks
+
+```bash
+npm run build && npm run lint
+```
+
+## Layout
+
+- `api/` — one module per resource, plus `http.ts` (`apiFetch`, `ApiUnreachableError`)
+  and `realtime.ts` (the single SSE connection per tab).
+- `components/` — screen components.
+- `hooks/` — `useConnectionStatus`, `useResourceChanges`.
+- `upload/` — the upload queue (`useUploadQueue`) and the sync classifier (`classify.ts`).
+- `notes/` — `renderNoteBody.ts`, the `marked` extension that renders `[[wiki-links]]`.
+- `format.ts` — shared formatting helpers.

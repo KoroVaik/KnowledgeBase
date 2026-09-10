@@ -1,111 +1,92 @@
-# Правила роботи над проєктом
+# Working rules for this project
 
-## Про проєкт
+## Language
 
-Personal Knowledge Base — веб-застосунок для збору нотаток і документів (аналог Obsidian).
-Кінцева мета: мультимодальна AI-модель аналізує PDF/фото, генерує `.md` нотатку, визначає
-категорію і додає двосторонні `[[wiki-links]]` у вже наявні нотатки.
+- **Talk to the owner in Ukrainian** — every chat reply, and visible thinking.
+- **Everything in the repo is English**: code, identifiers, comments, commit messages,
+  and all docs — except `docs/learning.md`, the owner's personal study notes, which stay
+  Ukrainian on purpose.
 
-Монорепо: `frontend/` (React + TypeScript + Vite) і `backend/` (ASP.NET Core 8).
+## The project
 
-`backend/KnowledgeBase.sln` — три проєкти:
+Personal Knowledge Base — a web app for collecting notes and documents (an Obsidian-alike).
+Monorepo: `frontend/` (React + TS + Vite), `backend/` (ASP.NET Core 8, three projects).
 
-- **`KnowledgeBase.Core`** (`Microsoft.NET.Sdk`) — спільне: EF-модель і міграції,
-  сховище S3, клієнт Ollama, `PipelineWorker`, контракт SSE-подій.
-- **`KnowledgeBase.Api`** (`Microsoft.NET.Sdk.Web`) — HTTP API + віддача SPA. **Єдине,
-  що їде в прод** (Render, Docker). Накатує міграції на старті — власник схеми.
-- **`KnowledgeBase.Worker`** (`Microsoft.NET.Sdk.Worker`) — AI-пайплайн окремим
-  процесом на домашньому ПК, поряд з Ollama; ходить у Neon і R2 по інтернету.
-  Міграцій не накатує.
+The full picture and the **deliberate constraints** (things not to "fix") are in
+[`docs/architecture.md`](docs/architecture.md). Read it first.
 
-Деталі розгортання — [`DEPLOYMENT.md`](DEPLOYMENT.md), запуск воркера в проді —
-[`infra/worker/README.md`](infra/worker/README.md).
+## Docs — read only what the task touches
 
-## Стек і свідомі обмеження
+[`docs/README.md`](docs/README.md) is the index. Per area:
+[`backend.md`](docs/backend.md), [`frontend.md`](docs/frontend.md),
+[`worker.md`](docs/worker.md), [`ai-pipeline.md`](docs/ai-pipeline.md),
+[`database.md`](docs/database.md), [`infra.md`](docs/infra.md).
 
-Це рішення, а не прогалини — не пропонувати їх «полагодити» щоразу:
+Each area file has a **Decisions** section (the *why* — do not undo a deliberate choice)
+and an **Open** section (actionable `[ ]` items).
 
-- **Бекенд тільки C# / ASP.NET Core.** Без Python. Виклики до моделі — напряму через
-  `HttpClient` або офіційний SDK, **без окремого сервісу**.
-- **Медіа — у S3, решта — у Postgres.** Тіло нотатки — колонка `text` у Postgres, а не
-  `.md`-файл (рішення від 2026-09-09, скасовує попереднє «нотатки лишаються файлами»):
-  граф `[[wiki-links]]` і повнотекстовий пошук живуть у БД, а нотатка — це кілобайти
-  тексту, не медіа. Справжні `.md`-файли, якщо знадобляться для Obsidian, — похідний
-  експорт із БД. Байти медіа живуть **тільки** в S3-сумісному сховищі за інтерфейсом
-  `IAssetStorage` — у проді Cloudflare R2, локально Garage на домашньому ПК (він же
-  друга копія). Локального файлового сховища більше немає: бекенд байтів не торкається,
-  браузер PUT/GET'ить бакет напряму за підписаними посиланнями (`IAssetLinkSigner`).
-  Метадані файлів (оригінальне ім'я, MIME, розмір, час) — у **Postgres** через EF Core,
-  і **таблиця там джерело правди**: список читається з неї, сховище віддає лише байти.
-  Локально Postgres у Docker (`infra/postgres`), у проді — керована (Neon).
-  Один рушій в обох середовищах свідомо: різні провайдери EF означали б два набори
-  міграцій і клас багів «локально працює, у хмарі ні». SQLite відпав, бо ефемерний
-  контейнер у проді не має диска, на якому файл бази пережив би деплой.
-  Повнотекстовий пошук по нотатках і backlinks у БД **ще не переїхали** — коли
-  переїжджатимуть, це та сама база, а не нова.
-- **Фронтенд**: React + TypeScript, `strict: true`, уникати `any`.
-- **Автентифікація** — однокористувацька, без реєстрації. Рішення від 2026-09-06:
-  додається як передумова деплою (скасовує попереднє «не планується»). Деталі — у
-  `CHECKLIST.md`.
+- **At the start of a task**: read the area file(s) it touches, plus `architecture.md`.
+- **At the end**: update the **Open** section — tick what is done, add what surfaced.
+- Tick `[x]` **only for what was actually run and checked** — not "code written" but
+  "ran and works". Then compress the line to one sentence and move it to
+  [`docs/archive.md`](docs/archive.md).
+- **Propose new items yourself.** If something out of the current scope surfaces, do not
+  do it silently — offer it as an Open item.
+- Verification detail does not belong in a living doc: "verified: login → upload →
+  delete, all green" is enough.
 
-## Рівень пояснень
+## Explanation level
 
-Користувач — інженер з автоматизації тестування, **не професійний розробник**. Вчиться
-розробки на цьому проєкті. Досвід із бекендом і фронтендом — переважно з **читання** чужого
-коду на робочому проєкті, а не з написання свого.
+The owner is a **test-automation engineer, not a professional developer**, learning
+development on this project — mostly from *reading* other people's code at work.
 
-**Не пояснювати** (це користувач знає):
+**Do not explain** (they know this): C# syntax and the language (generics, LINQ,
+`async`/`await`, records, nullable types); xUnit and general testing principles.
 
-- Синтаксис і мову C#: класи, generics, LINQ, `async`/`await`, records, nullable-типи.
-- xUnit і загальні принципи тестування.
+**Explain plainly, with analogies to C# and test automation:**
 
-**Пояснювати базово, з аналогіями до знайомого — мови C# і тест-автоматизації:**
+- **ASP.NET Core as a framework** — they know it only shallowly: the request pipeline and
+  middleware (what each `Use*` does and why the order), the DI container and service
+  lifetimes, hosting and Kestrel, configuration (`appsettings`, launch profiles,
+  user-secrets), minimal API vs MVC, parameter/form binding, `Results.*`.
+- Everything frontend: React (hooks, state, re-renders), TypeScript specifics, npm/Vite,
+  SPA structure.
+- General web mechanics: CORS, origin, HTTP headers, browser cache, DevTools.
+- Node ecosystem tools — what they are, why, the .NET equivalent.
 
-- **ASP.NET Core як фреймворк — знає дуже поверхнево.** Пояснювати: пайплайн запиту і
-  middleware (що робить кожен `Use*` і чому саме в такому порядку), DI-контейнер і час
-  життя сервісів, хостинг і Kestrel, конфігурацію (`appsettings`, профілі запуску,
-  user-secrets), minimal API, біндинг параметрів і форм, `Results.*`.
-- Усе фронтендове: React (хуки, стан, ре-рендери), TypeScript-специфіка, npm/Vite,
-  структура SPA.
-- Загальновебові механізми: CORS, origin, HTTP-заголовки, кеш браузера, DevTools.
-- Інструменти екосистеми Node — що це, навіщо, який аналог у .NET.
+**Explain before you change code**: first *why this matters in practice*, then wait for a
+"yes", then edit files.
 
-**Коментарі в коді — виняток, а не норма.** Користувач не любить їх читати: код має
-говорити сам за себе. Не описувати коментарем те, що й так видно з коду, і не писати
-навчальних вставок «щоб зрозуміти». Коментар доречний тільки там, де є **неочевидне
-рішення**: чому саме так, а не інакше; неінтуїтивна поведінка фреймворку чи браузера;
-обхід відомої пастки. Пояснення концепцій — у відповідь у чат, а не в код.
+## Comment policy
 
-## Чекліст
+**Comments are the exception, not the norm.** The owner does not like reading them — the
+code should speak for itself. Do not describe in a comment what the code already shows,
+and do not write teaching inserts. A comment earns its place **only** where there is a
+**non-obvious decision**: why this way and not another; counter-intuitive framework or
+browser behaviour; a workaround for a known trap. Keep it to one or two lines. Concept
+explanations go in the chat reply, not the code.
 
-`CHECKLIST.md` — єдине джерело правди про стан робіт.
+Exception: `///` XML-doc comments on API controllers and actions feed Swagger — keep
+those.
 
-- **Читати на початку** кожної задачі, щоб розуміти контекст.
-- **Оновлювати наприкінці** задачі: позначати зроблене, додавати нове, що виринуло.
-- Позначати `[x]` **тільки те, що реально перевірено** — не «код написаний», а
-  «запущено і працює».
-- **Пропонувати нові пункти самостійно.** Якщо під час роботи виринає щось поза
-  поточним скоупом — не робити мовчки, а запропонувати як пункт чекліста.
+## How to work
 
-## Як працювати
+- **One iteration, one scope.** Do not do "while I'm here" work nobody asked for.
+  Something noticed in passing → an Open item, not the current commit.
+- **Verify, do not assume.** Before saying "works", actually build, run, call the
+  endpoint. Show the command and the real output.
+- **Do not invent repo state.** Before claiming anything about configs, CI or
+  dependencies, look at the files. (The project description has drifted from reality
+  before: the linter turned out to be oxlint, not typescript-eslint; the CI workflow did
+  not exist at all.)
+- **Clean up after yourself**: test files in `data/assets`, stopped dev servers.
+- **Do not commit or push without being asked.**
+- **Secrets** (AI model keys) — only via user-secrets or env vars. Never in
+  `appsettings.json`, never in code.
 
-- **Одна ітерація — один скоуп.** Не робити «заодно» того, про що не просили. Помічене
-  побічно — у чекліст, а не в поточний коміт.
-- **Перевіряти, а не припускати.** Перед словами «працює» реально зібрати, запустити,
-  викликати endpoint. Показувати команду і фактичний результат.
-- **Не вигадувати стан репозиторію.** Перед твердженнями про конфіги, CI, залежності —
-  подивитись у файли. Пам'ятка: опис проєкту вже одного разу розходився з реальністю
-  (лінтер виявився oxlint, а не typescript-eslint; CI-workflow не існувало взагалі).
-- **Прибирати за собою**: тестові файли з `data/assets`, зупинені dev-сервери.
-- **Не комітити і не пушити без прямого прохання.**
-- **Секрети** (ключі до AI-моделі) — тільки через user-secrets або змінні оточення.
-  Ніколи в `appsettings.json` і ніколи в коді.
-- **Мова**: відповіді й документація — українською. Код, імена, коментарі в коді —
-  англійською.
+## Running locally
 
-## Як запустити
-
-Окремі процеси, кожен у своєму терміналі, працюють одночасно.
+Separate processes, each in its own terminal, running at once.
 
 ```bash
 cd infra/postgres && docker compose up -d
@@ -119,24 +100,24 @@ dotnet run --project backend/KnowledgeBase.Api --launch-profile http
 cd frontend && npm run dev
 ```
 
-Фронтенд: http://localhost:5173 · API: http://localhost:5244 · Swagger:
+Frontend: http://localhost:5173 · API: http://localhost:5244 · Swagger:
 http://localhost:5244/swagger
 
-`--launch-profile http` обов'язковий: дефолтний профіль `https` слухає порт 7087, і
-фронтенд у нього не влучить.
+`--launch-profile http` is required: the default `https` profile listens on 7087 and the
+frontend proxy will miss it.
 
-**AI-воркер** — окремо, коли треба обробляти завантаження (потрібна запущена Ollama
-на `localhost:11434`):
+**AI worker** — separately, when uploads need processing (needs Ollama on
+`localhost:11434`):
 
 ```bash
 dotnet run --project backend/KnowledgeBase.Worker
 ```
 
-Профіль `worker` вмикає `DOTNET_ENVIRONMENT=Development` → локальний Postgres +
-локальний Garage (`appsettings.Local.json`) + локальна Ollama. Смоук-тест аналізатора
-без черги: `dotnet run --project backend/KnowledgeBase.Worker -- analyze <файл>`.
+Profile `worker` sets `DOTNET_ENVIRONMENT=Development` → local Postgres + local Garage
+(`appsettings.Local.json`) + local Ollama. Analyzer smoke test without the queue:
+`dotnet run --project backend/KnowledgeBase.Worker -- analyze <file>`.
 
-Перевірки перед комітом:
+Pre-commit checks:
 
 ```bash
 cd frontend && npm run build && npm run lint

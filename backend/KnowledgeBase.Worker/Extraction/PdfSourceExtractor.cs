@@ -4,8 +4,8 @@ using KnowledgeBase.Core.Pipeline.Extraction;
 
 namespace KnowledgeBase.Worker.Extraction;
 
-// Phase 1: the text layer only. A PDF without one (a scan) is Skipped, not Failed - rendering
-// its pages to images for the vision model is a separate step (see CHECKLIST).
+// Text layer only. A scan (no text) is Skipped, not Failed; page-image OCR is a later step
+// (docs/ai-pipeline.md).
 public sealed class PdfSourceExtractor(IPdfTextExtractor text) : ISourceExtractor
 {
     public ContentKind Kind => ContentKind.Pdf;
@@ -20,8 +20,7 @@ public sealed class PdfSourceExtractor(IPdfTextExtractor text) : ISourceExtracto
         }
         catch (Exception error) when (error is not OperationCanceledException)
         {
-            // Corrupt, truncated or password-protected: PdfPig throws its own exception types
-            // and none of them get better on a retry.
+            // Corrupt / truncated / password-protected - no retry helps.
             throw new SkippableContentException($"The PDF could not be read: {error.Message}");
         }
 
