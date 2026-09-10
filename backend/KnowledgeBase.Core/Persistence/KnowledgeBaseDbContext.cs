@@ -14,6 +14,8 @@ public sealed class KnowledgeBaseDbContext(DbContextOptions<KnowledgeBaseDbConte
 
     public DbSet<NoteLink> NoteLinks => Set<NoteLink>();
 
+    public DbSet<SynthesisSource> SynthesisSources => Set<SynthesisSource>();
+
     public DbSet<Tag> Tags => Set<Tag>();
 
     public DbSet<NoteTag> NoteTags => Set<NoteTag>();

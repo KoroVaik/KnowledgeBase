@@ -2,6 +2,7 @@ using System.Text.Json;
 using KnowledgeBase.Core.Ai;
 using KnowledgeBase.Core.Pipeline;
 using KnowledgeBase.Core.Pipeline.Extraction;
+using KnowledgeBase.Core.Pipeline.SourceNotes;
 
 namespace KnowledgeBase.Worker;
 
@@ -47,9 +48,8 @@ public static class AnalyzeCommand
                 new SourceAsset(bytes, string.Empty, path),
                 CancellationToken.None);
 
-            var result = await analyzer.AnalyzeAsync(
-                new AnalysisRequest(ExistingTitles: [], KnownTags: [], extracted.Text, extracted.Image),
-                CancellationToken.None);
+            var task = SourceNotePrompt.TaskFor(extracted, existingTitles: [], knownTags: []);
+            var result = await analyzer.RunAsync<NoteDraft>(task, CancellationToken.None);
 
             Console.WriteLine(JsonSerializer.Serialize(
                 result,

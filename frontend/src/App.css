@@ -745,6 +745,75 @@
   color: var(--text);
 }
 
+/* Sits between the synthesis notes and the bin: pick a tag, merge its notes. */
+.tags-section {
+  margin-top: 28px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border);
+}
+
+.tags-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.tags-section h3 {
+  margin: 0 0 12px;
+  font-size: 16px;
+}
+
+.tags-head button,
+.tags-row button {
+  font: inherit;
+  font-size: 13px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  color: var(--text);
+  background: transparent;
+  border: 1px solid var(--border);
+}
+
+.tags-head button:hover:not(:disabled),
+.tags-row button:hover:not(:disabled) {
+  color: var(--text-h);
+  background: var(--surface-hover);
+}
+
+.tags-head button:disabled,
+.tags-row button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.tags-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.tags-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.tags-count {
+  flex: 1;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.tags-empty {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
 .notes-trash {
   margin-top: 20px;
 }

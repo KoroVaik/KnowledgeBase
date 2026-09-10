@@ -15,4 +15,8 @@ public sealed class PipelineOptions
     // the JSON. A source over this is marked Skipped, not failed. Map-reduce chunking is
     // the real fix (docs/ai-pipeline.md).
     public int MaxSourceChars { get; set; } = 12_000;
+
+    // Same guard for a synthesis: the combined bodies of the notes being merged. Higher than
+    // MaxSourceChars because merging is the whole point, lower than what would truncate.
+    public int MaxSynthesisChars { get; set; } = 24_000;
 }

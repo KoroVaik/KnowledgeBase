@@ -3,6 +3,7 @@ using System;
 using KnowledgeBase.Core.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace KnowledgeBase.Core.Persistence.Migrations
 {
     [DbContext(typeof(KnowledgeBaseDbContext))]
-    partial class KnowledgeBaseDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260910223434_AddJobKindAndPayload")]
+    partial class AddJobKindAndPayload
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -86,10 +89,6 @@ namespace KnowledgeBase.Core.Persistence.Migrations
                         .HasMaxLength(255)
                         .HasColumnType("character varying(255)");
 
-                    b.Property<string>("SynthesisGroup")
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
-
                     b.Property<string>("Title")
                         .IsRequired()
                         .HasMaxLength(200)
@@ -105,10 +104,6 @@ namespace KnowledgeBase.Core.Persistence.Migrations
                     b.HasIndex("Title")
                         .IsUnique()
                         .HasFilter("\"DeletedAtUtc\" IS NULL");
-
-                    b.HasIndex("Kind", "SynthesisGroup")
-                        .IsUnique()
-                        .HasFilter("\"SynthesisGroup\" IS NOT NULL AND \"DeletedAtUtc\" IS NULL");
 
                     b.ToTable("Notes");
                 });
@@ -215,23 +210,6 @@ namespace KnowledgeBase.Core.Persistence.Migrations
                     b.ToTable("ProcessingJobs");
                 });
 
-            modelBuilder.Entity("KnowledgeBase.Core.Persistence.SynthesisSource", b =>
-                {
-                    b.Property<string>("SynthesisNoteId")
-                        .HasMaxLength(32)
-                        .HasColumnType("character varying(32)");
-
-                    b.Property<string>("InputNoteId")
-                        .HasMaxLength(32)
-                        .HasColumnType("character varying(32)");
-
-                    b.HasKey("SynthesisNoteId", "InputNoteId");
-
-                    b.HasIndex("InputNoteId");
-
-                    b.ToTable("SynthesisSources");
-                });
-
             modelBuilder.Entity("KnowledgeBase.Core.Persistence.Tag", b =>
                 {
                     b.Property<string>("Id")
@@ -316,21 +294,6 @@ namespace KnowledgeBase.Core.Persistence.Migrations
                         .WithMany()
                         .HasForeignKey("AssetId")
                         .OnDelete(DeleteBehavior.Cascade);
-                });
-
-            modelBuilder.Entity("KnowledgeBase.Core.Persistence.SynthesisSource", b =>
-                {
-                    b.HasOne("KnowledgeBase.Core.Persistence.Note", null)
-                        .WithMany()
-                        .HasForeignKey("InputNoteId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("KnowledgeBase.Core.Persistence.Note", null)
-                        .WithMany()
-                        .HasForeignKey("SynthesisNoteId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
                 });
 #pragma warning restore 612, 618
         }

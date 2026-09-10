@@ -129,6 +129,22 @@ not just compiled.
 - Worker → API bridge (`HttpChangeNotifier` → `POST /api/events/ingest`, `X-Ingest-Token`
   constant-time compare, `503` when unset). Verified with `curl` + a parallel SSE client.
   **Not yet verified with a live worker or in prod.**
+- **Handler seam + synthesis pipeline (L2/L3).** `PipelineWorker` reduced to plumbing;
+  `JobKind` + JSON `Payload` on `ProcessingJob`; `IPipelineHandler` / `PipelineHandlerSelector`
+  (mirrors `SourceExtractorSelector`); `SourceNoteHandler` (moved `ProcessAsync`) +
+  `SynthesisHandler` (L2 by tag, L3 = same handler over `Synthesis` notes → one `Index`);
+  `NoteWriter.CommitAsync` shared; `IContentAnalyzer` → `RunAsync<T>(AiTask)`, prompts moved
+  to the pipelines; `NoteDraft` shared shape. `Note.SynthesisGroup` (replace-on-rerun key,
+  unique among the living), `SynthesisSource` provenance. `POST /api/synthesis/{tag,index}`,
+  `GET /api/tags`, Tags section in `NotesList` (before the bin). Migrations
+  `AddJobKindAndPayload` + `AddSynthesisSourceAndNoteGroup`. Also fixed: the worker caught
+  only `ContentTooLargeException`, so a scanned PDF / empty file went `Failed` not `Skipped`
+  — now catches the `SkippableContentException` base. And synthesis input bodies are stripped
+  of their `## Related` block before the model sees them (it was copying the section +
+  `[[links]]` into the merged note). Verified live against Ollama `qwen2.5vl:7b`: upload
+  re-run replaces; `Automotive` / `Windows Activation` / `Person Portrait` each merged to a
+  `Synthesis`; two syntheses → one `Index`; re-run bins the old + carries provenance;
+  `<2 notes → 409`, unknown tag → `404`, dedup → `409`. UI checked by the owner.
 - Tags from the pipeline: `AnalysisResult.Category` → `Tags[]` (1–5, relevance order),
   JSON schema + prompt to match, `AnalysisRequest.KnownCategories` → `KnownTags`. Guard
   `PipelineWorker.AttachTags` — trusts the model no more than the link filter does: keep
@@ -138,6 +154,15 @@ not just compiled.
   `.txt` uploaded → note got `Automotive`(existing, ord 0) + `Hypercar`(new, unconfirmed,
   ord 1) + two more existing tags the model padded with; one new tag, no duplicate
   `Automotive`, `/api/notes/{id}` returned them ordered.
+
+- Tags section (`components/TagsSection.tsx`) inside `NotesList`, between the synthesis
+  notes and the bin: `GET /api/tags`, a row per tag with ≥2 Source notes + "Synthesise"
+  (`POST /api/synthesis/tag`), a "Build index" button (`POST /api/synthesis/index`, off
+  under 2 syntheses), reloads on the `notes` SSE, "Queued" until then. The old
+  "hide the Notes section while empty" was dropped so it stays reachable. Checked by the
+  owner in the browser.
+- `GET /api/notes?kind=` now repeatable (`NoteKind[]`); `fetchNotes` takes one kind or an
+  array. `NotesList` asks for `Synthesis` + `Index` so the one Index note is visible.
 
 ## Database
 

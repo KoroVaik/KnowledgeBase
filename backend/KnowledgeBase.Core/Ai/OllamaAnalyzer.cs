@@ -43,9 +43,10 @@ public sealed class OllamaAnalyzer(HttpClient http, IOptions<OllamaOptions> opti
         }
     }
 
-    public async Task<AnalysisResult> AnalyzeAsync(AnalysisRequest request, CancellationToken cancellationToken)
+    public async Task<T> RunAsync<T>(AiTask task, CancellationToken cancellationToken)
+        where T : class
     {
-        var images = request.Image is { } image
+        var images = task.Image is { } image
             ? new[] { Convert.ToBase64String(image.Bytes) }
             : null;
 
@@ -53,12 +54,12 @@ public sealed class OllamaAnalyzer(HttpClient http, IOptions<OllamaOptions> opti
         {
             Model = _options.Model,
             KeepAlive = $"{(int)_options.KeepAlive.TotalSeconds}s",
-            Format = ResultSchema(),
+            Format = task.Schema,
             Options = ModelOptions(),
             Messages =
             [
-                new OllamaMessage("system", SystemPrompt),
-                new OllamaMessage("user", UserPrompt(request), images),
+                new OllamaMessage("system", task.SystemPrompt),
+                new OllamaMessage("user", task.UserPrompt, images),
             ],
         };
 
@@ -82,85 +83,10 @@ public sealed class OllamaAnalyzer(HttpClient http, IOptions<OllamaOptions> opti
                 + "large for the model's context window. Split it into smaller files.");
         }
 
-        var result = JsonSerializer.Deserialize<AnalysisResult>(content, ResultJson);
-
-        var tags = result?.Tags?.Where(tag => !string.IsNullOrWhiteSpace(tag)).ToList() ?? [];
-
-        if (result is null || string.IsNullOrWhiteSpace(result.Title) || tags.Count == 0)
-        {
-            throw new InvalidOperationException($"Ollama returned an unusable analysis: {content}");
-        }
-
-        return result with { Tags = tags, Links = result.Links ?? [] };
+        // The content is itself a JSON string matching task.Schema - hence the second parse.
+        return JsonSerializer.Deserialize<T>(content, ResultJson)
+            ?? throw new InvalidOperationException($"Ollama returned an unusable response: {content}");
     }
-
-    private const string SystemPrompt =
-        """
-        You turn a source into a note for a personal knowledge base and draft it in Markdown.
-        The source is either text or an image; for an image, transcribe any text in it and
-        describe what it shows, then write the note from that.
-        Return only JSON matching the schema.
-        - title: a short, specific title for this note.
-        - tags: 1 to 5 tags, most relevant first. Prefer tags from the known list the user
-          provides; only invent a new one when nothing on the list fits, and never invent
-          more than one new tag. Each tag is one or two words.
-        - markdownBody: the note as clean Markdown. Stay faithful to the source and do not
-          invent facts.
-        - links: titles taken verbatim from the existing-notes list that this note is genuinely
-          related to. Use [] when none apply. Never invent a title that is not in the list.
-        """;
-
-    private static string UserPrompt(AnalysisRequest request)
-    {
-        var knownTags = request.KnownTags.Count > 0
-            ? string.Join(", ", request.KnownTags)
-            : "(none yet)";
-
-        var titles = request.ExistingTitles.Count > 0
-            ? string.Join("\n", request.ExistingTitles.Select(title => $"- {title}"))
-            : "(none yet)";
-
-        var source = request.Text is { } text
-            ? $"""
-                Source text (between the markers):
-                <<<BEGIN>>>
-                {text}
-                <<<END>>>
-                """
-            : "The source is the attached image.";
-
-        return $"""
-            Known tags: {knownTags}
-
-            Existing notes:
-            {titles}
-
-            {source}
-            """;
-    }
-
-    private static JsonObject ResultSchema() => new()
-    {
-        ["type"] = "object",
-        ["properties"] = new JsonObject
-        {
-            ["title"] = new JsonObject { ["type"] = "string" },
-            ["tags"] = new JsonObject
-            {
-                ["type"] = "array",
-                ["items"] = new JsonObject { ["type"] = "string" },
-                ["minItems"] = 1,
-                ["maxItems"] = 5,
-            },
-            ["markdownBody"] = new JsonObject { ["type"] = "string" },
-            ["links"] = new JsonObject
-            {
-                ["type"] = "array",
-                ["items"] = new JsonObject { ["type"] = "string" },
-            },
-        },
-        ["required"] = new JsonArray("title", "tags", "markdownBody", "links"),
-    };
 
     private JsonObject ModelOptions()
     {

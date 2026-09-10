@@ -10,12 +10,16 @@ internal sealed class ProcessingJobConfiguration : IEntityTypeConfiguration<Proc
         builder.HasKey(job => job.Id);
 
         builder.Property(job => job.Id).HasMaxLength(32);
+        builder.Property(job => job.Kind).HasConversion<string>().HasMaxLength(32);
         builder.Property(job => job.AssetId).HasMaxLength(32);
         builder.Property(job => job.Status).HasConversion<string>().HasMaxLength(16);
         builder.Property(job => job.Error).HasMaxLength(2000);
 
         // One job per asset: re-enqueuing the same upload must not spawn a second worker run.
-        builder.HasIndex(job => job.AssetId).IsUnique();
+        // Aggregation jobs have no asset, so the constraint only covers the rows that carry one.
+        builder.HasIndex(job => job.AssetId)
+            .IsUnique()
+            .HasFilter("\"AssetId\" IS NOT NULL");
 
         // The worker polls WHERE Status = 'Pending' ORDER BY CreatedAtUtc.
         builder.HasIndex(job => new { job.Status, job.CreatedAtUtc });

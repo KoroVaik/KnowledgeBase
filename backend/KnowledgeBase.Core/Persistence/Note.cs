@@ -16,6 +16,10 @@ public sealed class Note
     // stays, so the bin entry can still name the file.
     public string? SourceFileName { get; init; }
 
+    // Which group a Synthesis/Index note aggregates (the tag name; "index" for the one Index
+    // note). Null for Source notes. A re-run replaces the note with the matching group.
+    public string? SynthesisGroup { get; init; }
+
     public required DateTime CreatedAtUtc { get; init; }
 
     public required DateTime UpdatedAtUtc { get; set; }
