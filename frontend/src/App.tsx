@@ -4,8 +4,8 @@ import type { CurrentUser } from './api/auth'
 import { fetchFeatures } from './api/features'
 import type { FeatureFlags } from './api/features'
 import { AssetList } from './components/AssetList'
-import { FileUploadForm } from './components/FileUploadForm'
 import { LoginForm } from './components/LoginForm'
+import { UploadDropZone } from './components/UploadDropZone'
 import { NotesList } from './components/NotesList'
 import { useConnectionStatus } from './hooks/useConnectionStatus'
 import './App.css'
@@ -32,6 +32,7 @@ function App() {
     // 0 until the real limit arrives: the "possibly too large" hint stays off rather than
     // firing against a wrong threshold.
     maxSourceChars: 0,
+    maxUploadBytes: 0,
   })
 
   const connection = useConnectionStatus()
@@ -156,12 +157,14 @@ function App() {
       {auth.status === 'authenticated' && (
         <>
           <p className="subtitle">
-            Upload a file to <code>backend/data/assets</code>. AI processing is not wired up yet.
+            Drop documents or images here. Each one is stored, then picked up by the AI pipeline
+            and turned into a note.
           </p>
-          <FileUploadForm
+          <UploadDropZone
             onUploaded={() => setUploadCount((count) => count + 1)}
             uploadEnabled={features.uploadEnabled}
             maxSourceChars={features.maxSourceChars}
+            maxUploadBytes={features.maxUploadBytes}
           />
           <AssetList
             reloadToken={uploadCount}

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { deleteAsset, fetchAssets, fetchDownloadUrl } from '../api/assets'
 import type { AssetSummary } from '../api/assets'
+import { formatSize } from '../format'
 import { useResourceChanges } from '../hooks/useResourceChanges'
 
 type ListState =
@@ -195,18 +196,6 @@ function startDownload(url: string) {
   // The download outlives the frame once the browser has seen the headers; the delay only has
   // to cover the round trip to the bucket.
   window.setTimeout(() => frame.remove(), 60_000)
-}
-
-function formatSize(bytes: number): string {
-  if (bytes < 1024) {
-    return `${bytes} B`
-  }
-
-  if (bytes < 1024 * 1024) {
-    return `${(bytes / 1024).toFixed(1)} KB`
-  }
-
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
 
 function messageOf(error: unknown): string {

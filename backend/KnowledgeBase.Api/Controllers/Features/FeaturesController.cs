@@ -2,6 +2,7 @@ using KnowledgeBase.Api.Controllers.Auth.Configuration;
 using KnowledgeBase.Api.Controllers.Features.Contracts;
 using KnowledgeBase.Api.Infrastructure.Features;
 using KnowledgeBase.Core.Pipeline;
+using KnowledgeBase.Core.Storage;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
 
@@ -16,12 +17,14 @@ namespace KnowledgeBase.Api.Controllers.Features;
 public sealed class FeaturesController(
     IOptionsSnapshot<FeatureOptions> features,
     IOptions<AuthOptions> auth,
-    IOptions<PipelineOptions> pipeline)
+    IOptions<PipelineOptions> pipeline,
+    IOptions<StorageOptions> storage)
     : ControllerBase
 {
     private readonly IOptionsSnapshot<FeatureOptions> _features = features;
     private readonly AuthOptions _auth = auth.Value;
     private readonly PipelineOptions _pipeline = pipeline.Value;
+    private readonly StorageOptions _storage = storage.Value;
 
     /// <summary>
     /// Returns the feature flags the UI has to respect.
@@ -42,5 +45,6 @@ public sealed class FeaturesController(
             // only when the credentials are there, so a flag switched on without them would put
             // a button on screen that can only answer 404.
             _features.Value.GoogleSignInEnabled && _auth.Google.IsConfigured,
-            _pipeline.MaxSourceChars);
+            _pipeline.MaxSourceChars,
+            _storage.MaxUploadBytes);
 }

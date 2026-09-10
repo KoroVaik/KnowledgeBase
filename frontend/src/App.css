@@ -7,34 +7,39 @@
   margin-bottom: 32px;
 }
 
-.upload-form {
+.drop-zone {
   display: flex;
-  flex-wrap: wrap;
+  flex-direction: column;
   align-items: center;
-  gap: 12px;
-  padding: 20px;
-  border: 1px solid var(--border);
+  gap: 6px;
+  width: 100%;
+  padding: 36px 20px;
+  font: inherit;
+  color: var(--text);
+  cursor: pointer;
+  background: transparent;
+  border: 2px dashed var(--border);
   border-radius: 8px;
 }
 
-.upload-form label {
-  color: var(--text-h);
-}
-
-.upload-form button {
-  font: inherit;
-  font-size: 16px;
-  padding: 8px 20px;
-  border-radius: 6px;
-  cursor: pointer;
+.drop-zone-active {
   color: var(--text-h);
   background: var(--accent-bg);
-  border: 1px solid var(--accent-border);
+  border-color: var(--accent-border);
 }
 
-.upload-form button:disabled {
+.drop-zone:disabled {
   cursor: not-allowed;
   opacity: 0.5;
+}
+
+.drop-zone-title {
+  font-size: 18px;
+  color: var(--text-h);
+}
+
+.drop-zone-hint {
+  font-size: 14px;
 }
 
 .upload-progress {
@@ -61,11 +66,6 @@
 
 .upload-progress::-moz-progress-bar {
   background: var(--text-h);
-}
-
-.upload-error {
-  margin-top: 16px;
-  color: #dc2626;
 }
 
 .app-header {
@@ -250,15 +250,153 @@
   color: #dc2626;
 }
 
+.upload-disabled {
+  margin-bottom: 12px;
+  color: var(--text);
+}
+
 .upload-hint {
   margin: 12px 0 0;
   color: #b45309;
   font-size: 14px;
 }
 
-.upload-disabled {
-  margin-bottom: 12px;
+/* The dialog sits in the browser's top layer, so it is positioned against the viewport and
+   owes nothing to the layout it is nested in. Only its own size needs saying. */
+.queue-dialog {
+  width: 720px;
+  max-width: calc(100vw - 32px);
+  padding: 24px;
   color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: var(--shadow);
+}
+
+.queue-dialog::backdrop {
+  background: rgba(0, 0, 0, 0.45);
+}
+
+.queue-summary {
+  margin-bottom: 16px;
+  font-size: 14px;
+}
+
+/* A long queue scrolls inside the dialog instead of growing past the viewport. */
+.queue-scroll {
+  max-height: 50vh;
+  overflow-y: auto;
+}
+
+.queue-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+}
+
+.queue-table th {
+  position: sticky;
+  top: 0;
+  padding: 0 12px 8px 0;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text);
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+}
+
+.queue-table td {
+  padding: 10px 12px 10px 0;
+  vertical-align: top;
+  border-bottom: 1px solid var(--border);
+}
+
+.queue-name {
+  font: 14px/150% var(--mono);
+  color: var(--text-h);
+  overflow-wrap: anywhere;
+}
+
+.queue-size {
+  font-size: 14px;
+  white-space: nowrap;
+}
+
+.queue-status {
+  width: 45%;
+  font-size: 14px;
+  line-height: 150%;
+}
+
+.queue-note {
+  opacity: 0.7;
+}
+
+.queue-ok {
+  color: #15803d;
+}
+
+.queue-warn {
+  color: #b45309;
+}
+
+.queue-error {
+  color: #dc2626;
+}
+
+.queue-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.queue-actions button {
+  font: inherit;
+  font-size: 13px;
+  padding: 4px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  color: var(--text);
+  background: transparent;
+  border: 1px solid var(--border);
+}
+
+.queue-footer {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 20px;
+}
+
+.queue-footer button {
+  font: inherit;
+  font-size: 15px;
+  padding: 8px 20px;
+  border-radius: 6px;
+  cursor: pointer;
+  color: var(--text);
+  background: transparent;
+  border: 1px solid var(--border);
+}
+
+.queue-footer button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+/* Scoped to the footer to outweigh `.queue-footer button`, which is the more specific
+   selector of the two and would otherwise win no matter which came last. */
+.queue-footer .queue-primary {
+  color: var(--text-h);
+  background: var(--accent-bg);
+  border-color: var(--accent-border);
+}
+
+.queue-status .upload-progress {
+  margin: 4px 0 6px;
 }
 
 .connection-banner {
