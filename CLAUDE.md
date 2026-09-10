@@ -81,6 +81,8 @@ those.
   not exist at all.)
 - **Clean up after yourself**: test files in `data/assets`, stopped dev servers.
 - **Do not commit or push without being asked.**
+- **Do not create git branches without being asked.** Work on the current branch; if that
+  seems wrong, say so and wait.
 - **Secrets** (AI model keys) — only via user-secrets or env vars. Never in
   `appsettings.json`, never in code.
 
