@@ -107,9 +107,11 @@ export function NotesList() {
                   <span className="note-meta">
                     {note.category} · {new Date(note.updatedAtUtc).toLocaleString()}
                   </span>
-                  {note.sourceAssetId === null && note.sourceFileName !== null && (
+                  {note.sourceAssetId === null && (
                     <span className="note-removed-source">
-                      Related file “{note.sourceFileName}” was removed
+                      {note.sourceFileName !== null
+                        ? `Related file “${note.sourceFileName}” was removed`
+                        : 'Source file was removed'}
                     </span>
                   )}
                 </button>

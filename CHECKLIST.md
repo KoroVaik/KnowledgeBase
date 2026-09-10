@@ -769,7 +769,11 @@ Postgres. Тіло нотатки — колонка `text`, не `.md`-файл
       `sourceAssetId`/`sourceFileName`, рядок нотатки показує «Related file "<name>" was
       removed», коли `sourceAssetId === null && sourceFileName !== null`. Клас
       `.note-removed-source` (той самий бурштин `#b45309`, що `.asset-status-warn`).
-      `npm run build` + `npm run lint` — зелені. **У браузері не перевірено**
+      Умова — просто `sourceAssetId === null` (зараз кожну нотатку робить воркер із
+      файлу, тож занулений FK однозначно = «джерело зникло»); текст з іменем, коли
+      `sourceFileName` є, і «Source file was removed» для нотаток, створених до колонки.
+      Явний дискримінатор «рукописна нотатка vs осиротіла» — коли з'явиться ручне
+      створення нотаток. `npm run build` + `npm run lint` — зелені. **У браузері не перевірено**
 - [ ] Видалення файлу з нотаткою не шле SSE `notes`/`deleted` — відкритий список нотаток
       на фронті бачить зміну лише після F5. Додати `_notifier.Publish` у
       `AssetsController.Delete`, коли в ассета була нотатка

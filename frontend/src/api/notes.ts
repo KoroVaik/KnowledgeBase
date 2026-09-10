@@ -5,8 +5,9 @@ export interface NoteSummary {
   id: string
   title: string
   category: string
-  // sourceAssetId is nulled when the source file is deleted; sourceFileName survives it, so
-  // sourceAssetId === null && sourceFileName !== null means "the file this came from is gone".
+  // Every note is born from a file, so sourceAssetId === null means that file was deleted
+  // (the FK is nulled on asset delete). sourceFileName survives it and names the file that
+  // was there; on notes created before that column existed it is null.
   sourceAssetId: string | null
   sourceFileName: string | null
   createdAtUtc: string
