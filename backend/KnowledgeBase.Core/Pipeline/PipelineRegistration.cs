@@ -1,4 +1,6 @@
 using KnowledgeBase.Core.Pipeline.Extraction;
+using KnowledgeBase.Core.Pipeline.SourceNotes;
+using KnowledgeBase.Core.Pipeline.Synthesis;
 
 namespace KnowledgeBase.Core.Pipeline;
 
@@ -16,6 +18,11 @@ public static class PipelineRegistration
         services.AddSingleton<ISourceExtractor, TextSourceExtractor>();
         services.AddSingleton<ISourceExtractor, ImageSourceExtractor>();
         services.AddSingleton<SourceExtractorSelector>();
+
+        // Handlers hold a scoped DbContext, so they and the selector over them are scoped too.
+        services.AddScoped<IPipelineHandler, SourceNoteHandler>();
+        services.AddScoped<IPipelineHandler, SynthesisHandler>();
+        services.AddScoped<PipelineHandlerSelector>();
 
         services.AddHostedService<PipelineWorker>();
 

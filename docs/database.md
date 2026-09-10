@@ -25,21 +25,27 @@ Deploy order: **API first** (applies the migration to Neon), then restart the wo
 | Table | Notes |
 |---|---|
 | `Assets` (`AssetRecord`) | File metadata. **Source of truth** — `GET /api/assets` reads this, not the store. `AssetRecord.For` is a factory taking separate values, not `IFormFile` (the pipeline creates rows too). Empty name → stored name; empty MIME → `application/octet-stream`. `UploadedAtUtc` is `timestamp with time zone`. |
-| `ProcessingJobs` (`ProcessingJob`) | `Id`, `AssetId` FK, `Status` (enum-as-string), `Attempts`, times, `Error`. Unique index on `AssetId` (no duplicate job). Index `(Status, CreatedAtUtc)` for polling. |
-| `Notes` (`Note`) | `Id`, `Title`, `Category`, `Body` (`text`), `Kind`, `SourceAssetId` FK, `SourceFileName`, times, `DeletedAtUtc`. |
+| `ProcessingJobs` (`ProcessingJob`) | `Id`, `Kind` (`JobKind` enum-as-string), `AssetId?` FK, `Payload?` (JSON, synthesis only), `Status` (enum-as-string), `Attempts`, times, `Error`. Unique index on `AssetId` **among non-null** (aggregation jobs carry none). Index `(Status, CreatedAtUtc)` for polling. |
+| `Notes` (`Note`) | `Id`, `Title`, `Body` (`text`), `Kind`, `SourceAssetId?` FK, `SourceFileName`, `SynthesisGroup?`, times, `DeletedAtUtc`. Classification is via `NoteTag`, not a column. Unique `(Kind, SynthesisGroup)` among the living — one aggregate note per group. |
 | `NoteLinks` (`NoteLink`) | `Id`, `SourceNoteId` FK, `TargetTitle` (raw), `TargetNoteId?` (nullable for a dangling `[[...]]`). Unique `(SourceNoteId, TargetTitle)`. |
+| `SynthesisSources` (`SynthesisSource`) | `SynthesisNoteId` + `InputNoteId` composite PK, both FK to `Notes` CASCADE. Provenance: which notes a synthesis absorbed. Index on `InputNoteId` for the staleness query. |
+| `Tags` (`Tag`) | `Id`, `Name` (unique), `Confirmed`. A tag the user has vouched for is `Confirmed`; a pipeline-invented one is not (shown anyway, flagged for review). |
+| `NoteTags` (`NoteTag`) | `NoteId` + `TagId` composite PK (the pair is unique on its own), `Ordinal`. `Ordinal 0` = primary tag **by convention**, no `IsPrimary` flag. Index on `TagId` for facet queries. No query filter — a binned note keeps its tags on screen. |
 | `DataProtectionKeys` | Auth-cookie encryption keys. Migration `AddDataProtectionKeys`. See [`backend.md`](backend.md). |
 
 FK behaviour: `ProcessingJobs → Assets` CASCADE; `NoteLinks → Notes` CASCADE (source) +
-SET NULL (target); `Notes → Assets` (`SourceAssetId`) SET NULL.
+SET NULL (target); `Notes → Assets` (`SourceAssetId`) SET NULL; `NoteTags → Notes` and
+`NoteTags → Tags` both CASCADE.
 
-### `NoteKind` — one table, two lifecycles
+### `NoteKind` — one table, three lifecycles
 
-`NoteKind` (`Source` | `Synthesis`) is a column, not a separate table: links and search
-are shared, and the only difference is who owns the lifecycle. A **source** note is a
-structured description of one file and goes to the bin with that file. A **synthesis**
-note is collected from many source notes by a (future) second pipeline and lives its own
-life.
+`NoteKind` (`Source` | `Synthesis` | `Index`) is a column, not a separate table: links and
+search are shared, only the lifecycle owner differs. A **source** note describes one file
+and goes to the bin with it. A **synthesis** note merges the source notes of one tag; the
+**index** note merges every synthesis. Both aggregate kinds absorb their inputs' text
+(they do not point at them) so they outlive every file, and carry `SynthesisGroup` (the
+tag name, or `"index"`) as their identity for replace-on-rerun. Pipeline side:
+[`ai-pipeline.md`](ai-pipeline.md).
 
 ### Soft delete
 
@@ -88,22 +94,6 @@ UTC as local time. Fixed with a value converter in the model; **not needed in Po
 
 ## Open
 
-- [ ] **Tagging system — replaces `Category`.** Many-to-many; the single classification
-      axis, because notes overlap freely and one category per note never fit.
-      - Model: `Tag` (`Id`, `Name`, `Confirmed`) + `NoteTag` (`NoteId`, `TagId`,
-        `Ordinal`). `Ordinal` is the model's relevance order; position 0 is the "primary"
-        tag **by convention** — no `IsPrimary` flag. Unique `(NoteId, TagId)`; unique
-        `Name`.
-      - Drop the `Category` column. Migration seeds one `Tag` per distinct existing
-        `Category`, plus a `NoteTag` at `Ordinal 0`, all `Confirmed = true` — the starting
-        vocabulary.
-      - `Confirmed`: a tag the user has vouched for. Pipeline-invented tags land
-        `Confirmed = false` — still shown everywhere (the facet marks them), just flagged
-        for review.
-      - A tag that was a note's only tag being deleted is fine: the note becomes untagged,
-        a normal state, surfaced by an "Untagged" filter for point re-tagging. No full
-        regeneration.
-      - Pipeline contract + proliferation control: [`ai-pipeline.md`](ai-pipeline.md).
 - [ ] **Tag reconciliation — string-distance merge, no model.** For `Confirmed = false`
       tags, show the nearest existing tags by trigram / Levenshtein (the pipeline already
       ranks candidates) and merge on one keypress: repoint every `NoteTag`, drop the
@@ -122,16 +112,8 @@ UTC as local time. Fixed with a value converter in the model; **not needed in Po
         the pick, move inbound links. The swap logic is the `process-again` replacement in
         reverse (separate `SaveChanges` around the partial unique index on `Title`).
       - UI: a version dropdown in `FilePanel` — see [`frontend.md`](frontend.md).
-- [ ] **Second pipeline: synthesis (aggregation) notes** from many source notes.
-      `NoteKind.Synthesis` already exists as a column; what is missing is the pipeline that
-      writes one — grouping source notes by topic/category, not by file. Needs a mark of
-      which source notes are already accounted for, or every run re-reads everything.
-      Deleting a source note does not change the synthesis text — it absorbed the content,
-      it does not point at it.
-- [ ] **More note kinds, each processed its own way.** After `Source` and `Synthesis`:
-      user-written notes (no AI, or AI only on request), general/standalone notes not tied
-      to any file. `NoteKind` grows; every new kind needs its own trigger, prompt and
-      possibly model in the worker — settle the per-kind routing (a selector by
-      `NoteKind`, the way `SourceExtractorSelector` picks by file type) before the third
-      kind lands. Pipeline side of this is in [`ai-pipeline.md`](ai-pipeline.md).
+- [ ] **More note kinds, each processed its own way.** After `Source` / `Synthesis` /
+      `Index`: user-written notes (no AI, or AI only on request), general/standalone notes
+      not tied to any file. The `JobKind` → `IPipelineHandler` seam is in place — each new
+      kind is a handler class. Pipeline side: [`ai-pipeline.md`](ai-pipeline.md).
 - [ ] Orphan sweep — reconcile `Assets` against the store (also in [`backend.md`](backend.md)).

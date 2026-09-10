@@ -67,11 +67,6 @@ namespace KnowledgeBase.Core.Persistence.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
-                    b.Property<string>("Category")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
-
                     b.Property<DateTime>("CreatedAtUtc")
                         .HasColumnType("timestamp with time zone");
 
@@ -91,6 +86,10 @@ namespace KnowledgeBase.Core.Persistence.Migrations
                         .HasMaxLength(255)
                         .HasColumnType("character varying(255)");
 
+                    b.Property<string>("SynthesisGroup")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
                     b.Property<string>("Title")
                         .IsRequired()
                         .HasMaxLength(200)
@@ -101,13 +100,15 @@ namespace KnowledgeBase.Core.Persistence.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("Category");
-
                     b.HasIndex("SourceAssetId");
 
                     b.HasIndex("Title")
                         .IsUnique()
                         .HasFilter("\"DeletedAtUtc\" IS NULL");
+
+                    b.HasIndex("Kind", "SynthesisGroup")
+                        .IsUnique()
+                        .HasFilter("\"SynthesisGroup\" IS NOT NULL AND \"DeletedAtUtc\" IS NULL");
 
                     b.ToTable("Notes");
                 });
@@ -144,6 +145,26 @@ namespace KnowledgeBase.Core.Persistence.Migrations
                     b.ToTable("NoteLinks");
                 });
 
+            modelBuilder.Entity("KnowledgeBase.Core.Persistence.NoteTag", b =>
+                {
+                    b.Property<string>("NoteId")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("TagId")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<int>("Ordinal")
+                        .HasColumnType("integer");
+
+                    b.HasKey("NoteId", "TagId");
+
+                    b.HasIndex("TagId");
+
+                    b.ToTable("NoteTags");
+                });
+
             modelBuilder.Entity("KnowledgeBase.Core.Persistence.ProcessingJob", b =>
                 {
                     b.Property<string>("Id")
@@ -151,7 +172,6 @@ namespace KnowledgeBase.Core.Persistence.Migrations
                         .HasColumnType("character varying(32)");
 
                     b.Property<string>("AssetId")
-                        .IsRequired()
                         .HasMaxLength(32)
                         .HasColumnType("character varying(32)");
 
@@ -168,6 +188,14 @@ namespace KnowledgeBase.Core.Persistence.Migrations
                         .HasMaxLength(2000)
                         .HasColumnType("character varying(2000)");
 
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("Payload")
+                        .HasColumnType("text");
+
                     b.Property<DateTime?>("StartedAtUtc")
                         .HasColumnType("timestamp with time zone");
 
@@ -179,11 +207,51 @@ namespace KnowledgeBase.Core.Persistence.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("AssetId")
-                        .IsUnique();
+                        .IsUnique()
+                        .HasFilter("\"AssetId\" IS NOT NULL");
 
                     b.HasIndex("Status", "CreatedAtUtc");
 
                     b.ToTable("ProcessingJobs");
+                });
+
+            modelBuilder.Entity("KnowledgeBase.Core.Persistence.SynthesisSource", b =>
+                {
+                    b.Property<string>("SynthesisNoteId")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("InputNoteId")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.HasKey("SynthesisNoteId", "InputNoteId");
+
+                    b.HasIndex("InputNoteId");
+
+                    b.ToTable("SynthesisSources");
+                });
+
+            modelBuilder.Entity("KnowledgeBase.Core.Persistence.Tag", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<bool>("Confirmed")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Name")
+                        .IsUnique();
+
+                    b.ToTable("Tags");
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.DataProtection.EntityFrameworkCore.DataProtectionKey", b =>
@@ -227,11 +295,40 @@ namespace KnowledgeBase.Core.Persistence.Migrations
                         .OnDelete(DeleteBehavior.SetNull);
                 });
 
+            modelBuilder.Entity("KnowledgeBase.Core.Persistence.NoteTag", b =>
+                {
+                    b.HasOne("KnowledgeBase.Core.Persistence.Note", null)
+                        .WithMany()
+                        .HasForeignKey("NoteId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("KnowledgeBase.Core.Persistence.Tag", null)
+                        .WithMany()
+                        .HasForeignKey("TagId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("KnowledgeBase.Core.Persistence.ProcessingJob", b =>
                 {
                     b.HasOne("KnowledgeBase.Core.Persistence.AssetRecord", null)
                         .WithMany()
                         .HasForeignKey("AssetId")
+                        .OnDelete(DeleteBehavior.Cascade);
+                });
+
+            modelBuilder.Entity("KnowledgeBase.Core.Persistence.SynthesisSource", b =>
+                {
+                    b.HasOne("KnowledgeBase.Core.Persistence.Note", null)
+                        .WithMany()
+                        .HasForeignKey("InputNoteId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("KnowledgeBase.Core.Persistence.Note", null)
+                        .WithMany()
+                        .HasForeignKey("SynthesisNoteId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });

@@ -17,17 +17,34 @@ The note body is a `text` column with an appended `## Related` section listing t
 
 ## Decisions
 
-### Analyzer contract
+### Handler seam — one queue, a handler per job kind
+
+`ProcessingJob` carries a `Kind` (`JobKind`, enum-as-string) and an optional JSON
+`Payload`. `PipelineWorker` owns only the plumbing — claim (`FOR UPDATE SKIP LOCKED`),
+attempts, `Skipped`/`Failed`, SSE — and dispatches to `PipelineHandlerSelector.For(kind)`
+(the same shape as `SourceExtractorSelector`). Each `IPipelineHandler` builds its note and
+adds it (+ links, tags) to the `DbContext`; the worker's final `SaveChanges` commits note
+and job status together.
+
+- `BuildSourceNote` → `SourceNoteHandler` (the file → note flow; `AssetId` set, no payload).
+- `BuildSynthesis` → `SynthesisHandler` (merge notes; `AssetId` null, payload =
+  `SynthesisJobPayload { TargetKind, GroupLabel, InputNoteIds }`).
+- A new kind = a new handler class + a `JobKind` value. Nothing in the worker changes.
+- Shared post-processing (the tag filter, link filter, dangling + inherited links) is
+  `NoteWriter.CommitAsync`, used by both handlers.
+
+### Analyzer contract — a thin transport
 
 - `IContentAnalyzer` (+ `OllamaAnalyzer` on a **typed `HttpClient`**) in `Core/Ai/`.
   `BaseAddress` and `Timeout` are set at registration, not in the analyzer.
-- Input `AnalysisRequest { Text?, Image? { Bytes, ContentType }, ExistingTitles,
-  KnownCategories }` — the worker fills `Text` or `Image` by content kind. Output
-  `AnalysisResult { Title, Category, MarkdownBody, Links[] }` — unchanged since text-only.
-- Ollama `POST /api/chat`, `stream:false`, **structured output** via `format` = a JSON
-  schema (`OllamaAnalyzer.ResultSchema()`) — the model is *required* to return that
-  shape. More reliable than "ask for JSON in the prompt and parse whatever comes".
-  `message.content` arrives as a string that is itself JSON — hence the double parse.
+- `RunAsync<T>(AiTask { SystemPrompt, UserPrompt, Schema, Image? })` — the analyzer knows
+  nothing about prompts. Each pipeline owns its prompt and its result shape: `SourceNotes/
+  SourceNotePrompt`, `Synthesis/SynthesisPrompt`, both producing `NoteDraft { Title,
+  Tags[], MarkdownBody, Links[] }` against `NoteDraft.Schema()`.
+- Ollama `POST /api/chat`, `stream:false`, **structured output** via `format` = the JSON
+  schema — the model is *required* to return that shape. More reliable than "ask for JSON
+  in the prompt and parse whatever comes". `message.content` arrives as a string that is
+  itself JSON — hence the double parse.
 - **Multimodal:** a vision model sees an image only if the `/api/chat` message carries an
   `images` array of base64. Same endpoint, same schema — only the message content
   changes. A text model will not take an image at all.
@@ -70,10 +87,40 @@ to itself. The guard is **not a better prompt**: `result.Links` is intersected w
 actual list of existing titles in code (exact match, case-insensitive; fuzzy later)
 before any `NoteLink` is created. "Ask again, more firmly" is not a production fix.
 
-- Dangling-link resolution: `ProcessAsync` loads `NoteLink` rows with
+- Dangling-link resolution: `NoteWriter.CommitAsync` loads `NoteLink` rows with
   `TargetNoteId IS NULL AND TargetTitle == note.Title` as tracked entities and sets
   `TargetNoteId` in the same `SaveChanges`. With the filter above no danglers come from
   the analyzer — the code stays for future inline `[[...]]` parsing from body text.
+- **Same stance for tags** (`NoteWriter.AttachTags`): the model over-tags and coins
+  near-duplicates, so its `Tags` list is not trusted. Keep order, drop blanks/dupes, cap
+  at 5, reuse an existing `Tag` on an **exact** name match (case-insensitive — no fuzzy,
+  a wrong snap loses a relevant tag; near-duplicates are the reconciliation item's job),
+  and allow **at most one** freshly invented tag per run (`Confirmed = false`). No tag
+  survives → the note is untagged, a normal state. `Ordinal` follows the surviving order.
+
+### Synthesis pipeline (L2 / L3)
+
+Three layers over one file: `Source` (per file) → `Synthesis` (per tag, merges the Source
+notes carrying it) → `Index` (one note, merges every `Synthesis`). L2 and L3 are the
+**same `SynthesisHandler`** — the endpoint gathers the input note ids and the target kind,
+the handler merges whatever list it is given.
+
+- Trigger is explicit: `POST /api/synthesis/tag { tag }` and `POST /api/synthesis/index`.
+  Both `202`; the worker publishes `notes/created` on completion (no failure signal to the
+  UI yet — Open).
+- **Identity is `(Note.Kind, Note.SynthesisGroup)`**, unique among the living. `GroupLabel`
+  is the tag name for L2, `"index"` for L3. A re-run bins the old note (separate
+  `SaveChanges`, as with a source re-run) and the new one inherits its inbound links.
+- **Threshold 2**: a tag with one Source note, or fewer than two `Synthesis` notes, is a
+  `409` at the endpoint. Fewer than two inputs still live when the job runs → `Skipped`.
+- `SynthesisSource { SynthesisNoteId, InputNoteId }` records provenance — kept for a
+  future staleness check. Soft delete does not cascade it; a purge does.
+- Size guard `Pipeline:MaxSynthesisChars` (24000) over the combined input bodies →
+  `ContentTooLargeException` → `Skipped`. Map-reduce per group is the real fix (Open).
+- The synthesis links **outward only** — its input notes' titles are removed from the
+  linkable list, since it absorbs their content rather than pointing back at it.
+- `SynthesisJobPayload` dedup: the endpoint refuses a second job for a `(kind, group)`
+  already `Pending`/`Running` (payloads are tiny, checked in memory).
 
 ### Large text broke the worker — size limits + a Skipped state
 
@@ -90,25 +137,32 @@ mid-string (`done_reason: "length"`). Fixed:
   of a cryptic `JsonException`.
 - **Exception hierarchy as flow control:** `SkippableContentException` (base) → job
   `Skipped`; `ContentTooLargeException : SkippableContentException`. The worker catches
-  the base, so a scanned PDF, an empty file and over-large text all say "retry won't
-  help" with one `catch`. A separate type, not a `bool retryable` field on the exception.
+  the **base** (fixed — it caught only `ContentTooLargeException` before, so a scanned PDF
+  or empty file went to `Failed` after three retries). Scanned PDF, empty file and
+  over-large text now all say "retry won't help" with one `catch`. A separate type, not a
+  `bool retryable` field on the exception.
 - `GET /api/assets` returns job state (`processingStatus`, `processingError`) and
   `noteId` (LEFT JOIN); `GET /api/features` returns `maxSourceChars`.
 
 ## Open
 
-- [ ] **Tags from the pipeline (with `Category` gone).** `AnalysisResult.Category` →
-      `Tags[]`, ordered by relevance (first = primary by convention, no flag). Prompt: the
-      full existing-tag list + "prefer an existing tag; invent one only if nothing fits".
-      Code guard, same principle as the links intersection — **do not trust the prompt**:
-      cap at 2–5 tags per note, snap each returned tag to an existing one when the string
-      distance is close, allow at most one genuinely new tag per run, mark new tags
-      `Confirmed = false`. Model + storage: [`database.md`](database.md).
-- [ ] **Pipeline routing by `NoteKind`.** Today the worker only builds `Source` notes
-      from an uploaded file. `Synthesis` (aggregate many notes into one, grouped by topic)
-      and later kinds (user notes, general notes) each need their own trigger, prompt and
-      maybe model — a selector keyed by note kind, the way `SourceExtractorSelector` picks
-      by file type. Design the seam before the third kind. See [`database.md`](database.md).
+- [ ] **Analyzer over-tags with irrelevant known tags.** With "prefer tags from the known
+      list", `qwen2.5vl:7b` pads the list — a hypercar note came back tagged
+      `Windows Activation` and `Person Portrait` alongside the right ones. The guard stops
+      *proliferation* (no new junk tags) but not a wrong *existing* tag being attached.
+      Options: tighten the prompt ("only tags that genuinely describe the content; fewer is
+      better"), drop `maxItems` to 3, or a relevance re-check. Prompt-tuning loop, needs a
+      few sample files.
+- [ ] **No failure signal for a synthesis.** A `BuildSynthesis` job that ends `Failed`/
+      `Skipped` publishes nothing — the Tags section shows "Queued" until a reload. Needs a
+      job-state read (like `GET /api/assets` has) or an SSE event carrying the outcome.
+- [ ] **Map-reduce a large synthesis group.** A tag with many notes blows
+      `MaxSynthesisChars` → `Skipped`. Split the inputs, draft per batch, reduce to one
+      note — same shape as the document-chunking item below.
+- [ ] **Synthesis staleness + regeneration.** `SynthesisSource` records what a synthesis
+      was built from; nothing yet flags "an input changed since" or offers a one-click
+      rebuild. Also: L3 grouping beyond "all into one" (topic clusters), and a
+      "synthesise every eligible tag" button (N jobs from one click).
 - [ ] The `Failed` branch (`Attempts >= MaxAttempts`) exists but is unverified live —
       needs an "Ollama answers, but with garbage" scenario. The outage case (does not
       spend attempts) is verified.

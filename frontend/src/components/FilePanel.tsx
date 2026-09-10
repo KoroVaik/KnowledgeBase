@@ -7,6 +7,7 @@ import { isImage, isProcessable } from '../assetKind'
 import { startDownload } from '../download'
 import { renderNoteBody } from '../notes/renderNoteBody'
 import { DeleteNoteDialog } from './DeleteNoteDialog'
+import { TagChips } from './TagChips'
 
 type Tab = 'note' | 'file'
 
@@ -230,13 +231,20 @@ export function FilePanel({ asset, onChanged, onDeleted }: FilePanelProps) {
             </p>
           )}
           {note.status === 'ready' && (
-            <div
-              className="note-body"
-              // No sanitising: single-user app, body is Markdown from the local model.
-              dangerouslySetInnerHTML={{
-                __html: renderNoteBody(note.note.body, note.note.links, { linkable: false }),
-              }}
-            />
+            <>
+              {note.note.tags.length > 0 && (
+                <div className="file-panel-tags">
+                  <TagChips tags={note.note.tags} />
+                </div>
+              )}
+              <div
+                className="note-body"
+                // No sanitising: single-user app, body is Markdown from the local model.
+                dangerouslySetInnerHTML={{
+                  __html: renderNoteBody(note.note.body, note.note.links, { linkable: false }),
+                }}
+              />
+            </>
           )}
         </div>
       )}

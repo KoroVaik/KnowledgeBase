@@ -24,26 +24,29 @@ public sealed class NotesController(
     private readonly IAssetStorage _storage = storage;
     private readonly IChangeNotifier _notifier = notifier;
 
-    /// <summary>Lists notes, newest first, no body. <c>kind</c> filters to one kind.</summary>
+    /// <summary>
+    /// Lists notes, newest first, no body. <c>kind</c> may repeat (<c>?kind=Synthesis&amp;kind=Index</c>)
+    /// to filter to several kinds; omit it for all.
+    /// </summary>
     /// <response code="200">The listing, possibly empty.</response>
     /// <response code="401">No session, or it has expired.</response>
     [HttpGet]
     [ProducesResponseType(typeof(IReadOnlyList<NoteSummaryResponse>), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-    public async Task<IActionResult> List(CancellationToken cancellationToken, [FromQuery] NoteKind? kind = null)
+    public async Task<IActionResult> List(CancellationToken cancellationToken, [FromQuery] NoteKind[]? kind = null)
     {
         var query = _database.Notes.AsQueryable();
 
-        if (kind is { } wanted)
+        if (kind is { Length: > 0 } kinds)
         {
-            query = query.Where(note => note.Kind == wanted);
+            query = query.Where(note => kinds.Contains(note.Kind));
         }
 
         var notes = await query
             .OrderByDescending(note => note.UpdatedAtUtc)
             .ToListAsync(cancellationToken);
 
-        return Ok(notes.Select(Summarise).ToList());
+        return Ok(await SummariseAllAsync(notes, cancellationToken));
     }
 
     /// <summary>Lists the binned notes, most recently binned first.</summary>
@@ -60,7 +63,7 @@ public sealed class NotesController(
             .OrderByDescending(note => note.DeletedAtUtc)
             .ToListAsync(cancellationToken);
 
-        return Ok(notes.Select(Summarise).ToList());
+        return Ok(await SummariseAllAsync(notes, cancellationToken));
     }
 
     /// <summary>Returns one note with its Markdown body.</summary>
@@ -86,7 +89,7 @@ public sealed class NotesController(
         return Ok(new NoteResponse(
             note.Id,
             note.Title,
-            note.Category,
+            await LoadTagsAsync(note.Id, cancellationToken),
             note.Kind.ToString(),
             note.Body,
             await ResolveLinksAsync(note, cancellationToken),
@@ -384,14 +387,58 @@ public sealed class NotesController(
             .ToList();
     }
 
-    private static NoteSummaryResponse Summarise(Note note) => new(
-        note.Id,
-        note.Title,
-        note.Category,
-        note.Kind.ToString(),
-        note.SourceAssetId,
-        note.SourceFileName,
-        note.CreatedAtUtc,
-        note.UpdatedAtUtc,
-        note.DeletedAtUtc);
+    private async Task<IReadOnlyList<NoteSummaryResponse>> SummariseAllAsync(
+        IReadOnlyList<Note> notes,
+        CancellationToken cancellationToken)
+    {
+        var tags = await LoadTagsAsync(notes.Select(note => note.Id).ToList(), cancellationToken);
+
+        return notes
+            .Select(note => new NoteSummaryResponse(
+                note.Id,
+                note.Title,
+                tags.GetValueOrDefault(note.Id, []),
+                note.Kind.ToString(),
+                note.SourceAssetId,
+                note.SourceFileName,
+                note.CreatedAtUtc,
+                note.UpdatedAtUtc,
+                note.DeletedAtUtc))
+            .ToList();
+    }
+
+    private async Task<IReadOnlyList<NoteTagResponse>> LoadTagsAsync(
+        string noteId,
+        CancellationToken cancellationToken)
+    {
+        var tags = await LoadTagsAsync([noteId], cancellationToken);
+        return tags.GetValueOrDefault(noteId, []);
+    }
+
+    // NoteTag has no query filter, so a binned note keeps its tags on screen (Get / Trash).
+    private async Task<Dictionary<string, IReadOnlyList<NoteTagResponse>>> LoadTagsAsync(
+        IReadOnlyCollection<string> noteIds,
+        CancellationToken cancellationToken)
+    {
+        if (noteIds.Count == 0)
+        {
+            return new Dictionary<string, IReadOnlyList<NoteTagResponse>>();
+        }
+
+        var rows = await (
+            from noteTag in _database.NoteTags
+            where noteIds.Contains(noteTag.NoteId)
+            join tag in _database.Tags on noteTag.TagId equals tag.Id
+            orderby noteTag.Ordinal
+            select new { noteTag.NoteId, tag.Name, tag.Confirmed })
+            .ToListAsync(cancellationToken);
+
+        return rows
+            .GroupBy(row => row.NoteId)
+            .ToDictionary(
+                group => group.Key,
+                group => (IReadOnlyList<NoteTagResponse>)group
+                    .Select(row => new NoteTagResponse(row.Name, row.Confirmed))
+                    .ToList());
+    }
 }

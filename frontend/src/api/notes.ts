@@ -1,13 +1,22 @@
 import { apiFetch, readErrorMessage } from './http'
 
-/** A note made from one uploaded file, or one written from many of those. */
-export type NoteKind = 'Source' | 'Synthesis'
+/** A note from one file (`Source`), one merged from a tag's notes (`Synthesis`), or the
+ *  single table-of-contents note over every synthesis (`Index`). */
+export type NoteKind = 'Source' | 'Synthesis' | 'Index'
+
+/** One tag on a note. `NoteTagResponse` in the backend. */
+export interface NoteTag {
+  name: string
+  /** The user has vouched for it. A pipeline-invented tag is `false` until reviewed. */
+  confirmed: boolean
+}
 
 /** Mirrors NoteSummaryResponse in backend Controllers/Notes. */
 export interface NoteSummary {
   id: string
   title: string
-  category: string
+  /** Ordered by relevance; the first is the primary tag. Empty when the note is untagged. */
+  tags: NoteTag[]
   kind: NoteKind
   sourceAssetId: string | null
   /** Kept when the file goes, so the bin entry can still name it. */
@@ -44,9 +53,11 @@ function notePath(id: string): string {
   return `/api/notes/${encodeURIComponent(id)}`
 }
 
-/** Live notes, newest first, no body. `kind` narrows to one kind (Source lives under its file). */
-export async function fetchNotes(kind?: NoteKind): Promise<NoteSummary[]> {
-  const query = kind === undefined ? '' : `?kind=${kind}`
+/** Live notes, newest first, no body. `kind` narrows to one or several kinds (Source lives
+ *  under its file, so this list is usually asked for the aggregate kinds). */
+export async function fetchNotes(kind?: NoteKind | NoteKind[]): Promise<NoteSummary[]> {
+  const kinds = kind === undefined ? [] : Array.isArray(kind) ? kind : [kind]
+  const query = kinds.length === 0 ? '' : `?${kinds.map((k) => `kind=${k}`).join('&')}`
   const response = await apiFetch(`/api/notes${query}`)
 
   if (!response.ok) {

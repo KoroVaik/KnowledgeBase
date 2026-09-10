@@ -9,8 +9,11 @@ import {
   restoreNote,
 } from '../api/notes'
 import type { Note, NoteSummary } from '../api/notes'
+import { formatDateTime } from '../format'
 import { renderNoteBody } from '../notes/renderNoteBody'
 import { DeleteNoteDialog } from './DeleteNoteDialog'
+import { TagChips } from './TagChips'
+import { TagsSection } from './TagsSection'
 import { useResourceChanges } from '../hooks/useResourceChanges'
 
 type ListState =
@@ -44,7 +47,7 @@ export function NotesList() {
     const reloadId = ++latestReload.current
 
     // Source notes now live under their file in the Files section; this list is the rest.
-    void Promise.all([fetchNotes('Synthesis'), fetchTrash()])
+    void Promise.all([fetchNotes(['Synthesis', 'Index']), fetchTrash()])
       .then(([notes, trash]) => {
         if (reloadId !== latestReload.current) {
           return
@@ -200,12 +203,6 @@ export function NotesList() {
     }
   }
 
-  // Nothing to show yet: no aggregated notes and an empty bin. The section reappears once a
-  // synthesis note exists or something is binned.
-  if (state.status === 'ready' && state.notes.length === 0 && state.trash.length === 0) {
-    return null
-  }
-
   return (
     <section className="notes">
       <h2>Notes</h2>
@@ -246,7 +243,8 @@ export function NotesList() {
                   >
                     <span className="note-title">{note.title}</span>
                     <span className="note-meta">
-                      {note.category} · {new Date(note.updatedAtUtc).toLocaleString()}
+                      <TagChips tags={note.tags} />
+                      {formatDateTime(note.updatedAtUtc)}
                     </span>
                     {note.sourceAssetId === null && (
                       <span className="note-removed-source">
@@ -299,6 +297,8 @@ export function NotesList() {
         </ul>
       )}
 
+      <TagsSection />
+
       {state.status === 'ready' && state.trash.length > 0 && (
         <div className="notes-trash">
           <button
@@ -327,7 +327,7 @@ export function NotesList() {
                       >
                         <span className="note-title">{note.title}</span>
                         <span className="note-meta">
-                          Deleted {note.deletedAtUtc !== null && new Date(note.deletedAtUtc).toLocaleString()}
+                          Deleted {note.deletedAtUtc !== null && formatDateTime(note.deletedAtUtc)}
                           {note.sourceFileName !== null && ` · from “${note.sourceFileName}”`}
                         </span>
                       </button>

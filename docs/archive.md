@@ -94,6 +94,13 @@ not just compiled.
   line-height, Delete button height.
 - "Backend down is visible on the page" — `realtime.ts` connection state, `unreachable`
   cold-start state, `apiFetch` → `ApiUnreachableError`. Verified, four scenarios.
+- Dark-theme visual pass: `--surface` / `--surface-hover` tokens replace the `--accent-bg`
+  wash on the file panel (now surface + accent `border-left`); dark-specific `--ok` /
+  `--warn` / `--danger` (+ `-bg` / `-border`) so status text is legible on `#16171d`;
+  `.note-body` scopes its own `h1`–`h4` and paragraph spacing (was inheriting the 56 px
+  page `h1`); lighter accent tag chips; ghost-button hover; `:focus-visible` ring; short
+  `formatDateTime` (no seconds) in the file list and notes list. Build + lint green,
+  checked in the browser in both themes (file panel Note + File tabs, status colours).
 
 ## Worker & AI pipeline
 
@@ -122,6 +129,40 @@ not just compiled.
 - Worker → API bridge (`HttpChangeNotifier` → `POST /api/events/ingest`, `X-Ingest-Token`
   constant-time compare, `503` when unset). Verified with `curl` + a parallel SSE client.
   **Not yet verified with a live worker or in prod.**
+- **Handler seam + synthesis pipeline (L2/L3).** `PipelineWorker` reduced to plumbing;
+  `JobKind` + JSON `Payload` on `ProcessingJob`; `IPipelineHandler` / `PipelineHandlerSelector`
+  (mirrors `SourceExtractorSelector`); `SourceNoteHandler` (moved `ProcessAsync`) +
+  `SynthesisHandler` (L2 by tag, L3 = same handler over `Synthesis` notes → one `Index`);
+  `NoteWriter.CommitAsync` shared; `IContentAnalyzer` → `RunAsync<T>(AiTask)`, prompts moved
+  to the pipelines; `NoteDraft` shared shape. `Note.SynthesisGroup` (replace-on-rerun key,
+  unique among the living), `SynthesisSource` provenance. `POST /api/synthesis/{tag,index}`,
+  `GET /api/tags`, Tags section in `NotesList` (before the bin). Migrations
+  `AddJobKindAndPayload` + `AddSynthesisSourceAndNoteGroup`. Also fixed: the worker caught
+  only `ContentTooLargeException`, so a scanned PDF / empty file went `Failed` not `Skipped`
+  — now catches the `SkippableContentException` base. And synthesis input bodies are stripped
+  of their `## Related` block before the model sees them (it was copying the section +
+  `[[links]]` into the merged note). Verified live against Ollama `qwen2.5vl:7b`: upload
+  re-run replaces; `Automotive` / `Windows Activation` / `Person Portrait` each merged to a
+  `Synthesis`; two syntheses → one `Index`; re-run bins the old + carries provenance;
+  `<2 notes → 409`, unknown tag → `404`, dedup → `409`. UI checked by the owner.
+- Tags from the pipeline: `AnalysisResult.Category` → `Tags[]` (1–5, relevance order),
+  JSON schema + prompt to match, `AnalysisRequest.KnownCategories` → `KnownTags`. Guard
+  `PipelineWorker.AttachTags` — trusts the model no more than the link filter does: keep
+  order, drop blanks/dupes, cap 5, reuse an existing `Tag` on an exact case-insensitive
+  name match, at most one freshly invented tag per run (`Confirmed = false`), no survivor
+  → note left untagged. Verified end-to-end against live Ollama `qwen2.5vl:7b`: a hypercar
+  `.txt` uploaded → note got `Automotive`(existing, ord 0) + `Hypercar`(new, unconfirmed,
+  ord 1) + two more existing tags the model padded with; one new tag, no duplicate
+  `Automotive`, `/api/notes/{id}` returned them ordered.
+
+- Tags section (`components/TagsSection.tsx`) inside `NotesList`, between the synthesis
+  notes and the bin: `GET /api/tags`, a row per tag with ≥2 Source notes + "Synthesise"
+  (`POST /api/synthesis/tag`), a "Build index" button (`POST /api/synthesis/index`, off
+  under 2 syntheses), reloads on the `notes` SSE, "Queued" until then. The old
+  "hide the Notes section while empty" was dropped so it stays reachable. Checked by the
+  owner in the browser.
+- `GET /api/notes?kind=` now repeatable (`NoteKind[]`); `fetchNotes` takes one kind or an
+  array. `NotesList` asks for `Synthesis` + `Index` so the one Index note is visible.
 
 ## Database
 
@@ -139,6 +180,14 @@ not just compiled.
   Inbound links move to the new version on replacement. Verified with `curl` end-to-end.
 - `Note.SourceFileName` (survives the file's deletion) — kept for the bin entry after the
   "note belongs to its file" decision.
+- `ReplaceCategoryWithTags`: `Tag` (`Id`, `Name` unique, `Confirmed`) + `NoteTag`
+  (`NoteId`+`TagId` PK, `Ordinal`, index on `TagId`), `Note.Category` and its index
+  dropped. One migration, order enforced: create tables → seed one `Tag` per distinct
+  `Category` (`Confirmed = true`) + a `NoteTag` at `Ordinal 0` for every note (binned
+  included) → then drop the column. Applied to local Postgres by API startup; verified 4
+  tags / 16 `NoteTag` rows matching the old `Category` counts, zero untagged, and
+  `/api/notes`, `/api/notes/{id}`, `/api/notes/trash` all returning `tags[]` (ordered,
+  `{ name, confirmed }`).
 
 ## Infra & deploy
 

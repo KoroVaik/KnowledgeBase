@@ -12,14 +12,17 @@ internal sealed class NoteConfiguration : IEntityTypeConfiguration<Note>
         builder.Property(note => note.Id).HasMaxLength(32);
         builder.Property(note => note.Kind).HasConversion<string>().HasMaxLength(16);
         builder.Property(note => note.Title).HasMaxLength(200);
-        builder.Property(note => note.Category).HasMaxLength(100);
         builder.Property(note => note.SourceAssetId).HasMaxLength(32);
         builder.Property(note => note.SourceFileName).HasMaxLength(255);
+        builder.Property(note => note.SynthesisGroup).HasMaxLength(100);
 
         // Binned notes drop out of every query that does not ask by name.
         builder.HasQueryFilter(note => note.DeletedAtUtc == null);
 
-        builder.HasIndex(note => note.Category);
+        // One live aggregate note per (kind, group): a re-run must replace, not accumulate.
+        builder.HasIndex(note => new { note.Kind, note.SynthesisGroup })
+            .IsUnique()
+            .HasFilter("\"SynthesisGroup\" IS NOT NULL AND \"DeletedAtUtc\" IS NULL");
 
         // Links resolve by title; two live notes sharing one make it a coin flip. Partial - a
         // binned note keeps its title on screen but stops occupying it.

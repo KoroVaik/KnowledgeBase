@@ -4,7 +4,13 @@ public sealed class ProcessingJob
 {
     public required string Id { get; init; }
 
-    public required string AssetId { get; init; }
+    public required JobKind Kind { get; init; }
+
+    // Set for BuildSourceNote (the file to process), null for aggregation jobs.
+    public string? AssetId { get; init; }
+
+    // Kind-specific input as JSON. Unused by BuildSourceNote.
+    public string? Payload { get; init; }
 
     public required DateTime CreatedAtUtc { get; init; }
 
@@ -21,6 +27,7 @@ public sealed class ProcessingJob
     public static ProcessingJob Queue(string assetId) => new()
     {
         Id = Guid.NewGuid().ToString("N"),
+        Kind = JobKind.BuildSourceNote,
         AssetId = assetId,
         CreatedAtUtc = DateTime.UtcNow,
         Status = ProcessingStatus.Pending,
