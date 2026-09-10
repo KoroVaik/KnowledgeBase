@@ -81,6 +81,22 @@
   border: 1px solid var(--border);
 }
 
+/* Every bordered ghost button lifts the same way on hover. */
+.sign-out:hover,
+.upload-action:hover,
+.asset-delete:hover:not(:disabled),
+.note-actions button:hover:not(:disabled),
+.queue-actions button:hover:not(:disabled),
+.queue-footer button:hover:not(:disabled),
+.confirm-actions button:not(.confirm-danger):hover:not(:disabled) {
+  color: var(--text-h);
+  background: var(--surface-hover);
+}
+
+.confirm-danger:hover:not(:disabled) {
+  background: var(--danger-bg);
+}
+
 .login-form {
   display: flex;
   flex-wrap: wrap;
@@ -134,7 +150,7 @@
 
 .login-error {
   margin-top: 16px;
-  color: #dc2626;
+  color: var(--danger);
 }
 
 .assets {
@@ -233,7 +249,7 @@
 
 .assets-error {
   margin-bottom: 16px;
-  color: #dc2626;
+  color: var(--danger);
 }
 
 /* Second column, under the head. */
@@ -249,15 +265,15 @@
 }
 
 .asset-status-ok {
-  color: #15803d;
+  color: var(--ok);
 }
 
 .asset-status-warn {
-  color: #b45309;
+  color: var(--warn);
 }
 
 .asset-status-error {
-  color: #dc2626;
+  color: var(--danger);
 }
 
 .upload-actions {
@@ -292,7 +308,7 @@
 
 .upload-hint {
   margin: 12px 0 0;
-  color: #b45309;
+  color: var(--warn);
   font-size: 14px;
 }
 
@@ -369,15 +385,15 @@
 }
 
 .queue-ok {
-  color: #15803d;
+  color: var(--ok);
 }
 
 .queue-warn {
-  color: #b45309;
+  color: var(--warn);
 }
 
 .queue-error {
-  color: #dc2626;
+  color: var(--danger);
 }
 
 .queue-actions {
@@ -438,9 +454,9 @@
   margin: 16px 0 0;
   padding: 12px 16px;
   border-radius: 8px;
-  color: #dc2626;
-  background: rgba(220, 38, 38, 0.08);
-  border: 1px solid rgba(220, 38, 38, 0.35);
+  color: var(--danger);
+  background: var(--danger-bg);
+  border: 1px solid var(--danger-border);
 }
 
 .retry {
@@ -511,16 +527,16 @@
 }
 
 .tag-chip {
-  padding: 1px 8px;
-  font-size: 13px;
-  color: var(--text-h);
+  padding: 2px 9px;
+  font-size: 12px;
+  color: var(--accent);
   background: var(--accent-bg);
   border: 1px solid var(--accent-border);
   border-radius: 999px;
 }
 
 /* Dashed cue like an unresolved wiki-link: not yet vouched for. Body-text grey, not
-   --text-muted - muted enough against the solid confirmed chip while clearing AA contrast. */
+   --text-muted - muted enough against the confirmed chip while clearing AA contrast. */
 .tag-chip-unconfirmed {
   color: var(--text);
   background: transparent;
@@ -534,7 +550,7 @@
 
 .note-removed-source {
   font-size: 13px;
-  color: #b45309;
+  color: var(--warn);
 }
 
 /* Rendered Markdown - keep the block spacing sane inside the row. */
@@ -545,6 +561,37 @@
 
 .note-body > :first-child {
   margin-top: 0;
+}
+
+/* The body comes from the model as free Markdown; without this its headings inherit the
+   page's 56px marketing h1 and fill the whole row. */
+.note-body :is(h1, h2, h3, h4) {
+  font-family: var(--heading);
+  font-weight: 500;
+  line-height: 1.3;
+  letter-spacing: normal;
+  color: var(--text-h);
+  margin: 20px 0 8px;
+}
+
+.note-body h1 {
+  font-size: 20px;
+}
+
+.note-body h2 {
+  font-size: 17px;
+}
+
+.note-body h3 {
+  font-size: 15px;
+}
+
+.note-body h4 {
+  font-size: 14px;
+}
+
+.note-body :is(p, ul, ol) {
+  margin: 8px 0;
 }
 
 .note-body pre {
@@ -561,20 +608,23 @@
 
 .note-body a {
   color: var(--accent);
+  text-underline-offset: 2px;
 }
 
 .notes-error {
   margin-bottom: 16px;
-  color: #dc2626;
+  color: var(--danger);
 }
 
-/* The section that opens under a file row. */
+/* The section that opens under a file row: a raised surface with an accent edge, not a
+   translucent accent wash (which turned muddy on the dark background). */
 .file-panel {
   margin: 8px 0 4px;
-  padding: 12px;
+  padding: 16px;
   border: 1px solid var(--border);
+  border-left: 2px solid var(--accent-border);
   border-radius: 8px;
-  background: var(--accent-bg);
+  background: var(--surface);
 }
 
 .file-panel-actions {
@@ -590,8 +640,13 @@
   border-radius: 6px;
   cursor: pointer;
   color: var(--text);
-  background: var(--bg);
+  background: transparent;
   border: 1px solid var(--border);
+}
+
+.file-panel-actions button:hover:not(:disabled) {
+  color: var(--text-h);
+  background: var(--surface-hover);
 }
 
 .file-panel-actions button:disabled {
@@ -602,13 +657,15 @@
 .file-panel-error {
   margin: 12px 0 0;
   font-size: 13px;
-  color: #dc2626;
+  color: var(--danger);
 }
 
 .file-panel-tabs {
   display: flex;
   gap: 4px;
-  margin: 16px 0 8px;
+  margin: 16px 0 12px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
 }
 
 .file-panel-tab {
@@ -622,9 +679,14 @@
   border: 1px solid var(--border);
 }
 
+.file-panel-tab:hover:not(.file-panel-tab-on) {
+  color: var(--text-h);
+  background: var(--surface-hover);
+}
+
 .file-panel-tab-on {
   color: var(--text-h);
-  background: var(--bg);
+  background: var(--accent-bg);
   border-color: var(--accent-border);
 }
 
@@ -768,7 +830,7 @@ button.wiki-link {
 }
 
 .confirm-warn {
-  color: #b45309;
+  color: var(--warn);
 }
 
 .confirm-hint {
@@ -808,8 +870,8 @@ button.wiki-link {
 }
 
 .confirm-danger {
-  color: #dc2626;
-  border-color: #dc2626;
+  color: var(--danger);
+  border-color: var(--danger);
 }
 
 @media (max-width: 600px) {

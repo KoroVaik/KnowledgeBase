@@ -9,6 +9,7 @@ import {
   restoreNote,
 } from '../api/notes'
 import type { Note, NoteSummary } from '../api/notes'
+import { formatDateTime } from '../format'
 import { renderNoteBody } from '../notes/renderNoteBody'
 import { DeleteNoteDialog } from './DeleteNoteDialog'
 import { TagChips } from './TagChips'
@@ -248,7 +249,7 @@ export function NotesList() {
                     <span className="note-title">{note.title}</span>
                     <span className="note-meta">
                       <TagChips tags={note.tags} />
-                      {new Date(note.updatedAtUtc).toLocaleString()}
+                      {formatDateTime(note.updatedAtUtc)}
                     </span>
                     {note.sourceAssetId === null && (
                       <span className="note-removed-source">
@@ -329,7 +330,7 @@ export function NotesList() {
                       >
                         <span className="note-title">{note.title}</span>
                         <span className="note-meta">
-                          Deleted {note.deletedAtUtc !== null && new Date(note.deletedAtUtc).toLocaleString()}
+                          Deleted {note.deletedAtUtc !== null && formatDateTime(note.deletedAtUtc)}
                           {note.sourceFileName !== null && ` · from “${note.sourceFileName}”`}
                         </span>
                       </button>

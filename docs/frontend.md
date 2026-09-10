@@ -165,6 +165,21 @@ the Delete button off-screen; it was never tabular data). `h1` needs an explicit
 `line-height: 110%` — an inherited percentage becomes a fixed pixel value. Tap targets
 ≥ 44 px.
 
+### Colour tokens — surface vs accent
+
+`--surface` / `--surface-hover` are the raised-panel and hover fills; `--accent-*` is a
+line/text accent only, never a large fill. The file panel is `--surface` + a 2 px
+`border-left` in `--accent-border` — an earlier `background: var(--accent-bg)` wash went
+muddy on the dark ground. Status colours are tokens (`--ok` / `--warn` / `--danger`,
+`--danger-bg` / `--danger-border`) with a **separate dark-theme set** — the light-theme
+`#15803d` / `#b45309` / `#dc2626` were near-illegible on `#16171d`.
+
+### Note body is untrusted-shape Markdown
+
+`.note-body` scopes its own `h1`–`h4` (20 / 17 / 15 / 14 px) and `p` / `ul` / `ol`
+spacing. Without the heading scope the model's `# Title` inherits the page's 56 px
+marketing `h1` and fills the row.
+
 ## Open
 
 ### Bugs / polish
@@ -177,10 +192,11 @@ the Delete button off-screen; it was never tabular data). `h1` needs an explicit
 - [ ] `GET /api/auth/me` returns 401 before login — a red console error every cold start.
       Behaviour is right, the noise is not.
 - [ ] Enter in the password field does not submit the login form — click only.
-- [ ] The date in the file list is a raw `toLocaleString()` with seconds
-      (`9/6/2026, 9:52:14 PM`).
 - [ ] Native `<input type="file">` is 21 px tall, half the 44 px finger target. Needs a
       hidden input + a label button.
+- [ ] `.note-body` has no styling for `table` / `blockquote` / `hr` / nested lists — the
+      model can emit any of them. Only headings, `p`, `ul`/`ol`, `pre`, `code`, `a` are
+      covered.
 - [ ] dev: one dialog show fires **six** `GET /{id}/backlinks`, and each mutation a
       doubled `notes` + `trash`. StrictMode explains a doubling, not six — worth a look.
 - [ ] SSE events after a delete (`notes` + `assets`) — the `Publish` calls are in place

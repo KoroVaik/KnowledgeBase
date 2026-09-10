@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { deleteAsset, fetchAssets } from '../api/assets'
 import type { AssetSummary } from '../api/assets'
-import { formatSize } from '../format'
+import { formatDateTime, formatSize } from '../format'
 import { useResourceChanges } from '../hooks/useResourceChanges'
 import { FilePanel } from './FilePanel'
 
@@ -226,7 +226,7 @@ export function AssetList({ reloadToken, maxSourceChars }: AssetListProps) {
                   >
                     <span className="asset-name">{asset.originalFileName}</span>
                     <span className="asset-meta">
-                      {formatSize(asset.sizeBytes)} · {new Date(asset.uploadedAtUtc).toLocaleString()}
+                      {formatSize(asset.sizeBytes)} · {formatDateTime(asset.uploadedAtUtc)}
                     </span>
                   </button>
 

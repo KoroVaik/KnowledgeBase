@@ -94,6 +94,13 @@ not just compiled.
   line-height, Delete button height.
 - "Backend down is visible on the page" — `realtime.ts` connection state, `unreachable`
   cold-start state, `apiFetch` → `ApiUnreachableError`. Verified, four scenarios.
+- Dark-theme visual pass: `--surface` / `--surface-hover` tokens replace the `--accent-bg`
+  wash on the file panel (now surface + accent `border-left`); dark-specific `--ok` /
+  `--warn` / `--danger` (+ `-bg` / `-border`) so status text is legible on `#16171d`;
+  `.note-body` scopes its own `h1`–`h4` and paragraph spacing (was inheriting the 56 px
+  page `h1`); lighter accent tag chips; ghost-button hover; `:focus-visible` ring; short
+  `formatDateTime` (no seconds) in the file list and notes list. Build + lint green,
+  checked in the browser in both themes (file panel Note + File tabs, status colours).
 
 ## Worker & AI pipeline
 
