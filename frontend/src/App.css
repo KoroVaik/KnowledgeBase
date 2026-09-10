@@ -250,6 +250,46 @@
   color: #dc2626;
 }
 
+.upload-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.upload-action {
+  font: inherit;
+  font-size: 14px;
+  padding: 6px 16px;
+  border-radius: 6px;
+  cursor: pointer;
+  color: var(--text);
+  background: transparent;
+  border: 1px solid var(--border);
+}
+
+.upload-action:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.upload-paste {
+  font: inherit;
+  font-size: 14px;
+  width: 220px;
+  padding: 6px 12px;
+  border-radius: 6px;
+  color: var(--text-h);
+  background: var(--bg);
+  border: 1px solid var(--border);
+}
+
+.upload-paste:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
 .upload-disabled {
   margin-bottom: 12px;
   color: var(--text);
@@ -499,4 +539,189 @@
 .notes-error {
   margin-bottom: 16px;
   color: #dc2626;
+}
+
+/* Both file buttons share one grid cell: the row is three columns wide, and a fourth child
+   would push the status badge off its own line. */
+.asset-actions {
+  display: flex;
+  gap: 8px;
+}
+
+/* The row is the toggle plus the buttons that act on it; the toggle takes what is left. */
+.note-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.note-row .note-head {
+  flex: 1;
+  /* Without this a long title refuses to shrink and pushes the buttons off the row. */
+  min-width: 0;
+}
+
+.note-actions {
+  display: flex;
+  flex-shrink: 0;
+  gap: 8px;
+  padding: 12px 0;
+}
+
+.note-actions button {
+  font: inherit;
+  font-size: 14px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  color: var(--text);
+  background: transparent;
+  border: 1px solid var(--border);
+}
+
+.note-actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.note-waiting {
+  font-size: 13px;
+  color: var(--accent);
+}
+
+.note-binned .note-title {
+  color: var(--text);
+}
+
+.notes-trash {
+  margin-top: 20px;
+}
+
+.notes-trash-toggle {
+  font: inherit;
+  font-size: 14px;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  color: var(--text);
+  text-decoration: underline;
+}
+
+/* A [[link]] in a rendered body. Three states, and only the first one is clickable. */
+.wiki-link {
+  font: inherit;
+}
+
+button.wiki-link {
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  color: var(--accent);
+  text-decoration: underline;
+}
+
+.wiki-link-deleted,
+.wiki-link-missing {
+  color: var(--text-muted);
+}
+
+.wiki-link-deleted .wiki-link-text {
+  text-decoration: line-through;
+}
+
+/* currentColor, not --border: the border tone is meant for surfaces and all but disappears
+   against the page background. */
+.wiki-link-missing {
+  border-bottom: 1px dashed currentColor;
+}
+
+.wiki-link-tag {
+  font-size: 12px;
+}
+
+.confirm-dialog {
+  /* Without this the padding is added on top of max-width, and the dialog ends up wider than
+     the viewport it was told to fit - clipping the Delete button on a narrow screen. */
+  box-sizing: border-box;
+  width: 480px;
+  max-width: calc(100vw - 32px);
+  padding: 24px;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: var(--shadow);
+}
+
+.confirm-dialog::backdrop {
+  background: rgba(0, 0, 0, 0.45);
+}
+
+.confirm-dialog h3 {
+  margin: 0 0 12px;
+  font-size: 18px;
+  color: var(--text-h);
+}
+
+.confirm-line {
+  margin: 0 0 12px;
+  font-size: 14px;
+}
+
+.confirm-warn {
+  color: #b45309;
+}
+
+.confirm-hint {
+  font-size: 13px;
+}
+
+.confirm-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-bottom: 12px;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 20px;
+}
+
+.confirm-actions button {
+  font: inherit;
+  font-size: 15px;
+  padding: 8px 20px;
+  border-radius: 6px;
+  cursor: pointer;
+  color: var(--text);
+  background: transparent;
+  border: 1px solid var(--border);
+}
+
+.confirm-actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.confirm-danger {
+  color: #dc2626;
+  border-color: #dc2626;
+}
+
+@media (max-width: 600px) {
+  .note-row {
+    flex-direction: column;
+    gap: 0;
+  }
+
+  .note-actions {
+    padding: 0 0 12px;
+  }
 }

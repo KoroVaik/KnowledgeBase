@@ -176,3 +176,15 @@ export async function deleteAsset(storedFileName: string): Promise<void> {
     throw new Error(await readErrorMessage(response, 'Delete failed'))
   }
 }
+
+/**
+ * Puts the file back in front of the worker: for one it failed on, or one whose note has been
+ * deleted while the file itself was kept.
+ */
+export async function processAsset(storedFileName: string): Promise<void> {
+  const response = await apiFetch(`${assetPath(storedFileName)}/process`, { method: 'POST' })
+
+  if (!response.ok) {
+    throw new Error(await readErrorMessage(response, 'Could not queue the file'))
+  }
+}

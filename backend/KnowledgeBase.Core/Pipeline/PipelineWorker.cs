@@ -208,8 +208,18 @@ public sealed class PipelineWorker(
         var extractor = services.GetRequiredService<SourceExtractorSelector>().For(kind);
         var maxSourceChars = services.GetRequiredService<IOptions<PipelineOptions>>().Value.MaxSourceChars;
 
+        // A second run over the same file replaces its note rather than adding a sibling. The
+        // old one is not offered to the model as a link target - it is about to be binned.
+        var previous = await database.Notes
+            .FirstOrDefaultAsync(existing => existing.SourceAssetId == asset.Id, cancellationToken);
+
         var titles = await database.Notes.Select(note => note.Title).ToListAsync(cancellationToken);
         var categories = await database.Notes.Select(note => note.Category).Distinct().ToListAsync(cancellationToken);
+
+        if (previous is not null)
+        {
+            titles.Remove(previous.Title);
+        }
 
         var bytes = await reader.ReadBytesAsync(asset.StoredFileName, cancellationToken);
         var extracted = await extractor.ExtractAsync(
@@ -240,9 +250,20 @@ public sealed class PipelineWorker(
             .ToList();
 
         var now = DateTime.UtcNow;
+
+        if (previous is not null)
+        {
+            // Saved on its own rather than with everything below: a re-run usually produces the
+            // same title, and the unique index over live titles would reject the insert if EF
+            // happened to order it before this update.
+            previous.DeletedAtUtc = now;
+            await database.SaveChangesAsync(cancellationToken);
+        }
+
         var note = new Note
         {
             Id = Guid.NewGuid().ToString("N"),
+            Kind = NoteKind.Source,
             Title = result.Title,
             Category = result.Category,
             Body = AppendRelated(result.MarkdownBody, links),
@@ -279,6 +300,21 @@ public sealed class PipelineWorker(
         foreach (var link in dangling)
         {
             link.TargetNoteId = note.Id;
+        }
+
+        if (previous is not null)
+        {
+            // Links elsewhere followed the note, not the version: pointing them at the binned
+            // one would grey them out for no reason the reader could see. Only the id moves -
+            // TargetTitle is the literal text in the other note's body and is not ours to edit.
+            var inherited = await database.NoteLinks
+                .Where(link => link.TargetNoteId == previous.Id)
+                .ToListAsync(cancellationToken);
+
+            foreach (var link in inherited)
+            {
+                link.TargetNoteId = note.Id;
+            }
         }
 
         return note;

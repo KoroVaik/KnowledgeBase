@@ -1,12 +1,21 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { marked } from 'marked'
-import { fetchNote, fetchNotes } from '../api/notes'
+import {
+  deleteNote,
+  fetchNote,
+  fetchNotes,
+  fetchTrash,
+  processNoteAgain,
+  purgeNote,
+  restoreNote,
+} from '../api/notes'
 import type { Note, NoteSummary } from '../api/notes'
+import { renderNoteBody } from '../notes/renderNoteBody'
+import { DeleteNoteDialog } from './DeleteNoteDialog'
 import { useResourceChanges } from '../hooks/useResourceChanges'
 
 type ListState =
   | { status: 'loading' }
-  | { status: 'ready'; notes: NoteSummary[] }
+  | { status: 'ready'; notes: NoteSummary[]; trash: NoteSummary[] }
   | { status: 'error'; message: string }
 
 type BodyState =
@@ -18,6 +27,15 @@ export function NotesList() {
   const [state, setState] = useState<ListState>({ status: 'loading' })
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [body, setBody] = useState<BodyState | null>(null)
+  const [showTrash, setShowTrash] = useState(false)
+  const [deleting, setDeleting] = useState<NoteSummary | null>(null)
+  const [deleteBusy, setDeleteBusy] = useState(false)
+  const [busyId, setBusyId] = useState<string | null>(null)
+  const [actionError, setActionError] = useState<string | null>(null)
+  // Notes waiting for a fresh version. The worker is a separate process with no change stream
+  // back to the browser, so nothing announces the new note - the list polls until the id it is
+  // watching disappears, which is exactly what being replaced looks like.
+  const [reprocessing, setReprocessing] = useState<string[]>([])
 
   // Two reloads can be in flight at once - the mount and a change-stream event. Only the
   // newest may write to the list. Same guard on the body: a fast collapse-then-expand of
@@ -28,11 +46,14 @@ export function NotesList() {
   const reload = useCallback(() => {
     const reloadId = ++latestReload.current
 
-    void fetchNotes()
-      .then((notes) => {
-        if (reloadId === latestReload.current) {
-          setState({ status: 'ready', notes })
+    void Promise.all([fetchNotes(), fetchTrash()])
+      .then(([notes, trash]) => {
+        if (reloadId !== latestReload.current) {
+          return
         }
+
+        setState({ status: 'ready', notes, trash })
+        setReprocessing((current) => current.filter((id) => notes.some((note) => note.id === id)))
       })
       .catch((error: unknown) => {
         if (reloadId !== latestReload.current) {
@@ -51,13 +72,16 @@ export function NotesList() {
 
   useResourceChanges('notes', reload)
 
-  async function toggle(id: string) {
-    if (id === expandedId) {
-      setExpandedId(null)
-      setBody(null)
+  useEffect(() => {
+    if (reprocessing.length === 0) {
       return
     }
 
+    const timer = window.setInterval(reload, 4000)
+    return () => window.clearInterval(timer)
+  }, [reprocessing, reload])
+
+  const open = useCallback(async (id: string) => {
     const bodyId = ++latestBody.current
     setExpandedId(id)
     setBody({ status: 'loading' })
@@ -71,6 +95,112 @@ export function NotesList() {
       if (bodyId === latestBody.current) {
         setBody({ status: 'error', message: messageOf(error) })
       }
+    }
+  }, [])
+
+  async function toggle(id: string) {
+    if (id === expandedId) {
+      setExpandedId(null)
+      setBody(null)
+      return
+    }
+
+    await open(id)
+  }
+
+  /** One handler on the container rather than one per link: the body is rendered HTML. */
+  function followLink(event: React.MouseEvent<HTMLDivElement>) {
+    const target = (event.target as HTMLElement).closest<HTMLElement>('[data-note-id]')
+    const id = target?.dataset.noteId
+
+    if (id === undefined) {
+      return
+    }
+
+    // The row already exists whether or not it is expanded, and the note it links to may be
+    // anywhere in the list - including off screen, where opening it would look like nothing.
+    document.querySelector(`[data-note-row="${id}"]`)?.scrollIntoView({ block: 'nearest' })
+    void open(id)
+  }
+
+  async function handleProcessAgain(note: NoteSummary) {
+    setActionError(null)
+    setBusyId(note.id)
+
+    try {
+      await processNoteAgain(note.id)
+      setReprocessing((current) => [...current, note.id])
+    } catch (error) {
+      setActionError(messageOf(error))
+    } finally {
+      setBusyId(null)
+    }
+  }
+
+  async function handleDelete(deleteSource: boolean) {
+    if (deleting === null) {
+      return
+    }
+
+    setActionError(null)
+    setDeleteBusy(true)
+
+    try {
+      await deleteNote(deleting.id, deleteSource)
+
+      if (expandedId === deleting.id) {
+        setExpandedId(null)
+        setBody(null)
+      }
+
+      setDeleting(null)
+      reload()
+    } catch (error) {
+      setActionError(messageOf(error))
+    } finally {
+      setDeleteBusy(false)
+    }
+  }
+
+  async function handleRestore(note: NoteSummary) {
+    setActionError(null)
+    setBusyId(note.id)
+
+    try {
+      await restoreNote(note.id)
+      reload()
+    } catch (error) {
+      setActionError(messageOf(error))
+    } finally {
+      setBusyId(null)
+    }
+  }
+
+  async function handlePurge(note: NoteSummary) {
+    if (
+      !window.confirm(
+        `Delete “${note.title}” permanently? Links to it will stop saying it was deleted and read as “no such note” instead.`,
+      )
+    ) {
+      return
+    }
+
+    setActionError(null)
+    setBusyId(note.id)
+
+    try {
+      await purgeNote(note.id)
+
+      if (expandedId === note.id) {
+        setExpandedId(null)
+        setBody(null)
+      }
+
+      reload()
+    } catch (error) {
+      setActionError(messageOf(error))
+    } finally {
+      setBusyId(null)
     }
   }
 
@@ -86,6 +216,12 @@ export function NotesList() {
         </p>
       )}
 
+      {actionError !== null && (
+        <p className="notes-error" role="alert">
+          {actionError}
+        </p>
+      )}
+
       {state.status === 'ready' && state.notes.length === 0 && (
         <p>No notes yet — upload a text file and the pipeline will make one.</p>
       )}
@@ -94,27 +230,48 @@ export function NotesList() {
         <ul className="notes-list">
           {state.notes.map((note) => {
             const expanded = note.id === expandedId
+            const busy = busyId === note.id
+            const waiting = reprocessing.includes(note.id)
 
             return (
-              <li className="note" key={note.id}>
-                <button
-                  type="button"
-                  className="note-head"
-                  aria-expanded={expanded}
-                  onClick={() => void toggle(note.id)}
-                >
-                  <span className="note-title">{note.title}</span>
-                  <span className="note-meta">
-                    {note.category} · {new Date(note.updatedAtUtc).toLocaleString()}
-                  </span>
-                  {note.sourceAssetId === null && (
-                    <span className="note-removed-source">
-                      {note.sourceFileName !== null
-                        ? `Related file “${note.sourceFileName}” was removed`
-                        : 'Source file was removed'}
+              <li className="note" key={note.id} data-note-row={note.id}>
+                <div className="note-row">
+                  <button
+                    type="button"
+                    className="note-head"
+                    aria-expanded={expanded}
+                    onClick={() => void toggle(note.id)}
+                  >
+                    <span className="note-title">{note.title}</span>
+                    <span className="note-meta">
+                      {note.category} · {new Date(note.updatedAtUtc).toLocaleString()}
                     </span>
-                  )}
-                </button>
+                    {note.sourceAssetId === null && (
+                      <span className="note-removed-source">
+                        {note.sourceFileName !== null
+                          ? `The file “${note.sourceFileName}” it came from is gone`
+                          : 'The file it came from is gone'}
+                      </span>
+                    )}
+                    {waiting && <span className="note-waiting">Reprocessing — a new version is on the way…</span>}
+                  </button>
+
+                  <div className="note-actions">
+                    {note.sourceAssetId !== null && (
+                      <button
+                        type="button"
+                        onClick={() => void handleProcessAgain(note)}
+                        disabled={busy || waiting}
+                        title="Run the pipeline over this file again and replace this note"
+                      >
+                        Process again
+                      </button>
+                    )}
+                    <button type="button" onClick={() => setDeleting(note)} disabled={busy}>
+                      Delete
+                    </button>
+                  </div>
+                </div>
 
                 {expanded && body?.status === 'loading' && <p className="note-loading">Loading…</p>}
 
@@ -127,10 +284,13 @@ export function NotesList() {
                 {expanded && body?.status === 'ready' && (
                   <div
                     className="note-body"
+                    onClick={followLink}
                     // Single-user app; the body is Markdown from the local model, the same
                     // trust level as any other row already rendered. Sanitising is a later
                     // concern, for when notes take content from elsewhere.
-                    dangerouslySetInnerHTML={{ __html: renderMarkdown(body.note.body) }}
+                    dangerouslySetInnerHTML={{
+                      __html: renderNoteBody(body.note.body, body.note.links),
+                    }}
                   />
                 )}
               </li>
@@ -138,12 +298,78 @@ export function NotesList() {
           })}
         </ul>
       )}
+
+      {state.status === 'ready' && state.trash.length > 0 && (
+        <div className="notes-trash">
+          <button
+            type="button"
+            className="notes-trash-toggle"
+            aria-expanded={showTrash}
+            onClick={() => setShowTrash((shown) => !shown)}
+          >
+            Bin ({state.trash.length})
+          </button>
+
+          {showTrash && (
+            <ul className="notes-list">
+              {state.trash.map((note) => {
+                const busy = busyId === note.id
+                const expanded = note.id === expandedId
+
+                return (
+                  <li className="note note-binned" key={note.id} data-note-row={note.id}>
+                    <div className="note-row">
+                      <button
+                        type="button"
+                        className="note-head"
+                        aria-expanded={expanded}
+                        onClick={() => void toggle(note.id)}
+                      >
+                        <span className="note-title">{note.title}</span>
+                        <span className="note-meta">
+                          Deleted {note.deletedAtUtc !== null && new Date(note.deletedAtUtc).toLocaleString()}
+                          {note.sourceFileName !== null && ` · from “${note.sourceFileName}”`}
+                        </span>
+                      </button>
+
+                      <div className="note-actions">
+                        <button type="button" onClick={() => void handleRestore(note)} disabled={busy}>
+                          Restore
+                        </button>
+                        <button type="button" onClick={() => void handlePurge(note)} disabled={busy}>
+                          Delete forever
+                        </button>
+                      </div>
+                    </div>
+
+                    {expanded && body?.status === 'ready' && (
+                      <div
+                        className="note-body"
+                        onClick={followLink}
+                        dangerouslySetInnerHTML={{
+                          __html: renderNoteBody(body.note.body, body.note.links),
+                        }}
+                      />
+                    )}
+                  </li>
+                )
+              })}
+            </ul>
+          )}
+        </div>
+      )}
+
+      {/* Keyed by the note: a fresh mount is what resets the checkbox and the backlink list
+          between two openings, without an effect writing state on every open. */}
+      <DeleteNoteDialog
+        key={deleting?.id ?? 'closed'}
+        note={deleting}
+        busy={deleteBusy}
+        onCancel={() => setDeleting(null)}
+        onConfirm={(deleteSource) => void handleDelete(deleteSource)}
+      />
     </section>
   )
-}
-
-function renderMarkdown(markdown: string): string {
-  return marked.parse(markdown, { async: false })
 }
 
 function messageOf(error: unknown): string {

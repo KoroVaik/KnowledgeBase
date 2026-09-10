@@ -9,8 +9,10 @@ services:
       - garage-meta:/var/lib/garage/meta
       - garage-data:/var/lib/garage/data
     ports:
-      # Bound to loopback: nothing reaches the S3 API until a tunnel is put in front of it.
-      - "127.0.0.1:3900:3900"
+      # The S3 API is open to the LAN: the browser PUTs into the bucket itself, so a phone
+      # on the same network has to reach it. Writing still needs a signed URL.
+      - "3900:3900"
+      # The admin API has no such need - only this host talks to it.
       - "127.0.0.1:3903:3903"
 
 volumes:

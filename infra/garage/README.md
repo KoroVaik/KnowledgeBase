@@ -10,8 +10,9 @@ cp .env.example .env   # заповнити: openssl rand -hex 32 / openssl rand
 docker compose up -d
 ```
 
-Порти прив'язані до `127.0.0.1` — назовні нічого не стирчить, поки перед Garage
-не поставлено тунель.
+Порт S3-API (`3900`) відкритий на всі інтерфейси: байти в бакет кладе **браузер**,
+тож телефон у тій же мережі мусить до нього достукатись. Адмін-порт (`3903`) лишився
+на `127.0.0.1` — до нього ходить тільки цей же хост.
 
 ## Перше налаштування кластера
 
@@ -39,36 +40,32 @@ docker exec knowledgebase-garage /garage bucket allow --read --write knowledgeba
 Потрібен рівно для прямого upload'у. Скачування ним не користується — там звичайна
 навігація по підписаному посиланню, а не `fetch`, і браузер дозволу не питає.
 
-Дозвіл видає **сховище**, не ASP.NET: запит іде на `localhost:3900`, тобто на чужий
-origin, і хто його приймає, той і вирішує. Окремої CLI-команди в Garage немає —
-правило ставиться через S3 API.
+Дозвіл видає **сховище**, не ASP.NET: запит іде на порт 3900, тобто на чужий origin,
+і хто його приймає, той і вирішує. Окремої CLI-команди в Garage немає — правило
+ставиться через S3 API.
 
-Ключ бекенду має лише RW, а зміна конфігурації бакета — операція власника: з RW-ключем
-`PutBucketCors` відповідає `AccessDenied: Operation is not allowed for this key`. Тому
-owner видається на час правки і одразу забирається — постійно бекенду він не потрібен.
+Правило свідомо максимально широке: `*` в origin, методах і заголовках. Це домашнє
+сховище, а вузький список origin'ів означав би перезаливку правила щоразу, коли
+зміниться адреса ПК або з'явиться ще один пристрій.
+
+Зміна конфігурації бакета — операція власника: з RW-ключем `PutBucketCors` відповідає
+`AccessDenied: Operation is not allowed for this key`. Тому ключу бекенду видається
+`--owner` **назавжди**, а не на час правки:
 
 ```bash
-docker exec knowledgebase-garage /garage bucket allow --owner knowledgebase-assets --key GK...
+docker exec knowledgebase-garage /garage bucket allow --owner knowledgebase-assets --key knowledgebase-backend
 ```
 
 ```bash
 docker run --rm --network container:knowledgebase-garage -e AWS_ACCESS_KEY_ID=GK... -e AWS_SECRET_ACCESS_KEY=... -v "$PWD/cors.json:/cors.json:ro" amazon/aws-cli s3api put-bucket-cors --endpoint-url http://localhost:3900 --region garage --bucket knowledgebase-assets --cors-configuration file:///cors.json
 ```
 
-```bash
-docker exec knowledgebase-garage /garage bucket deny --owner knowledgebase-assets --key GK...
-```
-
 `--network container:` кладе aws-cli в мережевий простір самого Garage, тож
-`localhost:3900` там означає те саме, що й усередині контейнера — інакше довелось би
-відв'язувати порт від loopback.
+`localhost:3900` там означає те саме, що й усередині контейнера.
 
-Перевірити правило: `s3api get-bucket-cors` — теж потребує owner. На самі запити
-браузера воно діє й без нього: preflight неавтентифікований, ключа в ньому немає.
+Перевірити правило: `s3api get-bucket-cors`. На самі запити браузера воно діє й без
+owner-прав: preflight неавтентифікований, ключа в ньому немає.
 Прибрати: `s3api delete-bucket-cors`.
-
-`cors.json` дозволяє лише `PUT` і лише з `http://localhost:5173`. Захід із телефона по
-LAN-IP цим правилом не покритий — там знадобиться другий origin у списку.
 
 ## Підключення бекенду
 
@@ -80,7 +77,7 @@ git, читаються тільки в Development:
 {
   "Storage": {
     "S3": {
-      "ServiceUrl": "http://localhost:3900",
+      "ServiceUrl": "http://192.168.1.40:3900",
       "BucketName": "knowledgebase-assets",
       "Region": "garage",
       "AccessKeyId": "GK...",
@@ -89,6 +86,11 @@ git, читаються тільки в Development:
   }
 }
 ```
+
+`ServiceUrl` — **LAN-адреса цього ПК**, а не `localhost`: хост входить у підпис SigV4,
+тож посилання діє рівно на тому імені, на якому його підписали, і з `localhost` телефон
+ліз би сам у себе. Адреса видається по DHCP — якщо зміниться, правити тут і в
+`appsettings.Local.json` воркера. Резервація на роутері позбавляє цієї мороки.
 
 Провайдера більше не обирають: бакет — єдине сховище (браузер ходить у нього напряму),
 і без цих ключів застосунок не стартує (`ValidateOnStart`). Локально вони живуть у

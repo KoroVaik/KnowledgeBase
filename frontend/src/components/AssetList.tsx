@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { deleteAsset, fetchAssets, fetchDownloadUrl } from '../api/assets'
+import { deleteAsset, fetchAssets, fetchDownloadUrl, processAsset } from '../api/assets'
 import type { AssetSummary } from '../api/assets'
 import { formatSize } from '../format'
 import { useResourceChanges } from '../hooks/useResourceChanges'
@@ -25,6 +25,7 @@ export function AssetList({ reloadToken, downloadEnabled, maxSourceChars }: Asse
   const [state, setState] = useState<ListState>({ status: 'loading' })
   const [deletingFileName, setDeletingFileName] = useState<string | null>(null)
   const [linkingFileName, setLinkingFileName] = useState<string | null>(null)
+  const [processingFileName, setProcessingFileName] = useState<string | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
 
   // Reloads are no longer triggered by this component alone - the change stream fires them
@@ -89,8 +90,28 @@ export function AssetList({ reloadToken, downloadEnabled, maxSourceChars }: Asse
     }
   }
 
+  async function handleProcess(asset: AssetSummary) {
+    setActionError(null)
+    setProcessingFileName(asset.storedFileName)
+
+    try {
+      await processAsset(asset.storedFileName)
+      reload()
+    } catch (error) {
+      setActionError(messageOf(error))
+    } finally {
+      setProcessingFileName(null)
+    }
+  }
+
   async function handleDelete(asset: AssetSummary) {
-    if (!window.confirm(`Delete ${asset.originalFileName}? This cannot be undone.`)) {
+    // The note is a description of this file, so it goes too - say so before, not after.
+    const warning =
+      asset.noteId !== null
+        ? `Delete ${asset.originalFileName}? Its note goes to the bin with it.`
+        : `Delete ${asset.originalFileName}? This cannot be undone.`
+
+    if (!window.confirm(warning)) {
       return
     }
 
@@ -160,14 +181,29 @@ export function AssetList({ reloadToken, downloadEnabled, maxSourceChars }: Asse
               <span className="asset-meta">
                 {formatSize(asset.sizeBytes)} · {new Date(asset.uploadedAtUtc).toLocaleString()}
               </span>
-              <button
-                type="button"
-                className="asset-delete"
-                onClick={() => void handleDelete(asset)}
-                disabled={deletingFileName === asset.storedFileName}
-              >
-                {deletingFileName === asset.storedFileName ? 'Deleting…' : 'Delete'}
-              </button>
+              {/* One grid cell for both buttons: the row is three columns, and a fourth
+                  child would push the status badge out of its own line. */}
+              <div className="asset-actions">
+                {canProcess(asset) && (
+                  <button
+                    type="button"
+                    className="asset-delete"
+                    onClick={() => void handleProcess(asset)}
+                    disabled={processingFileName === asset.storedFileName}
+                    title="Run the pipeline over this file and make a note from it"
+                  >
+                    {processingFileName === asset.storedFileName ? 'Queueing…' : 'Process'}
+                  </button>
+                )}
+                <button
+                  type="button"
+                  className="asset-delete"
+                  onClick={() => void handleDelete(asset)}
+                  disabled={deletingFileName === asset.storedFileName}
+                >
+                  {deletingFileName === asset.storedFileName ? 'Deleting…' : 'Delete'}
+                </button>
+              </div>
 
               {badge && (
                 <span className={`asset-status asset-status-${badge.tone}`}>{badge.text}</span>
@@ -200,6 +236,18 @@ function startDownload(url: string) {
 
 function messageOf(error: unknown): string {
   return error instanceof Error ? error.message : 'Unexpected error'
+}
+
+/**
+ * A file with no note and no job to make one: never processed, or its note was deleted while
+ * the file was kept. Not offered for 'Skipped' - the source does not fit, and a rerun cannot
+ * change that.
+ */
+function canProcess(asset: AssetSummary): boolean {
+  return (
+    asset.noteId === null &&
+    (asset.processingStatus === null || asset.processingStatus === 'Failed')
+  )
 }
 
 const TEXT_FILE = /\.(txt|md|markdown)$/i

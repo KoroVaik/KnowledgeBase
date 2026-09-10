@@ -298,6 +298,16 @@ public sealed class AssetsController(
             return NotFound();
         }
 
+        // The note is a structured description of this file, so it goes with it - into the bin,
+        // not out of existence, so links pointing at it can say "deleted" rather than go blank.
+        var note = await _database.Notes
+            .FirstOrDefaultAsync(note => note.SourceAssetId == record.Id, cancellationToken);
+
+        if (note is not null)
+        {
+            note.DeletedAtUtc = DateTime.UtcNow;
+        }
+
         // Row first: the file leaves the listing even if the storage call below fails, and a
         // leftover object is easier to live with than a row pointing at nothing.
         _database.Assets.Remove(record);
@@ -307,7 +317,56 @@ public sealed class AssetsController(
 
         _notifier.Publish(new ChangeEvent(ChangeResources.Assets, ChangeActions.Deleted, fileName));
 
+        if (note is not null)
+        {
+            _notifier.Publish(new ChangeEvent(ChangeResources.Notes, ChangeActions.Deleted, note.Id));
+        }
+
         return NoContent();
+    }
+
+    /// <summary>
+    /// Puts the file back in front of the worker.
+    /// </summary>
+    /// <param name="fileName">The stored name, as returned by the listing.</param>
+    /// <param name="cancellationToken">Cancels the call if the client disconnects.</param>
+    /// <remarks>
+    /// For files the pipeline failed on, skipped, or whose note has been binned. Redoing a file
+    /// that still has a note is the same call under a different name on the note itself.
+    /// </remarks>
+    /// <response code="202">Queued.</response>
+    /// <response code="401">No session, or it has expired.</response>
+    /// <response code="404">No such file.</response>
+    /// <response code="409">A run is already queued.</response>
+    [HttpPost("{fileName}/process")]
+    [ProducesResponseType(StatusCodes.Status202Accepted)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> Process(string fileName, CancellationToken cancellationToken)
+    {
+        var record = await FindAsync(fileName, cancellationToken);
+
+        if (record is null)
+        {
+            return NotFound();
+        }
+
+        if (ProcessableContent.Classify(record.ContentType, record.OriginalFileName) is null)
+        {
+            return Conflict(new { error = "The pipeline does not handle this kind of file." });
+        }
+
+        if (!await ProcessingQueue.EnsurePendingAsync(_database, record.Id, cancellationToken))
+        {
+            return Conflict(new { error = "This file is already queued." });
+        }
+
+        await _database.SaveChangesAsync(CancellationToken.None);
+
+        _notifier.Publish(new ChangeEvent(ChangeResources.Assets, ChangeActions.Updated, fileName));
+
+        return Accepted();
     }
 
     private Task<AssetRecord?> FindAsync(string fileName, CancellationToken cancellationToken) =>

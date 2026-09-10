@@ -1,0 +1,11 @@
+<component name="ProjectRunConfigurationManager">
+  <!-- Points at the configurations Rider generates from launchSettings.json itself:
+       a hand-written .NET configuration here would have to restate the environment
+       variables of the profile, and gets them wrong quietly. -->
+  <configuration default="false" name="Local: full stack" type="CompoundRunConfigurationType">
+    <toRun name="KnowledgeBase.Api: http" type="LaunchSettings" />
+    <toRun name="KnowledgeBase.Worker: worker" type="LaunchSettings" />
+    <toRun name="Frontend (vite)" type="js.build_tools.npm" />
+    <method v="2" />
+  </configuration>
+</component>
