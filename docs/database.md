@@ -88,6 +88,30 @@ UTC as local time. Fixed with a value converter in the model; **not needed in Po
 
 ## Open
 
+- [ ] **Tagging system — replaces `Category`.** Many-to-many; the single classification
+      axis, because notes overlap freely and one category per note never fit.
+      - Model: `Tag` (`Id`, `Name`, `Confirmed`) + `NoteTag` (`NoteId`, `TagId`,
+        `Ordinal`). `Ordinal` is the model's relevance order; position 0 is the "primary"
+        tag **by convention** — no `IsPrimary` flag. Unique `(NoteId, TagId)`; unique
+        `Name`.
+      - Drop the `Category` column. Migration seeds one `Tag` per distinct existing
+        `Category`, plus a `NoteTag` at `Ordinal 0`, all `Confirmed = true` — the starting
+        vocabulary.
+      - `Confirmed`: a tag the user has vouched for. Pipeline-invented tags land
+        `Confirmed = false` — still shown everywhere (the facet marks them), just flagged
+        for review.
+      - A tag that was a note's only tag being deleted is fine: the note becomes untagged,
+        a normal state, surfaced by an "Untagged" filter for point re-tagging. No full
+        regeneration.
+      - Pipeline contract + proliferation control: [`ai-pipeline.md`](ai-pipeline.md).
+- [ ] **Tag reconciliation — string-distance merge, no model.** For `Confirmed = false`
+      tags, show the nearest existing tags by trigram / Levenshtein (the pipeline already
+      ranks candidates) and merge on one keypress: repoint every `NoteTag`, drop the
+      losing `Tag`. Also a manual "merge tag A into B" for confirmed tags. Later, optional:
+      an AI pass that reconciles by meaning, not spelling.
+- [ ] **Point re-tag endpoint.** Model gets the note body + current tag list, returns tags
+      only — body and links untouched. Cheap fix for an untagged note or a bad set, without
+      `process-again`.
 - [ ] **Note version selection.** `Process again` stacks versions in the bin and soft
       delete keeps them there — what is left is to show the version list of one note with
       dates and let the active one be switched. Then the bin stops being a bin and becomes

@@ -17,10 +17,13 @@ not just compiled.
   `NoWarn 1591`. Verified against generated `swagger.json`.
 - `/api/assets` CRUD: `upload-link` → `PUT` to bucket → `confirm`, `GET` list, `GET
   {name}/link`, `DELETE`. Path-traversal names rejected in the store itself.
-- Feature flags: `Features` config → `FeatureOptions`, `GET /api/features` (anonymous).
-  `UploadEnabled` enforced in the controller (403/JSON), not just UI. `IOptionsSnapshot` so
-  a flag flips without a restart. (`DownloadEnabled` existed here too, removed 2026-09-10
-  when the file panel made inline preview a normal part of the UI.)
+- `GET /api/features` (anonymous): now serves only limits (`maxSourceChars`,
+  `maxUploadBytes`) and `googleSignInEnabled` (= `Auth:Google` credentials present). The
+  `Features` config section, `FeatureOptions` and `FeatureRegistration` are gone: the
+  on/off flags `DownloadEnabled` (removed 2026-09-10 with the file panel), then
+  `UploadEnabled` and `GoogleSignInEnabled` (removed 2026-09-10 — a single-user app has
+  no one to switch uploads off for, and Google is gated by its credentials alone) left
+  the section empty.
 - SSE: `IChangeNotifier` singleton, `GET /api/events`, `: ping` every 20 s, bounded
   drop-oldest channels. Verified through the Vite proxy with concurrent streams.
 - Health check `GET /health`, anonymous. Weatherforecast removed.
@@ -39,10 +42,11 @@ not just compiled.
 - PBKDF2 via `PasswordHasher<T>`, `dotnet run -- hash-password`. **(Now reverted to a
   plaintext default for local dev — see [`backend.md`](backend.md); restore before
   treating the public URL as safe.)**
-- Google OAuth behind `Features:GoogleSignInEnabled`: scheme registers only with
-  credentials present, `CallbackPath = /api/auth/google/callback`, correlation cookie
+- Google OAuth: scheme registers only with `Auth:Google` credentials present (that
+  registration is now the whole on/off — the `Features:GoogleSignInEnabled` flag was
+  dropped 2026-09-10), `CallbackPath = /api/auth/google/callback`, correlation cookie
   `Lax` + `SameAsRequest`, allow-list `Auth:Google:AllowedEmails` (empty = nobody),
-  check in `OnTicketReceived`. `/api/features` returns the effective state.
+  check in `OnTicketReceived`. `/api/features` returns `Google.IsConfigured`.
   Vite proxy `changeOrigin: false`. **Enabled in prod**, real sign-in passed in the
   browser locally and on prod.
 - `ForwardedHeaders` before `UseHttpsRedirection`. Data Protection keys → DB

@@ -1,6 +1,5 @@
 using KnowledgeBase.Api.Controllers.Auth.Configuration;
 using KnowledgeBase.Api.Controllers.Events.Configuration;
-using KnowledgeBase.Api.Infrastructure.Features;
 using KnowledgeBase.Api.Infrastructure.Hosting;
 using KnowledgeBase.Core.Hosting;
 using KnowledgeBase.Core.Persistence;
@@ -22,7 +21,6 @@ builder.Services.AddHealthChecks();
 builder.Services.AddProxyAwareHosting();
 
 builder.Services.AddDatabase(builder.Configuration);
-builder.Services.AddFeatureFlags(builder.Configuration);
 builder.Services.AddAuthFeature(builder.Configuration);
 builder.Services.AddAssetStorage(builder.Configuration);
 builder.Services.AddRealTimeUpdates();

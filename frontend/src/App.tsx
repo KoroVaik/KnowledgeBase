@@ -21,10 +21,9 @@ function App() {
   const [uploadCount, setUploadCount] = useState(0)
   // Bumped by "Try again" to re-run the load effect.
   const [attempt, setAttempt] = useState(0)
-  // Assume every feature off until the flags arrive: a working control the server then
-  // refuses is worse than a briefly disabled one. maxSourceChars 0 keeps the size hint off.
+  // Assume Google sign-in off until the flags arrive: showing a button the server has no
+  // handler for is worse than a brief absence. maxSourceChars 0 keeps the size hint off.
   const [features, setFeatures] = useState<FeatureFlags>({
-    uploadEnabled: false,
     googleSignInEnabled: false,
     maxSourceChars: 0,
     maxUploadBytes: 0,
@@ -151,7 +150,6 @@ function App() {
           </p>
           <UploadDropZone
             onUploaded={() => setUploadCount((count) => count + 1)}
-            uploadEnabled={features.uploadEnabled}
             maxSourceChars={features.maxSourceChars}
             maxUploadBytes={features.maxUploadBytes}
           />

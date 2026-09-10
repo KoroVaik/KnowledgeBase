@@ -8,7 +8,6 @@ const GENERIC_PASTE_NAME = /^image\.[a-z0-9]+$/i
 
 interface UploadDropZoneProps {
   onUploaded: () => void
-  uploadEnabled: boolean
   /** From /api/features: the pipeline's character budget, a warning threshold. */
   maxSourceChars: number
   /** From /api/features: the hard cap upload-link refuses. */
@@ -17,7 +16,6 @@ interface UploadDropZoneProps {
 
 export function UploadDropZone({
   onUploaded,
-  uploadEnabled,
   maxSourceChars,
   maxUploadBytes,
 }: UploadDropZoneProps) {
@@ -39,7 +37,6 @@ export function UploadDropZone({
   }, [reset])
 
   // A file dropped past the zone makes the browser navigate to it, taking the SPA with it.
-  // Also covers the disabled zone, where the button swallows the event.
   useEffect(() => {
     const swallow = (event: DragEvent) => event.preventDefault()
 
@@ -65,14 +62,14 @@ export function UploadDropZone({
 
   const accept = useCallback(
     (files: File[]) => {
-      if (!uploadEnabled || files.length === 0) {
+      if (files.length === 0) {
         return
       }
 
       add(files)
       setOpen(true)
     },
-    [uploadEnabled, add],
+    [add],
   )
 
   const acceptPasted = useCallback(
@@ -96,10 +93,6 @@ export function UploadDropZone({
   // On the window, not the field, so neither needs focus. preventDefault only once files were
   // taken, or pasting text elsewhere breaks.
   useEffect(() => {
-    if (!uploadEnabled) {
-      return
-    }
-
     const onPaste = (event: ClipboardEvent) => {
       const accepted = acceptPasted(event.clipboardData)
 
@@ -115,7 +108,7 @@ export function UploadDropZone({
 
     window.addEventListener('paste', onPaste)
     return () => window.removeEventListener('paste', onPaste)
-  }, [uploadEnabled, acceptPasted])
+  }, [acceptPasted])
 
   function handleDrop(event: ReactDragEvent<HTMLElement>) {
     // Without this the browser navigates to the dropped file.
@@ -168,14 +161,11 @@ export function UploadDropZone({
 
   return (
     <section className="upload">
-      {!uploadEnabled && <p className="upload-disabled">Uploading is turned off.</p>}
-
       {/* Input is a sibling, not a child: input.click() bubbles, and from inside the button
           that re-enters this handler. */}
       <button
         type="button"
         className={dragging ? 'drop-zone drop-zone-active' : 'drop-zone'}
-        disabled={!uploadEnabled}
         onClick={() => inputRef.current?.click()}
         onDragOver={(event) => {
           // preventDefault on dragover is what makes this a drop target; without it drop never fires.
@@ -209,7 +199,6 @@ export function UploadDropZone({
         <button
           type="button"
           className="upload-action"
-          disabled={!uploadEnabled}
           onClick={pasteFromClipboard}
         >
           Upload from clipboard
@@ -223,7 +212,6 @@ export function UploadDropZone({
           aria-label="Paste a screenshot or a file here"
           autoComplete="off"
           spellCheck={false}
-          disabled={!uploadEnabled}
           onChange={(event) => {
             event.target.value = ''
           }}

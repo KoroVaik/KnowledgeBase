@@ -97,6 +97,13 @@ mid-string (`done_reason: "length"`). Fixed:
 
 ## Open
 
+- [ ] **Tags from the pipeline (with `Category` gone).** `AnalysisResult.Category` →
+      `Tags[]`, ordered by relevance (first = primary by convention, no flag). Prompt: the
+      full existing-tag list + "prefer an existing tag; invent one only if nothing fits".
+      Code guard, same principle as the links intersection — **do not trust the prompt**:
+      cap at 2–5 tags per note, snap each returned tag to an existing one when the string
+      distance is close, allow at most one genuinely new tag per run, mark new tags
+      `Confirmed = false`. Model + storage: [`database.md`](database.md).
 - [ ] **Pipeline routing by `NoteKind`.** Today the worker only builds `Source` notes
       from an uploaded file. `Synthesis` (aggregate many notes into one, grouped by topic)
       and later kinds (user notes, general notes) each need their own trigger, prompt and

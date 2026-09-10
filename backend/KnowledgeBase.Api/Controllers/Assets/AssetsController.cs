@@ -1,5 +1,4 @@
 using KnowledgeBase.Api.Controllers.Assets.Contracts;
-using KnowledgeBase.Api.Infrastructure.Features;
 using KnowledgeBase.Core.Persistence;
 using KnowledgeBase.Core.Pipeline;
 using KnowledgeBase.Core.RealTime;
@@ -19,13 +18,11 @@ namespace KnowledgeBase.Api.Controllers.Assets;
 [Route("api/[controller]")]
 [Authorize]
 [Produces("application/json")]
-// IOptionsSnapshot, not IOptions: re-read per request, so a flipped flag needs no restart.
 public sealed class AssetsController(
     IAssetStorage storage,
     KnowledgeBaseDbContext database,
     IChangeNotifier notifier,
     IOptions<StorageOptions> options,
-    IOptionsSnapshot<FeatureOptions> features,
     IAssetLinkSigner signer)
     : ControllerBase
 {
@@ -33,7 +30,6 @@ public sealed class AssetsController(
     private readonly KnowledgeBaseDbContext _database = database;
     private readonly IChangeNotifier _notifier = notifier;
     private readonly StorageOptions _options = options.Value;
-    private readonly FeatureOptions _features = features.Value;
     private readonly IAssetLinkSigner _signer = signer;
 
     /// <summary>Lists every stored file, newest first, with its job state and note id.</summary>
@@ -119,19 +115,12 @@ public sealed class AssetsController(
     /// <response code="200">The signed URL.</response>
     /// <response code="400">The file is empty or over the size limit.</response>
     /// <response code="401">No session, or it has expired.</response>
-    /// <response code="403">Uploading is switched off by the Features:UploadEnabled flag.</response>
     [HttpPost("upload-link")]
     [ProducesResponseType(typeof(UploadLinkResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     public IActionResult UploadLink([FromBody] UploadLinkRequest request)
     {
-        if (!_features.UploadEnabled)
-        {
-            return StatusCode(StatusCodes.Status403Forbidden, new { error = "Uploading is turned off." });
-        }
-
         if (request.SizeBytes <= 0)
         {
             return BadRequest(new { error = "File is empty." });
@@ -154,14 +143,12 @@ public sealed class AssetsController(
     /// <response code="201">The row exists; the file is now in the listing.</response>
     /// <response code="400">The object is empty or over the size limit; it has been removed.</response>
     /// <response code="401">No session, or it has expired.</response>
-    /// <response code="403">Uploading is switched off by the Features:UploadEnabled flag.</response>
     /// <response code="404">No such object in the bucket.</response>
     /// <response code="409">This key was already confirmed.</response>
     [HttpPost("{fileName}/confirm")]
     [ProducesResponseType(typeof(UploadedAssetResponse), StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType(StatusCodes.Status409Conflict)]
     public async Task<IActionResult> ConfirmUpload(
@@ -169,11 +156,6 @@ public sealed class AssetsController(
         [FromBody] ConfirmUploadRequest request,
         CancellationToken cancellationToken)
     {
-        if (!_features.UploadEnabled)
-        {
-            return StatusCode(StatusCodes.Status403Forbidden, new { error = "Uploading is turned off." });
-        }
-
         // A retried confirm must not leave two rows on one object.
         if (await FindAsync(fileName, cancellationToken) is not null)
         {

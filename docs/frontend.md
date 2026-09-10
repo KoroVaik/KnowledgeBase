@@ -229,6 +229,13 @@ the Delete button off-screen; it was never tabular data). `h1` needs an explicit
       does — it leans on `AssetList`'s job poll + the `FilePanel` key change. Fine so far;
       revisit if the panel ever feels stale after a re-run.
 
+### Tagging (design in [`database.md`](database.md))
+
+- [ ] Faceted tag filter on the notes / files lists, plus an "Untagged" filter.
+- [ ] Tag chips in a note row, replacing the `{category}` text in `.note-meta`
+      (`NotesList`) and `FilePanel`; primary = first chip.
+- [ ] Unconfirmed-tag review UI: nearest existing tags + one-key merge.
+
 ### Larger features
 
 - [ ] Routing (react-router).

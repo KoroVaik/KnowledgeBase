@@ -2,7 +2,6 @@ using System.Security.Claims;
 using KnowledgeBase.Api.Controllers.Auth.Configuration;
 using KnowledgeBase.Api.Controllers.Auth.Contracts;
 using KnowledgeBase.Api.Controllers.Auth.Services;
-using KnowledgeBase.Api.Infrastructure.Features;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.Google;
@@ -21,8 +20,7 @@ namespace KnowledgeBase.Api.Controllers.Auth;
 [Produces("application/json")]
 public sealed class AuthController(
     ILoginAttemptLimiter limiter,
-    IOptions<AuthOptions> options,
-    IOptionsSnapshot<FeatureOptions> features)
+    IOptions<AuthOptions> options)
     : ControllerBase
 {
     private readonly AuthOptions _options = options.Value;
@@ -71,15 +69,15 @@ public sealed class AuthController(
     /// chain of top-level navigations. Google returns to the callback, which issues the cookie.
     /// </summary>
     /// <response code="302">Redirecting to Google.</response>
-    /// <response code="404">Google sign-in is switched off or has no credentials.</response>
+    /// <response code="404">Google sign-in has no credentials configured.</response>
     [HttpGet("google/start")]
     [AllowAnonymous]
     [ProducesResponseType(StatusCodes.Status302Found)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public IActionResult StartGoogleSignIn()
     {
-        // Checked here, not only in the UI: a flag that only hides a button is decoration.
-        if (!features.Value.GoogleSignInEnabled || !_options.Google.IsConfigured)
+        // Without credentials the Google scheme is not registered, so Challenge would throw.
+        if (!_options.Google.IsConfigured)
         {
             return NotFound();
         }

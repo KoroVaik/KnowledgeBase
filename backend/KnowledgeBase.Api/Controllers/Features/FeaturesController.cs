@@ -1,6 +1,5 @@
 using KnowledgeBase.Api.Controllers.Auth.Configuration;
 using KnowledgeBase.Api.Controllers.Features.Contracts;
-using KnowledgeBase.Api.Infrastructure.Features;
 using KnowledgeBase.Core.Pipeline;
 using KnowledgeBase.Core.Storage;
 using Microsoft.AspNetCore.Mvc;
@@ -13,13 +12,11 @@ namespace KnowledgeBase.Api.Controllers.Features;
 [Route("api/[controller]")]
 [Produces("application/json")]
 public sealed class FeaturesController(
-    IOptionsSnapshot<FeatureOptions> features,
     IOptions<AuthOptions> auth,
     IOptions<PipelineOptions> pipeline,
     IOptions<StorageOptions> storage)
     : ControllerBase
 {
-    private readonly IOptionsSnapshot<FeatureOptions> _features = features;
     private readonly AuthOptions _auth = auth.Value;
     private readonly PipelineOptions _pipeline = pipeline.Value;
     private readonly StorageOptions _storage = storage.Value;
@@ -33,10 +30,9 @@ public sealed class FeaturesController(
     [ProducesResponseType(typeof(FeatureFlagsResponse), StatusCodes.Status200OK)]
     public FeatureFlagsResponse Get() =>
         new(
-            _features.Value.UploadEnabled,
-            // Effective state: the Google scheme registers only with credentials, so a flag on
-            // without them would show a button that can only answer 404.
-            _features.Value.GoogleSignInEnabled && _auth.Google.IsConfigured,
+            // The Google scheme registers only with credentials, so without them the button
+            // would only ever answer 404.
+            _auth.Google.IsConfigured,
             _pipeline.MaxSourceChars,
             _storage.MaxUploadBytes);
 }

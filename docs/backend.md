@@ -70,12 +70,14 @@ server just never finishes, with `EventSource` reconnecting on its own.
   login page, and `fetch()` would read that HTML as success.
 - Password hash: PBKDF2 via `PasswordHasher<T>` (in-framework, no NuGet). Generate with
   `dotnet run -- hash-password <pw>`, store in user-secrets.
-- **Google OAuth** behind `Features:GoogleSignInEnabled` (default `false`). The handler
-  has `SignInScheme = cookie`, so it issues the same `kb.auth` and `/api/auth/me`,
-  logout, `[Authorize]` are unchanged. Package
-  `Microsoft.AspNetCore.Authentication.Google`.
+- **Google OAuth** — a second identity source, no separate on/off flag: it is live
+  whenever `Auth:Google` credentials are present. The handler has `SignInScheme =
+  cookie`, so it issues the same `kb.auth` and `/api/auth/me`, logout, `[Authorize]` are
+  unchanged. Package `Microsoft.AspNetCore.Authentication.Google`.
   - The scheme registers **only** when `ClientId`/`ClientSecret` are present — an empty
-    `ClientId` fails the OAuth options validator and would take down the whole API.
+    `ClientId` fails the OAuth options validator and would take down the whole API. That
+    registration is also the whole feature toggle: `google/start` 404s without it, and
+    `/api/features` reports it so the SPA hides the button.
   - `CallbackPath = /api/auth/google/callback` (not the default `/signin-google`): Vite
     only proxies `/api`.
   - Correlation cookie: `SameSite = Lax` **and** `SecurePolicy = SameAsRequest`. The
@@ -85,7 +87,8 @@ server just never finishes, with `EventSource` reconnecting on its own.
     succeeds for any account in the world. Checked in `OnTicketReceived` (not
     `OnCreatingTicket` — `Fail()` is ignored there), rejection via `HandleResponse()` +
     redirect to `/?authError=…`.
-  - `/api/features` returns the **effective** state (`flag && IsConfigured`).
+  - `/api/features` returns `Google.IsConfigured` — the SPA shows the button only when
+    the flow will actually work.
   - Vite proxy needs `changeOrigin: false` — the backend builds `redirect_uri` from the
     `Host` header. See [`frontend.md`](frontend.md).
 
@@ -131,9 +134,10 @@ re-raise every task.)
       stale and the user sees an upload error. Needs a shared 401 handler. (Also breaks
       `GET /api/events` → the connection banner says "no server" though the server is
       alive and just does not recognise us.) Partly a [`frontend.md`](frontend.md) item.
-- [ ] Remove the dead `Features__DirectAssetAccessEnabled` env var from Render. The flag
-      is gone from code; ASP.NET ignores the unknown key, so this is cleanup, not a
-      blocker.
+- [ ] Remove the dead `Features__*` env vars from Render — `Features__DirectAssetAccessEnabled`
+      and now `Features__GoogleSignInEnabled` (the whole `Features` section is gone from
+      code). ASP.NET ignores unknown keys, so this is cleanup, not a blocker; Google stays
+      on because `Auth__Google__*` are still set.
 - [ ] xUnit + `WebApplicationFactory` integration tests — see [`../CLAUDE.md`] and the
       Tests section of [`archive.md`](archive.md). `IAssetStorage` is now swappable for a
       fake via `WithWebHostBuilder`.

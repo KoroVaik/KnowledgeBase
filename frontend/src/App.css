@@ -28,11 +28,6 @@
   border-color: var(--accent-border);
 }
 
-.drop-zone:disabled {
-  cursor: not-allowed;
-  opacity: 0.5;
-}
-
 .drop-zone-title {
   font-size: 18px;
   color: var(--text-h);
@@ -284,11 +279,6 @@
   border: 1px solid var(--border);
 }
 
-.upload-action:disabled {
-  cursor: not-allowed;
-  opacity: 0.5;
-}
-
 .upload-paste {
   font: inherit;
   font-size: 14px;
@@ -298,16 +288,6 @@
   color: var(--text-h);
   background: var(--bg);
   border: 1px solid var(--border);
-}
-
-.upload-paste:disabled {
-  cursor: not-allowed;
-  opacity: 0.5;
-}
-
-.upload-disabled {
-  margin-bottom: 12px;
-  color: var(--text);
 }
 
 .upload-hint {
