@@ -1,4 +1,4 @@
-namespace KnowledgeBase.Api.Features;
+namespace KnowledgeBase.Api.Infrastructure.Features;
 
 public static class FeatureRegistration
 {

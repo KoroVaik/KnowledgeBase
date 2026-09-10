@@ -16,9 +16,11 @@ interface AssetListProps {
    */
   reloadToken: number
   downloadEnabled: boolean
+  /** From /api/features: threshold for the "possibly too large" hint on text files. */
+  maxSourceChars: number
 }
 
-export function AssetList({ reloadToken, downloadEnabled }: AssetListProps) {
+export function AssetList({ reloadToken, downloadEnabled, maxSourceChars }: AssetListProps) {
   const [state, setState] = useState<ListState>({ status: 'loading' })
   const [deletingFileName, setDeletingFileName] = useState<string | null>(null)
   const [linkingFileName, setLinkingFileName] = useState<string | null>(null)
@@ -56,6 +58,22 @@ export function AssetList({ reloadToken, downloadEnabled }: AssetListProps) {
   useEffect(reload, [reload, reloadToken])
 
   useResourceChanges('assets', reload)
+
+  // The worker runs in its own process with no change stream back to the browser, so a job
+  // finishing is not announced. While anything is still in flight, poll for the status flip;
+  // stop once every row has reached a terminal state.
+  const hasActiveJob =
+    state.status === 'ready' &&
+    state.assets.some((asset) => asset.processingStatus === 'Pending' || asset.processingStatus === 'Running')
+
+  useEffect(() => {
+    if (!hasActiveJob) {
+      return
+    }
+
+    const timer = window.setInterval(reload, 4000)
+    return () => window.clearInterval(timer)
+  }, [hasActiveJob, reload])
 
   async function handleDownload(asset: AssetSummary) {
     setActionError(null)
@@ -119,7 +137,10 @@ export function AssetList({ reloadToken, downloadEnabled }: AssetListProps) {
 
       {state.status === 'ready' && state.assets.length > 0 && (
         <ul className="assets-list">
-          {state.assets.map((asset) => (
+          {state.assets.map((asset) => {
+            const badge = processingBadge(asset, maxSourceChars)
+
+            return (
             <li className="asset" key={asset.storedFileName}>
               {!downloadEnabled && <span className="asset-name">{asset.originalFileName}</span>}
 
@@ -146,8 +167,13 @@ export function AssetList({ reloadToken, downloadEnabled }: AssetListProps) {
               >
                 {deletingFileName === asset.storedFileName ? 'Deleting…' : 'Delete'}
               </button>
+
+              {badge && (
+                <span className={`asset-status asset-status-${badge.tone}`}>{badge.text}</span>
+              )}
             </li>
-          ))}
+            )
+          })}
         </ul>
       )}
     </section>
@@ -185,4 +211,33 @@ function formatSize(bytes: number): string {
 
 function messageOf(error: unknown): string {
   return error instanceof Error ? error.message : 'Unexpected error'
+}
+
+const TEXT_FILE = /\.(txt|md|markdown)$/i
+
+type Badge = { text: string; tone: 'info' | 'ok' | 'warn' | 'error' }
+
+/**
+ * The processing state to show next to a file. Mirrors the server-side ProcessingStatus once
+ * a job exists; before that, a size-based guess for text files the pipeline will likely skip.
+ * Byte size, not characters, so it is only ever a "possibly" - the worker decides for real.
+ */
+function processingBadge(asset: AssetSummary, maxSourceChars: number): Badge | null {
+  switch (asset.processingStatus) {
+    case 'Pending':
+    case 'Running':
+      return { text: 'Processing…', tone: 'info' }
+    case 'Done':
+      return { text: 'Note ready', tone: 'ok' }
+    case 'Failed':
+      return { text: `Processing failed: ${asset.processingError ?? 'unknown error'}`, tone: 'error' }
+    case 'Skipped':
+      return { text: `Not processed: ${asset.processingError ?? 'source too large'}`, tone: 'warn' }
+    default:
+      return maxSourceChars > 0 &&
+        TEXT_FILE.test(asset.originalFileName) &&
+        asset.sizeBytes > maxSourceChars
+        ? { text: 'Possibly too large to turn into a note', tone: 'warn' }
+        : null
+  }
 }

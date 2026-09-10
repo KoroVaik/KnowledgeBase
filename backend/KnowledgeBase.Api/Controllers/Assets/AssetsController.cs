@@ -1,5 +1,5 @@
 using KnowledgeBase.Api.Controllers.Assets.Contracts;
-using KnowledgeBase.Api.Features;
+using KnowledgeBase.Api.Infrastructure.Features;
 using KnowledgeBase.Core.Persistence;
 using KnowledgeBase.Core.Pipeline;
 using KnowledgeBase.Core.RealTime;
@@ -55,14 +55,39 @@ public sealed class AssetsController(
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> List(CancellationToken cancellationToken)
     {
-        var assets = await _database.Assets
-            .OrderByDescending(asset => asset.UploadedAtUtc)
-            .Select(asset => new AssetSummaryResponse(
-                asset.StoredFileName,
-                asset.OriginalFileName,
-                asset.SizeBytes,
-                asset.UploadedAtUtc))
+        // One row per asset plus, where they exist, its pipeline job and the note it produced.
+        // Left joins, because most of the interesting states are "no job yet" or "no note yet";
+        // GroupJoin + SelectMany with DefaultIfEmpty is how EF spells LEFT JOIN.
+        var rows = await _database.Assets
+            .GroupJoin(
+                _database.ProcessingJobs,
+                asset => asset.Id,
+                job => job.AssetId,
+                (asset, jobs) => new { asset, jobs })
+            .SelectMany(
+                pair => pair.jobs.DefaultIfEmpty(),
+                (pair, job) => new { pair.asset, job })
+            .GroupJoin(
+                _database.Notes,
+                pair => pair.asset.Id,
+                note => note.SourceAssetId,
+                (pair, notes) => new { pair.asset, pair.job, notes })
+            .SelectMany(
+                group => group.notes.DefaultIfEmpty(),
+                (group, note) => new { group.asset, group.job, note })
+            .OrderByDescending(row => row.asset.UploadedAtUtc)
             .ToListAsync(cancellationToken);
+
+        var assets = rows
+            .Select(row => new AssetSummaryResponse(
+                row.asset.StoredFileName,
+                row.asset.OriginalFileName,
+                row.asset.SizeBytes,
+                row.asset.UploadedAtUtc,
+                row.job?.Status.ToString(),
+                row.job?.Error,
+                row.note?.Id))
+            .ToList();
 
         return Ok(assets);
     }

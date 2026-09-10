@@ -113,6 +113,17 @@ public sealed class PipelineWorker(
             services.GetRequiredService<IChangeNotifier>()
                 .Publish(new ChangeEvent(ChangeResources.Notes, ChangeActions.Created, note.Id));
         }
+        catch (ContentTooLargeException error)
+        {
+            // Not a failure to retry: the input cannot fit however many times we try it.
+            logger.LogWarning("Job {JobId} skipped: {Reason}", job.Id, error.Message);
+
+            job.Status = ProcessingStatus.Skipped;
+            job.CompletedAtUtc = DateTime.UtcNow;
+            job.Error = error.Message;
+
+            await database.SaveChangesAsync(CancellationToken.None);
+        }
         catch (Exception error) when (error is not OperationCanceledException)
         {
             var giveUp = job.Attempts >= _options.MaxAttempts;
@@ -193,6 +204,7 @@ public sealed class PipelineWorker(
             ?? throw new InvalidOperationException($"{asset.OriginalFileName} is not a supported type.");
 
         var reader = services.GetRequiredService<IAssetContentReader>();
+        var maxSourceChars = services.GetRequiredService<IOptions<PipelineOptions>>().Value.MaxSourceChars;
 
         var titles = await database.Notes.Select(note => note.Title).ToListAsync(cancellationToken);
         var categories = await database.Notes.Select(note => note.Category).Distinct().ToListAsync(cancellationToken);
@@ -207,6 +219,16 @@ public sealed class PipelineWorker(
                 if (string.IsNullOrWhiteSpace(text))
                 {
                     throw new InvalidOperationException("The file has no text content.");
+                }
+
+                // Caught here rather than left to Ollama's silent truncation: a bounded slice
+                // of a huge document would produce a note that looks fine but was written from
+                // a fraction of the source. Skip it and let the user split the file.
+                if (text.Length > maxSourceChars)
+                {
+                    throw new ContentTooLargeException(
+                        $"The text is {text.Length:N0} characters; the pipeline handles up to "
+                        + $"{maxSourceChars:N0}. Split it into smaller files.");
                 }
 
                 request = new AnalysisRequest(titles, categories, Text: text);

@@ -73,6 +73,16 @@ public sealed class OllamaAnalyzer(HttpClient http, IOptions<OllamaOptions> opti
             throw new InvalidOperationException("Ollama returned an empty response.");
         }
 
+        // "length" means the model hit the context limit mid-generation. The content is a
+        // truncated JSON string; parsing it throws a cryptic "end of data" JsonException and
+        // the job then burns every retry on the same doomed input. Fail it clearly instead.
+        if (string.Equals(body!.DoneReason, "length", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new ContentTooLargeException(
+                "Ollama ran out of context before finishing the analysis - the source is too "
+                + "large for the model's context window. Split it into smaller files.");
+        }
+
         var result = JsonSerializer.Deserialize<AnalysisResult>(content, ResultJson);
 
         if (result is null || string.IsNullOrWhiteSpace(result.Title) || string.IsNullOrWhiteSpace(result.Category))

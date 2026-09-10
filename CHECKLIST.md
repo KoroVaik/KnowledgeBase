@@ -807,6 +807,29 @@ Postgres. Тіло нотатки — колонка `text`, не `.md`-файл
       спроби); падіння аналізу — ні
 - [ ] Дублі при повторній обробці: одна job на ассет (унікальний індекс), але немає захисту
       від «видалили job вручну → залили знову». Ідемпотентність не покрита
+- [ ] **Великі текстові файли валили воркер.** 2 МБ `.txt` → всі 3 спроби `Failed` з
+      `JsonException: Expected end of string ... Path: $.markdownBody`. Причина: `NumCtx=8192`
+      — Ollama мовчки ріже промпт під контекст, на відповідь місця не лишається, модель
+      обриває JSON посеред рядка (`done_reason: "length"`). Зроблено:
+  - `Pipeline:MaxSourceChars` (дефолт 12000): воркер міряє `text.Length` після читання і,
+    якщо більше, кидає `ContentTooLargeException` **до** виклику моделі
+  - Новий `ProcessingStatus.Skipped` — термінальний, не витрачає спроби, не ре-к'юїться
+    (на відміну від `Failed`); причина в `ProcessingJob.Error`. Без міграції (enum-рядок)
+  - `OllamaAnalyzer` читає `done_reason`; `"length"` → `ContentTooLargeException` замість
+    криптового `JsonException` (ловить і випадок «нотатка під лімітом, але контекст усе одно
+    переповнив» — великий список назв, тощо)
+  - `GET /api/assets` віддає стан джоби (`processingStatus`, `processingError`) і `noteId`
+    (LEFT JOIN); `GET /api/features` — `maxSourceChars`
+  - `AssetList` показує бейдж стану біля файлу (`Processing…` / `Note ready` /
+    `Processing failed: …` / `Not processed: …` / `Possibly too large`), поллінг раз на 4 с
+    поки є активні джоби (SSE-мосту воркер→бек нема); `FileUploadForm` попереджає при виборі
+    завеликого текстового файлу
+  - Збірка (`dotnet build`, `npm run build && npm run lint`) зелена. Наскрізь через воркер
+    ще не переганялось
+- [ ] **Чанкінг великих документів (map-reduce)** — щоб аналізувати весь файл, а не перші
+      `MaxSourceChars` символів. Побити на шматки, зробити чернетку по кожному, звести в одну
+      нотатку. N викликів моделі на джобу; замінить обхід «Skipped» вище для тексту й
+      відкриє шлях до довгих PDF
 - [ ] Прибрати CLI `analyze` (`dotnet run --project backend/KnowledgeBase.Worker -- analyze`)
       і `AnalyzeCommand` (переїхав у `KnowledgeBase.Worker/`) — тимчасова, воркер її
       замінив. Лишити до першого інтеграційного тесту воркера

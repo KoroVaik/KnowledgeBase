@@ -1,6 +1,6 @@
 using Microsoft.AspNetCore.HttpOverrides;
 
-namespace KnowledgeBase.Api.Hosting;
+namespace KnowledgeBase.Api.Infrastructure.Hosting;
 
 public static class HostingSetup
 {

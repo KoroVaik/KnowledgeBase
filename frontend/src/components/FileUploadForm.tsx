@@ -12,9 +12,13 @@ type UploadState =
 interface FileUploadFormProps {
   onUploaded: () => void
   uploadEnabled: boolean
+  /** From /api/features: text files larger than this are likely skipped by the pipeline. */
+  maxSourceChars: number
 }
 
-export function FileUploadForm({ onUploaded, uploadEnabled }: FileUploadFormProps) {
+const TEXT_FILE = /\.(txt|md|markdown)$/i
+
+export function FileUploadForm({ onUploaded, uploadEnabled, maxSourceChars }: FileUploadFormProps) {
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [state, setState] = useState<UploadState>({ status: 'idle' })
 
@@ -55,6 +59,14 @@ export function FileUploadForm({ onUploaded, uploadEnabled }: FileUploadFormProp
     }
   }
 
+  // A heads-up, not a block: the file still uploads and is stored, it just probably will not
+  // become a note. Byte size against a character limit, so it stays a "likely".
+  const likelyTooLargeForPipeline =
+    selectedFile !== null &&
+    maxSourceChars > 0 &&
+    TEXT_FILE.test(selectedFile.name) &&
+    selectedFile.size > maxSourceChars
+
   const isUploading = state.status === 'uploading'
   const isBlocked = isUploading || !uploadEnabled
   const progress = state.status === 'uploading' ? state.progress : null
@@ -77,6 +89,13 @@ export function FileUploadForm({ onUploaded, uploadEnabled }: FileUploadFormProp
           {isUploading ? uploadLabel : 'Upload'}
         </button>
       </form>
+
+      {likelyTooLargeForPipeline && !isUploading && (
+        <p className="upload-hint" role="status">
+          This text file is large — it will upload, but the pipeline will likely skip it
+          instead of making a note. Consider splitting it.
+        </p>
+      )}
 
       {isUploading && (
         // No `value` while the fraction is unknown: that is what puts a native <progress>

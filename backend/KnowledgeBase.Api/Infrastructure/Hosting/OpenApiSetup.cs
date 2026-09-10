@@ -1,7 +1,7 @@
 using System.Reflection;
 using Microsoft.OpenApi.Models;
 
-namespace KnowledgeBase.Api.Hosting;
+namespace KnowledgeBase.Api.Infrastructure.Hosting;
 
 public static class OpenApiSetup
 {

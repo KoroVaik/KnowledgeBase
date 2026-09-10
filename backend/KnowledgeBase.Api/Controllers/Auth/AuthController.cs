@@ -2,7 +2,7 @@ using System.Security.Claims;
 using KnowledgeBase.Api.Controllers.Auth.Configuration;
 using KnowledgeBase.Api.Controllers.Auth.Contracts;
 using KnowledgeBase.Api.Controllers.Auth.Services;
-using KnowledgeBase.Api.Features;
+using KnowledgeBase.Api.Infrastructure.Features;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.Google;

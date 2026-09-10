@@ -29,6 +29,9 @@ function App() {
     uploadEnabled: false,
     downloadEnabled: false,
     googleSignInEnabled: false,
+    // 0 until the real limit arrives: the "possibly too large" hint stays off rather than
+    // firing against a wrong threshold.
+    maxSourceChars: 0,
   })
 
   const connection = useConnectionStatus()
@@ -158,8 +161,13 @@ function App() {
           <FileUploadForm
             onUploaded={() => setUploadCount((count) => count + 1)}
             uploadEnabled={features.uploadEnabled}
+            maxSourceChars={features.maxSourceChars}
           />
-          <AssetList reloadToken={uploadCount} downloadEnabled={features.downloadEnabled} />
+          <AssetList
+            reloadToken={uploadCount}
+            downloadEnabled={features.downloadEnabled}
+            maxSourceChars={features.maxSourceChars}
+          />
           <NotesList />
         </>
       )}

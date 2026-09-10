@@ -16,6 +16,15 @@ export interface AssetSummary {
   originalFileName: string
   sizeBytes: number
   uploadedAtUtc: string
+  /**
+   * The pipeline job's state: 'Pending' | 'Running' | 'Done' | 'Failed' | 'Skipped', or null
+   * when the file is not a type the pipeline picks up.
+   */
+  processingStatus: string | null
+  /** The job's error text, for 'Failed' and 'Skipped'. Null otherwise. */
+  processingError: string | null
+  /** The note produced from this file, once it exists. */
+  noteId: string | null
 }
 
 /** Mirrors AssetLinkResponse in backend/Controllers/Assets. */

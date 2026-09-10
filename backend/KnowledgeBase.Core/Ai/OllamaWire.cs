@@ -40,6 +40,12 @@ internal sealed record OllamaChatResponse
     // The assistant turn. Its Content is itself a JSON string matching the requested schema.
     [JsonPropertyName("message")]
     public OllamaMessage? Message { get; init; }
+
+    // Why generation stopped. "stop" is a clean finish; "length" means it ran into the
+    // context or token limit and the content is cut off - for our schema-constrained output
+    // that is an unterminated JSON string, so we catch it before trying to parse it.
+    [JsonPropertyName("done_reason")]
+    public string? DoneReason { get; init; }
 }
 
 internal sealed record OllamaTagsResponse

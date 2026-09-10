@@ -5,6 +5,8 @@ export interface FeatureFlags {
   uploadEnabled: boolean
   downloadEnabled: boolean
   googleSignInEnabled: boolean
+  /** The pipeline's text-size limit in characters: a warning threshold, not an upload cap. */
+  maxSourceChars: number
 }
 
 export async function fetchFeatures(): Promise<FeatureFlags> {

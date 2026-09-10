@@ -1,4 +1,4 @@
-namespace KnowledgeBase.Api.Hosting;
+namespace KnowledgeBase.Api.Infrastructure.Hosting;
 
 public static class MiddlewarePipeline
 {
