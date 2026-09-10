@@ -33,12 +33,16 @@ public sealed class NotesController(KnowledgeBaseDbContext database) : Controlle
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> List(CancellationToken cancellationToken)
     {
+        // SourceFileName survives asset deletion (SourceAssetId does not) so the client can
+        // flag a note whose source file is gone: SourceAssetId == null && SourceFileName != null.
         var notes = await _database.Notes
             .OrderByDescending(note => note.UpdatedAtUtc)
             .Select(note => new NoteSummaryResponse(
                 note.Id,
                 note.Title,
                 note.Category,
+                note.SourceAssetId,
+                note.SourceFileName,
                 note.CreatedAtUtc,
                 note.UpdatedAtUtc))
             .ToListAsync(cancellationToken);
@@ -68,6 +72,7 @@ public sealed class NotesController(KnowledgeBaseDbContext database) : Controlle
                 note.Category,
                 note.Body,
                 note.SourceAssetId,
+                note.SourceFileName,
                 note.CreatedAtUtc,
                 note.UpdatedAtUtc))
             .FirstOrDefaultAsync(cancellationToken);

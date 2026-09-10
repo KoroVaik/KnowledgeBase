@@ -107,6 +107,11 @@ export function NotesList() {
                   <span className="note-meta">
                     {note.category} · {new Date(note.updatedAtUtc).toLocaleString()}
                   </span>
+                  {note.sourceAssetId === null && note.sourceFileName !== null && (
+                    <span className="note-removed-source">
+                      Related file “{note.sourceFileName}” was removed
+                    </span>
+                  )}
                 </button>
 
                 {expanded && body?.status === 'loading' && <p className="note-loading">Loading…</p>}

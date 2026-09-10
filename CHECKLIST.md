@@ -754,6 +754,25 @@ Postgres. Тіло нотатки — колонка `text`, не `.md`-файл
       зверху за `UpdatedAtUtc`), `GET /api/notes/{id}` (з `Body`, 404 якщо нема),
       `[Authorize]`, Swagger-доки. Перевірено curl: список → `[]` `200`,
       `{id}` неіснуючий → `404`
+- [ ] Нотатка зі зниклим джерелом позначається, а не ховається. Нова колонка
+      `Note.SourceFileName` (міграція `AddNoteSourceFileName`) — воркер пише в неї
+      `asset.OriginalFileName` при створенні нотатки. `SourceAssetId` лишається FK з
+      `OnDelete(SetNull)`: після видалення файлу він занулюється, а `SourceFileName`
+      переживає. `GET /api/notes` і `{id}` віддають обидва поля (без фільтра); фронт
+      малює бейдж «Related file <name> was removed», коли
+      `sourceAssetId == null && sourceFileName != null`. Питання «нотатка живе далі чи
+      належить файлу» (див. вище) свідомо ще не вирішене — це проміжний, оборотний крок.
+      Старі нотатки (до міграції) матимуть `SourceFileName == null` → бейдж без імені.
+      **Не перевірено** — прогін: `confirm` → нотатка з `SourceFileName` → `DELETE`
+      ассета → нотатка лишилась, `sourceAssetId` `null`, `sourceFileName` на місці
+- [ ] Бейдж «джерело видалене» у `NotesList.tsx`: `NoteSummary` тепер несе
+      `sourceAssetId`/`sourceFileName`, рядок нотатки показує «Related file "<name>" was
+      removed», коли `sourceAssetId === null && sourceFileName !== null`. Клас
+      `.note-removed-source` (той самий бурштин `#b45309`, що `.asset-status-warn`).
+      `npm run build` + `npm run lint` — зелені. **У браузері не перевірено**
+- [ ] Видалення файлу з нотаткою не шле SSE `notes`/`deleted` — відкритий список нотаток
+      на фронті бачить зміну лише після F5. Додати `_notifier.Publish` у
+      `AssetsController.Delete`, коли в ассета була нотатка
 - [ ] Блок нотаток унизу сторінки на фронті — тимчасовий перегляд до окремої сторінки.
       Реалізовано: `api/notes.ts` (`fetchNotes`, `fetchNote`, інтерфейси-дзеркала
       `NoteSummaryResponse`/`NoteResponse`), `components/NotesList.tsx` за зразком

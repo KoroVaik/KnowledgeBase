@@ -5,6 +5,10 @@ export interface NoteSummary {
   id: string
   title: string
   category: string
+  // sourceAssetId is nulled when the source file is deleted; sourceFileName survives it, so
+  // sourceAssetId === null && sourceFileName !== null means "the file this came from is gone".
+  sourceAssetId: string | null
+  sourceFileName: string | null
   createdAtUtc: string
   updatedAtUtc: string
 }
@@ -12,7 +16,6 @@ export interface NoteSummary {
 /** Mirrors NoteResponse in backend/Controllers/Notes: the summary plus the Markdown body. */
 export interface Note extends NoteSummary {
   body: string
-  sourceAssetId: string | null
 }
 
 /** Every note, newest first. No body - the front polls this on load. */

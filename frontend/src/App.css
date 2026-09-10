@@ -327,6 +327,11 @@
   margin: 0 0 12px;
 }
 
+.note-removed-source {
+  font-size: 13px;
+  color: #b45309;
+}
+
 /* Rendered Markdown - keep the block spacing sane inside the row. */
 .note-body {
   margin: 4px 0 16px;

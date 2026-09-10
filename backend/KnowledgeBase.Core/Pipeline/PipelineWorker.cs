@@ -271,6 +271,7 @@ public sealed class PipelineWorker(
             Category = result.Category,
             Body = AppendRelated(result.MarkdownBody, links),
             SourceAssetId = asset.Id,
+            SourceFileName = asset.OriginalFileName,
             CreatedAtUtc = now,
             UpdatedAtUtc = now,
         };

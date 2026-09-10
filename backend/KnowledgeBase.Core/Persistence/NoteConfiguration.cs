@@ -13,6 +13,7 @@ internal sealed class NoteConfiguration : IEntityTypeConfiguration<Note>
         builder.Property(note => note.Title).HasMaxLength(200);
         builder.Property(note => note.Category).HasMaxLength(100);
         builder.Property(note => note.SourceAssetId).HasMaxLength(32);
+        builder.Property(note => note.SourceFileName).HasMaxLength(255);
 
         builder.HasIndex(note => note.Category);
 
