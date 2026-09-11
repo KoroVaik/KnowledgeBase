@@ -8,14 +8,14 @@ namespace KnowledgeBase.Core.Pipeline;
 // says, so its lists are filtered here, not asked for more firmly (see docs/ai-pipeline.md).
 internal static class NoteWriter
 {
-    // Adds the note, its filtered tags and links, and fixes links that named it. The caller
-    // has already set the note's kind-specific fields, its unique Title and its raw Body, and
+    // Adds the note and its filtered links, and fixes links that named it. Tags are the
+    // handler's call (AttachProposedTags, or a synthesis's own group tag). The caller has
+    // already set the note's kind-specific fields, its unique Title and its raw Body, and
     // (for a replacement) binned the previous note in an earlier SaveChanges.
     public static async Task CommitAsync(
         KnowledgeBaseDbContext database,
         Note note,
         NoteDraft draft,
-        List<Tag> existingTags,
         IReadOnlyList<string> priorTitles,
         Note? previous,
         CancellationToken cancellationToken)
@@ -24,8 +24,6 @@ internal static class NoteWriter
 
         note.Body = AppendRelated(note.Body, links);
         database.Notes.Add(note);
-
-        AttachTags(database, note, draft.Tags ?? [], existingTags);
 
         var targetIds = await database.Notes
             .Where(existing => links.Contains(existing.Title))
@@ -106,11 +104,12 @@ internal static class NoteWriter
 
     // Keep order, drop blanks/dupes, cap at 5, reuse an existing tag on an exact name match
     // (case-insensitive), allow at most one freshly invented tag per run. A genuinely new tag
-    // lands Confirmed = false - shown everywhere, flagged for review.
-    private static void AttachTags(
+    // lands Confirmed = false - shown everywhere, flagged for review - with the model's
+    // closest confirmed tag as its merge suggestion.
+    public static void AttachProposedTags(
         KnowledgeBaseDbContext database,
         Note note,
-        IReadOnlyList<string> proposed,
+        NoteDraft draft,
         List<Tag> existingTags)
     {
         var byName = existingTags.ToDictionary(tag => tag.Name, StringComparer.OrdinalIgnoreCase);
@@ -118,7 +117,10 @@ internal static class NoteWriter
         var ordinal = 0;
         var invented = false;
 
-        foreach (var candidate in proposed)
+        var closest = byName.GetValueOrDefault(draft.ClosestKnownTag?.Trim() ?? "");
+        var suggestion = closest is { Confirmed: true } ? closest.Id : null;
+
+        foreach (var candidate in draft.Tags ?? [])
         {
             var name = candidate.Trim();
 
@@ -134,7 +136,13 @@ internal static class NoteWriter
                     continue;
                 }
 
-                tag = new Tag { Id = Guid.NewGuid().ToString("N"), Name = name, Confirmed = false };
+                tag = new Tag
+                {
+                    Id = Guid.NewGuid().ToString("N"),
+                    Name = name,
+                    Confirmed = false,
+                    SuggestedMergeIntoId = suggestion,
+                };
                 database.Tags.Add(tag);
                 byName[name] = tag;
                 invented = true;

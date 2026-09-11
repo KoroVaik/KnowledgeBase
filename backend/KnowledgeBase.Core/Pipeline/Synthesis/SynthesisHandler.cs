@@ -16,9 +16,18 @@ public sealed class SynthesisHandler(
 
     public JobKind Kind => JobKind.BuildSynthesis;
 
-    public async Task<Note> HandleAsync(ProcessingJob job, CancellationToken cancellationToken)
+    public async Task<Note?> HandleAsync(ProcessingJob job, CancellationToken cancellationToken)
     {
         var payload = SynthesisJobPayload.Deserialize(job.Payload);
+
+        // Merged away or deleted while the job waited - there is nothing left to synthesise for.
+        Tag? groupTag = null;
+
+        if (payload.TargetKind == NoteKind.Synthesis)
+        {
+            groupTag = await database.Tags.FirstOrDefaultAsync(tag => tag.Name == payload.GroupLabel, cancellationToken)
+                ?? throw new SkippableContentException($"The tag \"{payload.GroupLabel}\" no longer exists.");
+        }
 
         var inputs = await database.Notes
             .Where(note => payload.InputNoteIds.Contains(note.Id))
@@ -45,7 +54,6 @@ public sealed class SynthesisHandler(
             cancellationToken);
 
         var allTitles = await database.Notes.Select(note => note.Title).ToListAsync(cancellationToken);
-        var existingTags = await database.Tags.ToListAsync(cancellationToken);
 
         if (previous is not null)
         {
@@ -63,12 +71,11 @@ public sealed class SynthesisHandler(
         var task = SynthesisPrompt.TaskFor(
             topic,
             inputs.Select(note => new SynthesisPrompt.Input(note.Title, NoteWriter.WithoutRelated(note.Body))).ToList(),
-            linkableTitles,
-            existingTags.Select(tag => tag.Name).ToList());
+            linkableTitles);
 
         var draft = await analyzer.RunAsync<NoteDraft>(task, cancellationToken);
 
-        if (string.IsNullOrWhiteSpace(draft.Title) || draft.Tags is null || draft.Tags.All(string.IsNullOrWhiteSpace))
+        if (string.IsNullOrWhiteSpace(draft.Title))
         {
             throw new InvalidOperationException($"Ollama returned an unusable synthesis: {draft}");
         }
@@ -92,7 +99,12 @@ public sealed class SynthesisHandler(
             UpdatedAtUtc = now,
         };
 
-        await NoteWriter.CommitAsync(database, note, draft, existingTags, linkableTitles, previous, cancellationToken);
+        await NoteWriter.CommitAsync(database, note, draft, linkableTitles, previous, cancellationToken);
+
+        if (groupTag is not null)
+        {
+            database.NoteTags.Add(new NoteTag { NoteId = note.Id, TagId = groupTag.Id, Ordinal = 0 });
+        }
 
         foreach (var input in inputs)
         {

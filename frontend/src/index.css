@@ -4,6 +4,7 @@
   --text-h: #08060d;
   --bg: #fff;
   --surface: #faf9f6;
+  --surface-2: #f2f0ea;
   --surface-hover: #f1efe9;
   --border: #e5e4e7;
   --code-bg: #f4f3ec;
@@ -12,7 +13,9 @@
   --accent-border: rgba(170, 59, 255, 0.5);
   --social-bg: rgba(244, 243, 236, 0.5);
   --ok: #15803d;
+  --ok-bg: rgba(21, 128, 61, 0.08);
   --warn: #b45309;
+  --warn-bg: rgba(180, 83, 9, 0.08);
   --danger: #dc2626;
   --danger-bg: rgba(220, 38, 38, 0.08);
   --danger-border: rgba(220, 38, 38, 0.35);
@@ -44,8 +47,9 @@
     --text-muted: #6f7681;
     --text-h: #f3f4f6;
     --bg: #16171d;
-    --surface: #1e1f27;
-    --surface-hover: #262832;
+    --surface: #1e1f28;
+    --surface-2: #272935;
+    --surface-hover: #2c2e3a;
     --border: #34363f;
     --code-bg: #1f2028;
     --accent: #c084fc;
@@ -53,7 +57,9 @@
     --accent-border: rgba(192, 132, 252, 0.5);
     --social-bg: rgba(47, 48, 58, 0.5);
     --ok: #4ade80;
+    --ok-bg: rgba(74, 222, 128, 0.1);
     --warn: #fbbf24;
+    --warn-bg: rgba(251, 191, 36, 0.1);
     --danger: #f87171;
     --danger-bg: rgba(248, 113, 113, 0.12);
     --danger-border: rgba(248, 113, 113, 0.32);
@@ -95,16 +101,17 @@ h2 {
   color: var(--text-h);
 }
 
+/* App title, not a landing-page hero: the page is a working list, and a 56px heading ate
+   the first screen before a single row showed. */
 h1 {
-  font-size: 56px;
+  font-size: 28px;
   /* A percentage line-height on body inherits as its computed px value, not as a ratio,
-     so without this the 36px heading wraps onto 23px lines and overlaps itself. */
+     so without this the heading wraps onto 23px lines and overlaps itself. */
   line-height: 110%;
-  letter-spacing: -1.68px;
-  margin: 32px 0;
+  letter-spacing: -0.4px;
+  margin: 0;
   @media (max-width: 1024px) {
-    font-size: 36px;
-    margin: 20px 0;
+    font-size: 24px;
   }
 }
 h2 {

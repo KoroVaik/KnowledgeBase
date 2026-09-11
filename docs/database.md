@@ -29,13 +29,44 @@ Deploy order: **API first** (applies the migration to Neon), then restart the wo
 | `Notes` (`Note`) | `Id`, `Title`, `Body` (`text`), `Kind`, `SourceAssetId?` FK, `SourceFileName`, `SynthesisGroup?`, times, `DeletedAtUtc`. Classification is via `NoteTag`, not a column. Unique `(Kind, SynthesisGroup)` among the living — one aggregate note per group. |
 | `NoteLinks` (`NoteLink`) | `Id`, `SourceNoteId` FK, `TargetTitle` (raw), `TargetNoteId?` (nullable for a dangling `[[...]]`). Unique `(SourceNoteId, TargetTitle)`. |
 | `SynthesisSources` (`SynthesisSource`) | `SynthesisNoteId` + `InputNoteId` composite PK, both FK to `Notes` CASCADE. Provenance: which notes a synthesis absorbed. Index on `InputNoteId` for the staleness query. |
-| `Tags` (`Tag`) | `Id`, `Name` (unique), `Confirmed`. A tag the user has vouched for is `Confirmed`; a pipeline-invented one is not (shown anyway, flagged for review). |
+| `Tags` (`Tag`) | `Id`, `Name` (unique), `Confirmed`, `SuggestedMergeIntoId?` (self-FK). A tag the user has vouched for is `Confirmed`; a pipeline-invented one is not (shown anyway, flagged for review) and carries the confirmed tag the model judged closest. |
 | `NoteTags` (`NoteTag`) | `NoteId` + `TagId` composite PK (the pair is unique on its own), `Ordinal`. `Ordinal 0` = primary tag **by convention**, no `IsPrimary` flag. Index on `TagId` for facet queries. No query filter — a binned note keeps its tags on screen. |
 | `DataProtectionKeys` | Auth-cookie encryption keys. Migration `AddDataProtectionKeys`. See [`backend.md`](backend.md). |
 
 FK behaviour: `ProcessingJobs → Assets` CASCADE; `NoteLinks → Notes` CASCADE (source) +
 SET NULL (target); `Notes → Assets` (`SourceAssetId`) SET NULL; `NoteTags → Notes` and
-`NoteTags → Tags` both CASCADE.
+`NoteTags → Tags` both CASCADE; `Tags → Tags` (`SuggestedMergeIntoId`) SET NULL.
+
+### Tag review
+
+- **Similarity is the model's call, never string distance.** When the pipeline invents a
+  tag it also names the closest *confirmed* tag by meaning (`closestKnownTag`), stored as
+  `SuggestedMergeIntoId`. Trigram / Levenshtein was rejected: "car" and "automobile" are
+  far apart as strings.
+- `POST /api/tags/{id}/confirm`, `POST /api/tags/{id}/merge { intoId }`,
+  `DELETE /api/tags/{id}`. Routes by id — a name may contain `/`.
+- `GET /api/tags?query=&excludeId=` doubles as the merge-target search: with `query` it
+  keeps only tags matching it (exact → starts-with → contains, then note count, then
+  name) instead of the busiest-first default. Plain text ranking, not the model's call —
+  it ranks a human's typing for a pick list, it does not decide a "correct" merge (that
+  stays `SuggestedMergeIntoId`, below). `excludeId` drops one tag (the one being merged)
+  from the results. See `TagPicker` in [`frontend.md`](frontend.md).
+- `POST /api/tags/suggest-merges` queues a `GroupTags` job (see *Synthesis pipeline* in
+  [`ai-pipeline.md`](ai-pipeline.md)) that re-runs the closest-confirmed-tag call over
+  **every** unconfirmed tag in one pass, not only ones invented in the same run as a
+  source note. Fixes the case that motivated it: tag A is invented and points nowhere
+  (nothing confirmed is close yet); tag B is invented later and would have been A's
+  match, but the per-file pipeline never compares tags to each other, only to the
+  confirmed list at that moment. 409 when there is nothing to group (no confirmed tag, or
+  no unconfirmed one) or a run is already queued.
+- **Merge A → B**: every `NoteTag` of A moves to B (a note carrying both keeps the lower
+  `Ordinal`), tags suggesting A now suggest B, B becomes `Confirmed` (merging into it
+  vouches for it), A is deleted.
+- **Merge or delete bins A's synthesis note.** It is tied to the tag by name only
+  (`SynthesisGroup`), so it would describe a group that no longer exists. A queued
+  synthesis for a vanished tag is `Skipped`.
+- **A synthesis carries exactly its group tag; the index carries none.** The model is not
+  asked for tags there — it used to invent some.
 
 ### `NoteKind` — one table, three lifecycles
 
@@ -94,11 +125,19 @@ UTC as local time. Fixed with a value converter in the model; **not needed in Po
 
 ## Open
 
-- [ ] **Tag reconciliation — string-distance merge, no model.** For `Confirmed = false`
-      tags, show the nearest existing tags by trigram / Levenshtein (the pipeline already
-      ranks candidates) and merge on one keypress: repoint every `NoteTag`, drop the
-      losing `Tag`. Also a manual "merge tag A into B" for confirmed tags. Later, optional:
-      an AI pass that reconciles by meaning, not spelling.
+- [ ] **Tag review (confirm / merge / delete).** Done in code (design in *Tag review*
+      above, migration `AddTagMergeSuggestion`); build + lint pass. **Run pending**:
+      migration on local DB, the three endpoints, a fresh upload producing a suggestion.
+- [ ] **Tag search + batch grouping.** `GET /api/tags?query=` ranking, `TagPicker`, and
+      the `GroupTags` job behind `POST /api/tags/suggest-merges` are done in code (Core
+      builds clean; Api/Worker not rebuilt this session — a dev instance of each was
+      running and locking the output). **Run pending**: the migration-free `GroupTags`
+      job end to end (needs ≥1 confirmed + ≥1 unconfirmed tag), the search endpoint's
+      ranking with a real 100+-tag vocabulary, `TagPicker` in the browser.
+- [ ] **Stale synthesis / index badge.** An L2 goes stale when its tag's note set changes
+      (new upload, merge into it, delete); L3 when any L2 changes. `SynthesisSources`
+      already records the inputs — compare against the tag's current notes and show
+      "outdated — re-synthesise".
 - [ ] **Point re-tag endpoint.** Model gets the note body + current tag list, returns tags
       only — body and links untouched. Cheap fix for an untagged note or a bad set, without
       `process-again`.

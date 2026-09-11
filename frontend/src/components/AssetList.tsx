@@ -150,7 +150,10 @@ export function AssetList({ reloadToken, maxSourceChars }: AssetListProps) {
 
   return (
     <section className="assets">
-      <h2>Files</h2>
+      <h2>
+        Files
+        {state.status === 'ready' && <span className="section-count">{state.assets.length}</span>}
+      </h2>
 
       {state.status === 'loading' && <p>Loading…</p>}
 
@@ -204,7 +207,7 @@ export function AssetList({ reloadToken, maxSourceChars }: AssetListProps) {
               const isOpen = expanded === asset.storedFileName
 
               return (
-                <li className="asset" key={asset.storedFileName}>
+                <li className={isOpen ? 'asset asset-open' : 'asset'} key={asset.storedFileName}>
                   <input
                     type="checkbox"
                     className="asset-select"
