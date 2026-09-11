@@ -3,6 +3,7 @@ using System;
 using KnowledgeBase.Core.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace KnowledgeBase.Core.Persistence.Migrations
 {
     [DbContext(typeof(KnowledgeBaseDbContext))]
-    partial class KnowledgeBaseDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260911101611_AddTagMergeSuggestion")]
+    partial class AddTagMergeSuggestion
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -260,23 +263,6 @@ namespace KnowledgeBase.Core.Persistence.Migrations
                     b.ToTable("Tags");
                 });
 
-            modelBuilder.Entity("KnowledgeBase.Core.Persistence.TagParent", b =>
-                {
-                    b.Property<string>("ChildId")
-                        .HasMaxLength(32)
-                        .HasColumnType("character varying(32)");
-
-                    b.Property<string>("ParentId")
-                        .HasMaxLength(32)
-                        .HasColumnType("character varying(32)");
-
-                    b.HasKey("ChildId", "ParentId");
-
-                    b.HasIndex("ParentId");
-
-                    b.ToTable("TagParents");
-                });
-
             modelBuilder.Entity("Microsoft.AspNetCore.DataProtection.EntityFrameworkCore.DataProtectionKey", b =>
                 {
                     b.Property<int>("Id")
@@ -362,21 +348,6 @@ namespace KnowledgeBase.Core.Persistence.Migrations
                         .WithMany()
                         .HasForeignKey("SuggestedMergeIntoId")
                         .OnDelete(DeleteBehavior.SetNull);
-                });
-
-            modelBuilder.Entity("KnowledgeBase.Core.Persistence.TagParent", b =>
-                {
-                    b.HasOne("KnowledgeBase.Core.Persistence.Tag", null)
-                        .WithMany()
-                        .HasForeignKey("ChildId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("KnowledgeBase.Core.Persistence.Tag", null)
-                        .WithMany()
-                        .HasForeignKey("ParentId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
                 });
 #pragma warning restore 612, 618
         }

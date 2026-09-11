@@ -102,11 +102,15 @@ public sealed class PipelineWorker(
             job.CompletedAtUtc = DateTime.UtcNow;
             job.Error = null;
 
-            // One SaveChanges: note, links, tags, dangling-link fixes, job status - all or nothing.
+            // One SaveChanges: note (if any), links, tags, dangling-link fixes, job status - all
+            // or nothing.
             await database.SaveChangesAsync(cancellationToken);
 
-            services.GetRequiredService<IChangeNotifier>()
-                .Publish(new ChangeEvent(ChangeResources.Notes, ChangeActions.Created, note.Id));
+            var changeEvent = note is not null
+                ? new ChangeEvent(ChangeResources.Notes, ChangeActions.Created, note.Id)
+                : new ChangeEvent(ChangeResources.Notes, ChangeActions.Updated);
+
+            services.GetRequiredService<IChangeNotifier>().Publish(changeEvent);
         }
         catch (SkippableContentException error)
         {

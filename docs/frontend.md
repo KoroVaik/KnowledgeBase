@@ -165,6 +165,24 @@ the Delete button off-screen; it was never tabular data). `h1` needs an explicit
 `line-height: 110%` — an inherited percentage becomes a fixed pixel value. Tap targets
 ≥ 44 px.
 
+### Sections are cards, depth carries the hierarchy
+
+`.assets` and `.notes` are cards (`--surface`, border, 12 px radius) whose first `h2` is
+the header strip (`--surface-2`, uppercase label + a `.section-count` pill). The strip and
+every row use `margin-inline: -18px` to bleed back out to the card edge while the card's
+own padding sets the text inset — so a row's hover fill and its separator span the full
+width. **Change the card padding and the bleed margins together** (the mobile block at the
+bottom of `App.css` does exactly that), or rows stop lining up with the strip.
+
+Four depth levels, and nothing relies on colour alone: page `--bg` → card `--surface` →
+open row `--surface-hover` + a 2 px `inset` accent rail → `FilePanel` recessed back onto
+`--bg`. The panel had its own accent `border-left` before the rail existed; two accent
+edges on one row read as a mistake, so the row keeps it and the panel does not.
+
+Before this the sections were a bare `h2` over a hairline list on the page background —
+the whole page read as one continuous wall of rows, and restyling inside the rows changed
+nothing you could see from a step back.
+
 ### Colour tokens — surface vs accent
 
 `--surface` / `--surface-hover` are the raised-panel and hover fills; `--accent-*` is a
@@ -173,6 +191,17 @@ line/text accent only, never a large fill. The file panel is `--surface` + a 2 p
 muddy on the dark ground. Status colours are tokens (`--ok` / `--warn` / `--danger`,
 `--danger-bg` / `--danger-border`) with a **separate dark-theme set** — the light-theme
 `#15803d` / `#b45309` / `#dc2626` were near-illegible on `#16171d`.
+
+### Tag merge search — `TagPicker`
+
+The "merge into" picker in `TagsSection` used to be a plain `<select>` of every tag,
+ordered by note count — unusable once the vocabulary passes a hundred entries, and it
+could not surface a match that was not yet confirmed (see *Tag review* in
+[`database.md`](database.md)). `TagPicker.tsx` replaces it: a text input, debounced
+(200 ms), calling `GET /api/tags?query=&excludeId=` — ranking happens on the backend, the
+component just renders what comes back (top 8). Built with no dependency on the merge
+flow specifically (`onPick(tag)`, `excludeId`), so a future manual "add a tag to this
+note" picker can reuse it rather than growing its own search.
 
 ### Note body is untrusted-shape Markdown
 
@@ -255,7 +284,13 @@ marketing `h1` and fills the row.
       in code** in `NotesList` `.note-meta` (was `{category}`) and above the note body in
       `FilePanel`; build + lint pass, **browser run pending**. Faceted / "Untagged" filter
       and the review UI are the items below.
-- [ ] Unconfirmed-tag review UI: nearest existing tags + one-key merge.
+- [ ] Tag review UI in `TagsSection`: every tag listed, "To review" block for unconfirmed
+      ones — "Merge into «suggested»" (one click), Confirm, Synthesise (≥2 notes), a
+      searchable "Merge into…" (`TagPicker`, asks first), Delete (asks first for a
+      confirmed tag). "Suggest merges" head button queues the `GroupTags` job (see
+      *Synthesis pipeline* in [`ai-pipeline.md`](ai-pipeline.md)). Build + lint pass,
+      **browser run pending** (incl. phone width — the row wraps, and the picker's
+      dropdown position).
 
 ### Larger features
 

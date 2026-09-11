@@ -20,6 +20,8 @@ public sealed class KnowledgeBaseDbContext(DbContextOptions<KnowledgeBaseDbConte
 
     public DbSet<NoteTag> NoteTags => Set<NoteTag>();
 
+    public DbSet<TagParent> TagParents => Set<TagParent>();
+
     public DbSet<DataProtectionKey> DataProtectionKeys => Set<DataProtectionKey>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder) =>

@@ -4,22 +4,29 @@
 }
 
 .subtitle {
-  margin-bottom: 32px;
+  margin-bottom: 20px;
+  font-size: 14px;
+  color: var(--text-muted);
 }
 
 .drop-zone {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
   width: 100%;
-  padding: 36px 20px;
+  padding: 24px 20px;
   font: inherit;
   color: var(--text);
   cursor: pointer;
-  background: transparent;
-  border: 2px dashed var(--border);
-  border-radius: 8px;
+  background: var(--surface);
+  border: 1px dashed var(--border);
+  border-radius: 12px;
+}
+
+.drop-zone:hover {
+  background: var(--surface-hover);
+  border-color: var(--accent-border);
 }
 
 .drop-zone-active {
@@ -63,11 +70,15 @@
   background: var(--text-h);
 }
 
+/* A real app bar: the title sits on a rule instead of floating over the first list. */
 .app-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 16px;
+  padding: 20px 0;
+  margin-bottom: 20px;
+  border-bottom: 1px solid var(--border);
 }
 
 .sign-out {
@@ -153,13 +164,45 @@
   color: var(--danger);
 }
 
-.assets {
-  margin-top: 40px;
+/* Both lists are cards with a header strip. They used to be a bare h2 over a hairline
+   list, which read as one endless wall of rows running down the page. */
+.assets,
+.notes {
+  margin-top: 24px;
+  padding: 0 18px 10px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
 }
 
-.assets h2 {
-  margin-bottom: 16px;
-  font-size: 20px;
+/* The negative inline margin bleeds the strip (and the rows below) out to the card edge
+   while the card's own padding still sets the text inset. */
+.assets > h2,
+.notes > h2 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 -18px 2px;
+  padding: 13px 18px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--border);
+  border-radius: 11px 11px 0 0;
+}
+
+.section-count {
+  padding: 1px 8px;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 999px;
 }
 
 .assets-list {
@@ -172,7 +215,8 @@
   display: flex;
   align-items: center;
   gap: 16px;
-  padding: 8px 0;
+  padding: 8px 18px;
+  margin: 0 -18px;
   border-bottom: 1px solid var(--border);
 }
 
@@ -184,14 +228,30 @@
 }
 
 /* Checkbox down the left; the second column holds the row head, then the status badge and
-   the detail panel stacked under it when the row is open. */
+   the detail panel stacked under it when the row is open. Rows bleed to the card edge so
+   the hover fill and the separator span its full width. */
 .asset {
   display: grid;
   grid-template-columns: auto 1fr;
   align-items: start;
   gap: 4px 12px;
-  padding: 12px 0;
+  padding: 11px 18px;
+  margin: 0 -18px;
   border-bottom: 1px solid var(--border);
+}
+
+.asset:last-child {
+  border-bottom: 0;
+}
+
+.asset:hover {
+  background: var(--surface-hover);
+}
+
+/* The open row carries the accent rail, so the panel below it does not need one too. */
+.asset-open {
+  background: var(--surface-hover);
+  box-shadow: inset 2px 0 0 var(--accent);
 }
 
 .asset-select {
@@ -252,28 +312,50 @@
   color: var(--danger);
 }
 
-/* Second column, under the head. */
+/* Second column, under the head. A badge rather than a line of coloured text: "Note ready"
+   repeats on nearly every row, and as bare green text it shouted on all of them. */
 .asset-status {
   grid-column: 2;
-  font-size: 13px;
-  line-height: 150%;
+  justify-self: start;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 2px;
+  padding: 2px 10px;
+  font-size: 12px;
+  line-height: 160%;
+  border: 1px solid transparent;
+  border-radius: 10px;
+}
+
+.asset-status::before {
+  content: '';
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
 }
 
 .asset-status-info {
-  color: var(--text);
-  opacity: 0.7;
+  color: var(--text-muted);
+  background: var(--surface-2);
+  border-color: var(--border);
 }
 
 .asset-status-ok {
   color: var(--ok);
+  background: var(--ok-bg);
 }
 
 .asset-status-warn {
   color: var(--warn);
+  background: var(--warn-bg);
 }
 
 .asset-status-error {
   color: var(--danger);
+  background: var(--danger-bg);
 }
 
 .upload-actions {
@@ -470,15 +552,6 @@
   border: 1px solid var(--accent-border);
 }
 
-.notes {
-  margin-top: 40px;
-}
-
-.notes h2 {
-  margin-bottom: 16px;
-  font-size: 20px;
-}
-
 .notes-list {
   list-style: none;
   margin: 0;
@@ -486,16 +559,27 @@
 }
 
 .note {
+  padding: 4px 18px;
+  margin: 0 -18px;
   border-bottom: 1px solid var(--border);
 }
 
-/* The whole row is the toggle: title on its own line, category and date under it. */
+.note:last-child {
+  border-bottom: 0;
+}
+
+.note:hover {
+  background: var(--surface-hover);
+}
+
+/* The whole row is the toggle: title on its own line, tags and date under it. */
 .note-head {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  align-items: flex-start;
+  gap: 4px;
   width: 100%;
-  padding: 12px 0;
+  padding: 8px 0;
   border: 0;
   background: none;
   text-align: left;
@@ -505,6 +589,7 @@
 
 .note-title {
   font-size: 15px;
+  font-weight: 500;
   color: var(--text-h);
 }
 
@@ -514,6 +599,7 @@
   align-items: center;
   gap: 6px;
   font-size: 13px;
+  color: var(--text-muted);
 }
 
 .tag-chips {
@@ -549,8 +635,11 @@
 }
 
 .note-removed-source {
-  font-size: 13px;
+  padding: 2px 10px;
+  font-size: 12px;
+  border-radius: 10px;
   color: var(--warn);
+  background: var(--warn-bg);
 }
 
 /* Rendered Markdown - keep the block spacing sane inside the row. */
@@ -616,15 +705,14 @@
   color: var(--danger);
 }
 
-/* The section that opens under a file row: a raised surface with an accent edge, not a
-   translucent accent wash (which turned muddy on the dark background). */
+/* The section that opens under a file row. Recessed onto --bg inside the --surface card:
+   the open row already carries the accent rail, so depth is the only cue needed here. */
 .file-panel {
-  margin: 8px 0 4px;
+  margin: 10px 0 4px;
   padding: 16px;
   border: 1px solid var(--border);
-  border-left: 2px solid var(--accent-border);
-  border-radius: 8px;
-  background: var(--surface);
+  border-radius: 10px;
+  background: var(--bg);
 }
 
 .file-panel-actions {
@@ -717,7 +805,7 @@
   display: flex;
   flex-shrink: 0;
   gap: 8px;
-  padding: 12px 0;
+  padding: 8px 0;
 }
 
 .note-actions button {
@@ -737,35 +825,56 @@
 }
 
 .note-waiting {
-  font-size: 13px;
+  padding: 2px 10px;
+  font-size: 12px;
+  border-radius: 10px;
   color: var(--accent);
+  background: var(--accent-bg);
 }
 
 .note-binned .note-title {
   color: var(--text);
 }
 
-/* Sits between the synthesis notes and the bin: pick a tag, merge its notes. */
+/* Sits between the synthesis notes and the bin: pick a tag, merge its notes. Recessed
+   inside the Notes card, the same depth cue as the file panel. */
 .tags-section {
-  margin-top: 28px;
-  padding-top: 20px;
-  border-top: 1px solid var(--border);
+  margin-top: 14px;
+  padding: 14px 16px 4px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg);
 }
 
 .tags-head {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
   gap: 12px;
+  margin-bottom: 10px;
+}
+
+.tags-head-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.tags-head h3 {
+  margin: 0;
 }
 
 .tags-section h3 {
-  margin: 0 0 12px;
-  font-size: 16px;
+  margin: 0 0 10px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
 }
 
 .tags-head button,
-.tags-row button {
+.tags-row button,
+.tag-picker input {
   font: inherit;
   font-size: 13px;
   padding: 6px 10px;
@@ -776,6 +885,12 @@
   border: 1px solid var(--border);
 }
 
+.tag-picker input {
+  max-width: 11em;
+  background: var(--bg);
+  cursor: text;
+}
+
 .tags-head button:hover:not(:disabled),
 .tags-row button:hover:not(:disabled) {
   color: var(--text-h);
@@ -783,9 +898,105 @@
 }
 
 .tags-head button:disabled,
-.tags-row button:disabled {
+.tags-row button:disabled,
+.tag-picker input:disabled {
   cursor: not-allowed;
   opacity: 0.5;
+}
+
+.tag-picker {
+  position: relative;
+}
+
+.tag-picker-panel {
+  position: absolute;
+  z-index: 1;
+  top: calc(100% + 4px);
+  left: 0;
+  min-width: 14em;
+  max-width: 20em;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  box-shadow: 0 4px 12px rgb(0 0 0 / 0.2);
+}
+
+.tag-picker-heading {
+  margin: 6px 8px 2px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.tag-picker-heading:first-child {
+  margin-top: 2px;
+}
+
+.tag-picker-results {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tag-picker-results button {
+  display: block;
+  width: 100%;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: 4px;
+  text-align: left;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  color: var(--text);
+  background: transparent;
+}
+
+/* The pipeline's semantic pick, one accent tone lighter than the plain-text spelling
+   matches below it - the two need to read apart at a glance, not just by heading. */
+.tag-picker-suggested button {
+  color: var(--accent);
+}
+
+.tag-picker-results button:hover {
+  color: var(--text-h);
+  background: var(--surface-hover);
+}
+
+.tags-row .tag-picker-add {
+  display: block;
+  width: 100%;
+  margin-top: 2px;
+  padding: 6px 8px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  text-align: left;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  color: var(--ok);
+  background: var(--ok-bg);
+}
+
+.tags-row .tag-picker-add:hover:not(:disabled) {
+  border-color: var(--ok);
+  background: var(--ok-bg);
+}
+
+.tag-picker-error {
+  margin: 6px 4px 2px;
+  font-size: 12px;
+  color: var(--danger);
+}
+
+.tags-subhead {
+  margin: 12px 0 2px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
 }
 
 .tags-list {
@@ -796,16 +1007,66 @@
 
 .tags-row {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 12px;
+  gap: 8px 12px;
   padding: 8px 0;
   border-bottom: 1px solid var(--border);
+}
+
+.tags-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.tags-row:last-child {
+  border-bottom: 0;
 }
 
 .tags-count {
   flex: 1;
   font-size: 13px;
   color: var(--text-muted);
+}
+
+/* flex-basis: 100% forces this onto its own line under the rest of the row, in the same
+   wrapping flex container - no extra markup needed for the line break. */
+.tags-parents {
+  display: flex;
+  flex-basis: 100%;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.tags-parents-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.tags-parent-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.tags-parent-chip button {
+  padding: 0;
+  border: 0;
+  line-height: 1;
+  font-size: 14px;
+  color: inherit;
+  background: transparent;
+  cursor: pointer;
+}
+
+.tags-parent-chip button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
 }
 
 .tags-empty {
@@ -820,13 +1081,18 @@
 
 .notes-trash-toggle {
   font: inherit;
-  font-size: 14px;
-  padding: 0;
-  border: 0;
-  background: none;
+  font-size: 13px;
+  padding: 5px 14px;
+  border-radius: 999px;
   cursor: pointer;
   color: var(--text);
-  text-decoration: underline;
+  background: transparent;
+  border: 1px solid var(--border);
+}
+
+.notes-trash-toggle:hover {
+  color: var(--text-h);
+  background: var(--surface-hover);
 }
 
 /* A [[link]] in a rendered body. Three states, and only the first one is clickable. */
@@ -951,5 +1217,29 @@ button.wiki-link {
 
   .note-actions {
     padding: 0 0 12px;
+  }
+
+  /* Tighter card inset on a phone; the bleed margins have to match it or the rows stop
+     lining up with the header strip. */
+  .app {
+    padding: 0 16px 40px;
+  }
+
+  .assets,
+  .notes {
+    padding: 0 14px 8px;
+  }
+
+  .assets > h2,
+  .notes > h2 {
+    margin: 0 -14px 2px;
+    padding: 12px 14px;
+  }
+
+  .assets-selection,
+  .asset,
+  .note {
+    padding-inline: 14px;
+    margin-inline: -14px;
   }
 }

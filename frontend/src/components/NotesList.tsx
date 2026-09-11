@@ -205,7 +205,10 @@ export function NotesList() {
 
   return (
     <section className="notes">
-      <h2>Notes</h2>
+      <h2>
+        Notes
+        {state.status === 'ready' && <span className="section-count">{state.notes.length}</span>}
+      </h2>
 
       {state.status === 'loading' && <p>Loading…</p>}
 

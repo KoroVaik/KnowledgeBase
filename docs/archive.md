@@ -101,6 +101,13 @@ not just compiled.
   page `h1`); lighter accent tag chips; ghost-button hover; `:focus-visible` ring; short
   `formatDateTime` (no seconds) in the file list and notes list. Build + lint green,
   checked in the browser in both themes (file panel Note + File tabs, status colours).
+- Section layout pass (the colour-only pass above was invisible from a step back): `.assets`
+  / `.notes` became cards with a `--surface-2` header strip and a `.section-count` pill,
+  rows bleed to the card edge with hover and an `.asset-open` accent rail, `FilePanel` and
+  `.tags-section` recessed onto `--bg`, status badges are dot pills instead of bare coloured
+  text, `h1` down from a 56 px hero to a 28 px app bar with a rule, drop zone on `--surface`,
+  `Bin (n)` a pill button. Build + lint green, checked in the browser in both themes (full
+  page, open row with a long note body, Tags panel).
 
 ## Worker & AI pipeline
 
@@ -188,6 +195,12 @@ not just compiled.
   tags / 16 `NoteTag` rows matching the old `Category` counts, zero untagged, and
   `/api/notes`, `/api/notes/{id}`, `/api/notes/trash` all returning `tags[]` (ordered,
   `{ name, confirmed }`).
+- Tag parent hierarchy (DAG): `TagParent` edge table + cycle check (migration
+  `AddTagParents`), `POST`/`DELETE /api/tags/{id}/parents[/{parentId}]`,
+  `TagResponse.ParentIds`, `TagsSection` parent chips reusing `TagPicker`. Verified in the
+  browser by subagent: add, duplicate rejected, cycle rejected, multiple parents at once,
+  remove, delete-with-a-link cascades clean (no FK error); `zz-test-*` cleanup left the
+  real tags untouched.
 
 ## Infra & deploy
 

@@ -1,6 +1,7 @@
 using KnowledgeBase.Core.Pipeline.Extraction;
 using KnowledgeBase.Core.Pipeline.SourceNotes;
 using KnowledgeBase.Core.Pipeline.Synthesis;
+using KnowledgeBase.Core.Pipeline.TagGrouping;
 
 namespace KnowledgeBase.Core.Pipeline;
 
@@ -22,6 +23,7 @@ public static class PipelineRegistration
         // Handlers hold a scoped DbContext, so they and the selector over them are scoped too.
         services.AddScoped<IPipelineHandler, SourceNoteHandler>();
         services.AddScoped<IPipelineHandler, SynthesisHandler>();
+        services.AddScoped<IPipelineHandler, TagGroupingHandler>();
         services.AddScoped<PipelineHandlerSelector>();
 
         services.AddHostedService<PipelineWorker>();

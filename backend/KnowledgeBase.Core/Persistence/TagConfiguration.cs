@@ -14,5 +14,12 @@ internal sealed class TagConfiguration : IEntityTypeConfiguration<Tag>
 
         // One tag per name - the vocabulary, and links/facets resolve by name.
         builder.HasIndex(tag => tag.Name).IsUnique();
+
+        builder.Property(tag => tag.SuggestedMergeIntoId).HasMaxLength(32);
+
+        builder.HasOne<Tag>()
+            .WithMany()
+            .HasForeignKey(tag => tag.SuggestedMergeIntoId)
+            .OnDelete(DeleteBehavior.SetNull);
     }
 }

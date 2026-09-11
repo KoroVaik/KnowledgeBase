@@ -20,7 +20,7 @@ public sealed class SourceNoteHandler(
 
     public JobKind Kind => JobKind.BuildSourceNote;
 
-    public async Task<Note> HandleAsync(ProcessingJob job, CancellationToken cancellationToken)
+    public async Task<Note?> HandleAsync(ProcessingJob job, CancellationToken cancellationToken)
     {
         var assetId = job.AssetId
             ?? throw new InvalidOperationException($"Job {job.Id} is a source job with no asset.");
@@ -58,7 +58,7 @@ public sealed class SourceNoteHandler(
                 + $"{_maxSourceChars:N0}. Split it into smaller files.");
         }
 
-        var task = SourceNotePrompt.TaskFor(extracted, titles, existingTags.Select(tag => tag.Name).ToList());
+        var task = SourceNotePrompt.TaskFor(extracted, titles, existingTags);
         var draft = await analyzer.RunAsync<NoteDraft>(task, cancellationToken);
 
         if (string.IsNullOrWhiteSpace(draft.Title) || draft.Tags is null || draft.Tags.All(string.IsNullOrWhiteSpace))
@@ -88,7 +88,8 @@ public sealed class SourceNoteHandler(
             UpdatedAtUtc = now,
         };
 
-        await NoteWriter.CommitAsync(database, note, draft, existingTags, titles, previous, cancellationToken);
+        await NoteWriter.CommitAsync(database, note, draft, titles, previous, cancellationToken);
+        NoteWriter.AttachProposedTags(database, note, draft, existingTags);
 
         return note;
     }

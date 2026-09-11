@@ -29,9 +29,15 @@ and job status together.
 - `BuildSourceNote` → `SourceNoteHandler` (the file → note flow; `AssetId` set, no payload).
 - `BuildSynthesis` → `SynthesisHandler` (merge notes; `AssetId` null, payload =
   `SynthesisJobPayload { TargetKind, GroupLabel, InputNoteIds }`).
+- `GroupTags` → `TagGroupingHandler` (batch tag-merge suggestions; no `AssetId`, no
+  payload — see *Tag grouping pass* below).
 - A new kind = a new handler class + a `JobKind` value. Nothing in the worker changes.
 - Shared post-processing (the tag filter, link filter, dangling + inherited links) is
-  `NoteWriter.CommitAsync`, used by both handlers.
+  `NoteWriter.CommitAsync`, used by both note-writing handlers.
+- **`HandleAsync` returns `Note?`**, not `Note` — `GroupTags` changes `Tag` rows directly
+  and writes no note. `PipelineWorker` publishes `notes/created` when a note came back,
+  `notes/updated` (no id) otherwise, so any UI subscribed to `notes` (e.g. `TagsSection`)
+  still refreshes.
 
 ### Analyzer contract — a thin transport
 
@@ -91,12 +97,24 @@ before any `NoteLink` is created. "Ask again, more firmly" is not a production f
   `TargetNoteId IS NULL AND TargetTitle == note.Title` as tracked entities and sets
   `TargetNoteId` in the same `SaveChanges`. With the filter above no danglers come from
   the analyzer — the code stays for future inline `[[...]]` parsing from body text.
-- **Same stance for tags** (`NoteWriter.AttachTags`): the model over-tags and coins
-  near-duplicates, so its `Tags` list is not trusted. Keep order, drop blanks/dupes, cap
-  at 5, reuse an existing `Tag` on an **exact** name match (case-insensitive — no fuzzy,
-  a wrong snap loses a relevant tag; near-duplicates are the reconciliation item's job),
-  and allow **at most one** freshly invented tag per run (`Confirmed = false`). No tag
-  survives → the note is untagged, a normal state. `Ordinal` follows the surviving order.
+- **Same stance for tags** (`NoteWriter.AttachProposedTags`, source notes only): the
+  model over-tags and coins near-duplicates, so its `Tags` list is not trusted. Keep
+  order, drop blanks/dupes, cap at 5, reuse an existing `Tag` on an **exact** name match
+  (case-insensitive — no fuzzy, a wrong snap loses a relevant tag; near-duplicates are
+  the review UI's job), and allow **at most one** freshly invented tag per run
+  (`Confirmed = false`). No tag survives → the note is untagged, a normal state.
+  `Ordinal` follows the surviving order.
+- The prompt lists confirmed tags and other tags in use separately; the model also returns
+  `closestKnownTag` — for an invented tag, the closest confirmed one **by meaning**. It
+  becomes `Tag.SuggestedMergeIntoId` only if it names a confirmed tag exactly. See *Tag
+  review* in [`database.md`](database.md).
+- **No vague placeholder tags.** `SourceNotePrompt` tells the model not to invent a
+  non-descriptive tag ("Unknown", "Unidentified", "Miscellaneous"…) when it cannot pin
+  something down — skip that tag slot instead. Confusing to see sitting in the confirmed
+  list next to real topic tags; a code-side filter cannot fix this one since the model
+  is asked for meaning, not matched against a list.
+- A synthesis / index is not asked for tags (`NoteDraft.Schema(withTags: false)`): an L2
+  gets its group tag, the index none.
 
 ### Synthesis pipeline (L2 / L3)
 
@@ -122,6 +140,29 @@ the handler merges whatever list it is given.
 - `SynthesisJobPayload` dedup: the endpoint refuses a second job for a `(kind, group)`
   already `Pending`/`Running` (payloads are tiny, checked in memory).
 
+### Tag grouping pass
+
+`TagGroupingHandler` re-runs the closest-confirmed-tag idea (*Model does not obey the
+prompt* above, `closestKnownTag`) as a standalone batch pass over the whole vocabulary,
+triggered by `POST /api/tags/suggest-merges` (see *Tag review* in
+[`database.md`](database.md)) rather than at note-write time.
+
+- One model call per run: every confirmed tag name and every unconfirmed one, in one
+  prompt (`TagGroupingPrompt`) — tag names are short, so even a few hundred fit
+  comfortably, unlike a synthesis body. The reply is one `{tag, closestConfirmedTag}` pair
+  per unconfirmed tag (`""` when nothing fits), written straight onto
+  `Tag.SuggestedMergeIntoId` by exact name match.
+- Same reason it exists as a *separate* job from `BuildSourceNote`'s per-file suggestion:
+  that one only ever compares a freshly invented tag against the confirmed list at that
+  moment. Two tags invented on different uploads, before either is confirmed, are never
+  compared to each other until something confirms one of them and a re-run of this job
+  catches the other.
+- Always overwrites `SuggestedMergeIntoId` on every unconfirmed tag it can decide for -
+  it is a deliberate "recompute", not a fill-only pass.
+- Guarded like `BuildSynthesis`: the endpoint 409s instead of queuing when there is
+  nothing to group (no confirmed tag, or no unconfirmed one) or a run is already
+  pending/running.
+
 ### Large text broke the worker — size limits + a Skipped state
 
 A 2 MB `.txt` failed all 3 attempts with `JsonException`. Cause: `NumCtx=8192`, Ollama
@@ -146,6 +187,10 @@ mid-string (`done_reason: "length"`). Fixed:
 
 ## Open
 
+- [ ] **`GroupTags` unverified against a real vocabulary.** Written but never run against
+      Ollama: whether one prompt with a large tag list still gets good matches (same
+      "model pads/ignores instructions" risk as the item below), and what the right
+      re-run cadence is (manual button only, for now).
 - [ ] **Analyzer over-tags with irrelevant known tags.** With "prefer tags from the known
       list", `qwen2.5vl:7b` pads the list — a hypercar note came back tagged
       `Windows Activation` and `Person Portrait` alongside the right ones. The guard stops
