@@ -16,6 +16,7 @@ internal sealed class TagConfiguration : IEntityTypeConfiguration<Tag>
         builder.HasIndex(tag => tag.Name).IsUnique();
 
         builder.Property(tag => tag.SuggestedMergeIntoId).HasMaxLength(32);
+        builder.Property(tag => tag.SuggestedMergeConfidence).HasConversion<string>().HasMaxLength(16);
 
         builder.HasOne<Tag>()
             .WithMany()

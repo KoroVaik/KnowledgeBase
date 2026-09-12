@@ -4,12 +4,13 @@ const STORAGE_PREFIX = 'kb.section-collapsed.'
 
 /** Collapsed state for a page section or subsection, kept in localStorage so it survives
  *  a reload - per-tab UI state, not data, so it does not belong in the API. */
-export function useCollapsibleSection(key: string) {
+export function useCollapsibleSection(key: string, defaultCollapsed = true) {
   const [collapsed, setCollapsed] = useState(() => {
     try {
-      return localStorage.getItem(STORAGE_PREFIX + key) === '1'
+      const stored = localStorage.getItem(STORAGE_PREFIX + key)
+      return stored === null ? defaultCollapsed : stored === '1'
     } catch {
-      return false
+      return defaultCollapsed
     }
   })
 

@@ -1,7 +1,7 @@
 namespace KnowledgeBase.Api.Controllers.Tags.Contracts;
 
-/// <summary>One tag named in a placement suggestion - just enough for the suggestion graph.</summary>
-public sealed record TagSuggestionResponse(string Id, string Name);
+/// <summary>One tag named in a placement suggestion, with how confident the model was about it.</summary>
+public sealed record TagSuggestionResponse(string Id, string Name, string Confidence);
 
 /// <summary>
 /// Pending placement suggestions for one tag: other confirmed tags it could go under, and other

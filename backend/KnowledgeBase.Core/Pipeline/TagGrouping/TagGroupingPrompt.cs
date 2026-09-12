@@ -27,6 +27,8 @@ public static class TagGroupingPrompt
         - tag: copied verbatim from the awaiting-review list.
         - closestMatchingTag: the matching tag's name, copied verbatim from whichever list it
           came from. Use "" when nothing in either list means the same thing.
+        - confidence: "low", "medium", or "high" - how sure you are that this is genuinely the
+          same concept, not just a similar-sounding one. Ignored when closestMatchingTag is "".
         """;
 
     private static string UserPrompt(IReadOnlyList<string> confirmedTags, IReadOnlyList<string> unconfirmedTags) =>

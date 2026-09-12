@@ -230,8 +230,44 @@ depth step below the card itself: bordered box, `.tags-subhead` as the bled head
 (`--surface-2` body, `--surface-hover` strip) rather than reusing `--surface`/`--surface-2`
 — reusing those exactly would make the subsection blend into the card instead of reading as
 nested inside it. Generic on purpose so any subsection (not just Tags') can opt in. Used
-today by every subsection in `TagsSection`: "To review", "To place", "Confirmed" and
-"Hierarchy".
+today by every subsection in `TagsSection`: "To review", "Confirmed" and "Hierarchy".
+
+### One review queue, not two
+
+"To review" and "To place" used to be separate subsections, but both were the same action
+(approve an AI-guessed tag relationship) wearing two different looks - a chat with the owner
+2026-09-12 confirmed the duplication. Merged into one `.tags-list`: `TagsSection.tsx` renders
+`toReview.map(row)` then `<TagPlacementSuggestions>` inside the same `<ul>`, and
+`TagPlacementSuggestions` was rewritten to return bare `<li className="tags-row">` siblings
+(no own wrapper) styled with the same `tag-action-chip`/pill classes as `TagParentOptions`,
+just with an accept/reject pair per candidate instead of a single pick.
+
+`toPlace` now filters to **confirmed** tags only
+(`confirmed.filter(tag => tag.hasPendingPlacementSuggestion)`) - an unconfirmed tag's own
+pending parent suggestion already shows inline in its review row via `TagParentOptions`
+(confirm + place in one click); including it in `toPlace` too was showing the identical
+suggestion twice, once per UI.
+
+### To review — List/Graph toggle
+
+`TagSuggestionGraph` gives "To review" the same List/Graph split the Hierarchy subsection
+already has (`TagHierarchyGraph`): a mini node-link diagram per row instead of the flat chip
+pills — the tag under review centred, parent candidates above, child candidates below,
+connected by curved edges. No dagre/pan/zoom like the big graph - a row only ever has a
+couple of candidates per side, so a fixed three-tier arithmetic layout
+(`computeLayout` in `TagSuggestionGraph.tsx`) is enough.
+
+Candidate/accept/reject controls are real `<button>`s inside `<foreignObject>`, not plain SVG
+shapes - keeps normal focus/`disabled`/`aria-label` behaviour instead of hand-rolled hit
+testing. Node width is estimated from character count (name + confidence word), same
+technique `useTagHierarchyGraph`'s dagre sizing already uses - **a first pass only counted the
+name and clipped both the text and the accept/reject hit area** for confirmed-tag placement
+rows; fixed by budgeting the confidence word's width too, then browser-verified with
+`elementFromPoint` that ✓/× now resolve to the button, not the parent `<svg>`.
+
+"Merge into…" stays the existing button/picker rendered beside the graph, untouched by the
+toggle - it replaces a tag, it does not add a parent/child edge, so it does not belong inside
+the hierarchy diagram.
 
 ### Colour tokens — surface vs accent
 
@@ -374,10 +410,24 @@ marketing `h1` and fills the row.
       *Synthesis pipeline* in [`ai-pipeline.md`](ai-pipeline.md)). Build + lint pass,
       **browser run pending** (incl. phone width — the row wraps with several merge
       buttons, and the picker's dropdown position).
-- [ ] Tag hierarchy tree and placement suggestions panel — done in code and verified in the
-      browser (see [`archive.md`](archive.md)); **phone width still unchecked** for the
-      tree's drag-and-drop and the suggestion cards' pill wrapping (the tree's own row
-      wrapping at phone width was checked and fixed — see archive.md).
+- [ ] Tag hierarchy tree — done in code and verified in the browser (see
+      [`archive.md`](archive.md)); **phone width still unchecked** for the drag-and-drop
+      (the tree's own row wrapping at phone width was checked and fixed — see archive.md).
+- [ ] **"To review"/"To place" merge** (see *One review queue, not two* above). Build + lint
+      pass, and a quick browser look confirmed the duplicate display is gone (an unconfirmed
+      tag's suggestion no longer also shows as a card) and both row kinds now share one list
+      and one look. **Not yet clicked through**: accept/reject on a merged-in placement row,
+      and phone width for the wider rows (a confirmed tag with both a Parent and a Child pill
+      group).
+- [ ] **"To review" mini-graph presentation** (`TagSuggestionGraph`, see *To review -
+      List/Graph toggle* above). Build + lint pass; browser-verified: pills show full
+      name+confidence with no clipping, ✓/× hit-test correctly on confirmed-tag placement
+      rows, the pick-only case (unconfirmed tag choosing its own parent) still confirms +
+      places in one click, "Merge into…" and the List view are unaffected. **Not yet
+      checked**: phone width for the mini graph (same open item as the flat rows below), and
+      whether the accept/reject mutation's `ERR_ABORTED` network quirk (data persists, but
+      the row does not disappear without a manual reload) is specific to this view or
+      pre-existing in the flat chip rows too.
 - [ ] `TagHierarchyTree` drag-and-drop, real-mouse check: the `onDragLeave` flicker fix
       (`useTagHierarchyTree.ts`) is build+lint clean but unverified by an actual drag —
       browser automation's synthetic mouse drag does not fire native HTML5 `dragstart` at

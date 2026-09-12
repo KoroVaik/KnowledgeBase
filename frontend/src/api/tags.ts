@@ -1,5 +1,13 @@
 import { apiFetch, readErrorMessage } from './http'
 
+/** One pending AI placement guess for a tag, from the child's side - see
+ *  `Tag.pendingParentSuggestions`. */
+export interface TagParentSuggestionRef {
+  parentId: string
+  /** "Low" | "Medium" | "High" - the model's own self-report, not a calibrated probability. */
+  confidence: string
+}
+
 /** Mirrors TagResponse in backend Controllers/Tags. */
 export interface Tag {
   id: string
@@ -11,16 +19,22 @@ export interface Tag {
   /** For an invented tag: the tag (confirmed, or itself still unconfirmed) the model judged
    *  closest in meaning. */
   suggestedMergeIntoId: string | null
+  /** How sure the model was about `suggestedMergeIntoId` - null when there is no suggestion. */
+  suggestedMergeConfidence: string | null
   /** Ids of the tags this one is a child of (is-a). Manual/API-driven, not the model's call. */
   parentIds: string[]
   /** On either side of a pending AI placement guess - fetch `fetchTagParentSuggestions`. */
   hasPendingPlacementSuggestion: boolean
+  /** This tag's own side of the above (candidate parents for it, as the child) - lets the "To
+   *  review" row offer "confirm as a child of X" without a separate fetch. */
+  pendingParentSuggestions: TagParentSuggestionRef[]
 }
 
-/** One tag named in a placement suggestion - just enough for the suggestion graph. */
+/** One tag named in a placement suggestion, with how confident the model was. */
 export interface TagSuggestion {
   id: string
   name: string
+  confidence: string
 }
 
 /** Mirrors TagParentSuggestionsResponse: the two sides of the same underlying rows. */

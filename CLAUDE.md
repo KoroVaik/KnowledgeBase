@@ -91,6 +91,9 @@ those.
   port. If you did start one yourself to run a check, you own stopping it again before you
   finish — this has been skipped before, so don't rely on it happening on its own.
 - **Clean up after yourself**: test files in `data/assets`.
+- **Never search the whole disk.** No `find /` or similar unscoped searches — always
+  scope to a specific directory (the repo, a subfolder). An unscoped search is very
+  expensive and can hang.
 - **Do not commit or push without being asked.**
 - **Do not create git branches without being asked.** Work on the current branch; if that
   seems wrong, say so and wait.

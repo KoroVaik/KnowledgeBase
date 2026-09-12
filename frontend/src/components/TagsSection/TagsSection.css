@@ -52,7 +52,7 @@
 .subsection-toggle {
   display: flex;
   align-items: center;
-  width: 100%;
+  flex: 1;
   gap: 6px;
   padding: 0;
   font: inherit;
@@ -66,6 +66,41 @@
 
 .subsection-toggle:hover {
   color: var(--text-h);
+}
+
+/* Tree/Graph switch for the Hierarchy subsection - sits beside .subsection-toggle inside the
+   same .tags-subhead strip, so it needs its own case/spacing reset from the strip's uppercase
+   label styling. */
+.tags-view-tabs {
+  display: flex;
+  flex-shrink: 0;
+  gap: 2px;
+  padding: 2px;
+  text-transform: none;
+  letter-spacing: normal;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.tags-view-tab {
+  padding: 3px 10px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-muted);
+  background: none;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.tags-view-tab:hover {
+  color: var(--text-h);
+}
+
+.tags-view-tab-active {
+  color: var(--text-h);
+  background: var(--surface-2);
 }
 
 .tags-list {
@@ -91,6 +126,7 @@
   flex-wrap: wrap;
   align-items: center;
   gap: 6px;
+  margin-left: auto;
 }
 
 .tags-row:last-child {
@@ -101,6 +137,21 @@
   flex: 1;
   font-size: 13px;
   color: var(--text-muted);
+}
+
+/* A graph row (TagSuggestionGraph) is much taller than its `.tags-actions` sibling, so sharing
+   the flex line's vertical centring would leave the count drifting toward the row's middle
+   instead of reading as its top-right corner. Pinned out of flow instead of onto its own extra
+   line - a plain row is short enough that flex:1 above already puts it in the corner for free. */
+.tags-row:has(.tag-mini-graph) {
+  position: relative;
+}
+
+.tags-row:has(.tag-mini-graph) .tags-count {
+  position: absolute;
+  top: 8px;
+  right: 12px;
+  flex: none;
 }
 
 .tags-search {
@@ -120,4 +171,83 @@
   margin: 0;
   font-size: 13px;
   color: var(--text-muted);
+}
+
+/* How sure the model was about a merge or parent suggestion - a coarse word, not a false-precision
+   percentage. Shared by the To review row buttons, the placement pills, and TagMergeOptions. */
+.tag-confidence {
+  margin-left: 3px;
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+}
+
+/* One pill per action (the collapsed TagPicker `chip`, TagSuggestionChip) instead of one button
+   per candidate - the action is named once (.tag-action-label, tinted by which action it is),
+   candidates sit inside as smaller sub-chips (a step down from the outer pill and the tag-chip
+   it sits next to) separated by a hairline. overflow: hidden clips each option's square hover
+   fill to the pill's own rounded corners instead of giving every option its own radius. */
+.tag-action-chip {
+  display: inline-flex;
+  align-items: center;
+  font-size: 11px;
+  line-height: normal;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.tag-action-chip-merge {
+  border-color: var(--accent-border);
+}
+
+.tag-action-chip-parent {
+  border-color: var(--ok);
+}
+
+.tag-action-label {
+  padding: 2px 8px 2px 10px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.tag-action-chip-merge > .tag-action-label {
+  color: var(--text-muted);
+}
+
+.tag-action-chip-parent > .tag-action-label {
+  color: var(--text-muted);
+}
+
+.tag-action-option {
+  font: inherit;
+  font-size: 10px;
+  cursor: pointer;
+  color: var(--text);
+  background: transparent;
+  border: 0;
+  padding: 2px 7px;
+  line-height: 1;
+}
+
+.tag-action-chip-merge > .tag-action-option {
+  color: var(--accent);
+  background: var(--accent-bg);
+  border-left: 1px solid var(--accent-border);
+}
+
+.tag-action-chip-parent > .tag-action-option {
+  color: var(--ok);
+  background: var(--ok-bg);
+  border-left: 1px solid var(--ok);
+}
+
+.tag-action-option:hover:not(:disabled) {
+  color: var(--text-h);
+}
+
+.tag-action-option:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
 }

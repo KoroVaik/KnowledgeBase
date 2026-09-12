@@ -9,7 +9,15 @@ public sealed class TagParentSuggestion
 
     public required string ParentId { get; init; }
 
-    // The user rejected this guess - kept, not deleted, so the same pair is not proposed again
-    // on the next suggest-hierarchy run.
+    // The user rejected this guess - kept, not deleted, and hidden until either the same pair is
+    // revived (DeclineCount below the cap) or it is dismissed for good.
     public required bool Dismissed { get; set; }
+
+    // How many times the user has rejected this exact pair. TagHierarchyHandler revives a
+    // dismissed row (clears Dismissed) when the model proposes it again and this is still below
+    // its cap; past the cap the pair is never proposed again.
+    public required int DeclineCount { get; set; }
+
+    // How sure the model was about this placement - see SuggestionConfidence.
+    public required SuggestionConfidence Confidence { get; set; }
 }

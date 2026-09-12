@@ -1,0 +1,113 @@
+/* Mini node-link view of one tag's pending suggestions - see TagSuggestionGraph.tsx. Reuses the
+   app's existing chip/pill/accept/reject tokens so it reads as the same design as the list rows
+   and the big TagHierarchyGraph, just laid out as a small three-tier diagram. */
+.tag-mini-graph {
+  display: flex;
+  align-items: flex-start;
+  /* Anchors this to the top of its line in the parent `.tags-row` (which centers its flex
+     children by default) - otherwise it gets vertically centered against a taller sibling on
+     the same line (e.g. `.tags-actions` wrapping to two lines), leaving dead space above the
+     diagram instead of it sitting flush under the row's top edge. */
+  align-self: flex-start;
+  gap: 12px;
+}
+
+/* Positioning container only - every node inside sizes itself naturally (no forced width/height),
+   so `width`/`height` here are just the estimated footprint used to reserve room among the row's
+   other flex siblings; a node that runs a little wider than estimated overflows visibly instead
+   of being clipped (unlike an SVG `<foreignObject>`, which was the previous approach here and
+   clipped both text and the accept/reject hit area whenever the estimate ran short). */
+.tag-mini-canvas {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.tag-mini-edges {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.tag-mini-edge {
+  fill: none;
+  stroke: var(--border);
+  stroke-width: 1.5px;
+}
+
+.tag-mini-node {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  white-space: nowrap;
+}
+
+.tag-mini-center {
+  font-weight: 600;
+}
+
+.tag-mini-slot {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* No border/background at rest - it sits right on the connecting line, and its two arrows
+   straddle the line (the gap between them is where the line stays visible) rather than a single
+   badge covering it. Hover/focus brings back the oval badge the first version always showed, as
+   a hit-target cue. */
+.tag-mini-flip {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  padding: 2px 8px;
+  border: 1.5px solid transparent;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--accent-border);
+  font-size: 11px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  cursor: pointer;
+}
+
+.tag-mini-flip:hover:not(:disabled),
+.tag-mini-flip:focus-visible {
+  border-color: var(--accent-border);
+  background: var(--surface);
+}
+
+.tag-mini-flip:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.tag-mini-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 8px;
+  font-size: 11px;
+  line-height: normal;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+/* Same colour language as the confirmed/unconfirmed tag chip everywhere else in Tags
+   (TagChips.css `.tag-chip`/`.tag-chip-unconfirmed.chip-review`) - a candidate here is a real
+   tag too, so it gets the same purple-vs-orange cue instead of one neutral look regardless of
+   its own review state. */
+.tag-mini-pill-confirmed {
+  color: var(--accent);
+  background: var(--accent-bg);
+  border-color: var(--accent-border);
+}
+
+.tag-mini-pill-unconfirmed {
+  color: var(--warn);
+  background: var(--warn-bg);
+  border-color: var(--warn);
+}
+

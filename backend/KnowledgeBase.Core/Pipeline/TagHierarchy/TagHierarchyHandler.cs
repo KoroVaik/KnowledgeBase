@@ -4,16 +4,23 @@ using Microsoft.EntityFrameworkCore;
 
 namespace KnowledgeBase.Core.Pipeline.TagHierarchy;
 
-// Finds a parent for every confirmed tag that has none yet and no pending suggestion (see Tag
-// hierarchy in docs/database.md). Writes TagParentSuggestion rows, never TagParent directly - a
-// human accepts one through the existing AddParent path. Produces no note.
+// Finds a parent for every tag that has none yet and no pending suggestion - confirmed or still
+// awaiting review alike (same widened-pool reasoning as TagGroupingHandler: a tag can be placed
+// under a not-yet-reviewed tag too, so the review UI can offer "confirm as a child of X" before
+// the two-step confirm-then-place ever happens - see "Tag hierarchy" in docs/database.md). Writes
+// TagParentSuggestion rows, never TagParent directly - a human accepts one through the existing
+// AddParent path. Produces no note.
 public sealed class TagHierarchyHandler(KnowledgeBaseDbContext database, IContentAnalyzer analyzer) : IPipelineHandler
 {
+    // A dismissed pair is revived (re-surfaced) if proposed again while under this cap; at the
+    // cap it is left alone for good instead of being re-inserted or revived.
+    private const int DeclineCap = 3;
+
     public JobKind Kind => JobKind.SuggestTagParents;
 
     public async Task<Note?> HandleAsync(ProcessingJob job, CancellationToken cancellationToken)
     {
-        var confirmed = await database.Tags.Where(tag => tag.Confirmed).ToListAsync(cancellationToken);
+        var allTags = await database.Tags.ToListAsync(cancellationToken);
 
         var parentedIds = await database.TagParents
             .Select(link => link.ChildId)
@@ -26,33 +33,34 @@ public sealed class TagHierarchyHandler(KnowledgeBaseDbContext database, IConten
             .Distinct()
             .ToListAsync(cancellationToken);
 
-        var unplaced = confirmed
+        var unplaced = allTags
             .Where(tag => !parentedIds.Contains(tag.Id) && !pendingIds.Contains(tag.Id))
             .ToList();
 
-        if (confirmed.Count < 2 || unplaced.Count == 0)
+        if (allTags.Count < 2 || unplaced.Count == 0)
         {
             throw new SkippableContentException(
-                "Nothing to place: needs a confirmed tag with no parent and no pending suggestion.");
+                "Nothing to place: needs a tag with no parent and no pending suggestion.");
         }
 
         var unplacedIds = unplaced.Select(tag => tag.Id).ToHashSet();
 
-        // Pairs already on record for these tags (dismissed or not) - never re-propose a rejected
-        // pair, and never insert a duplicate of a pending one.
-        var existingPairs = await database.TagParentSuggestions
+        // A child only reaches this loop with an existing pair if that pair is dismissed -
+        // pendingIds above already excludes any tag with an active (non-dismissed) suggestion.
+        // A dismissed pair proposed again is revived rather than skipped, unless it hit the cap.
+        var existingByPair = (await database.TagParentSuggestions
             .Where(suggestion => unplacedIds.Contains(suggestion.ChildId))
-            .Select(suggestion => new { suggestion.ChildId, suggestion.ParentId })
-            .ToListAsync(cancellationToken);
-        var seen = existingPairs.Select(pair => (pair.ChildId, pair.ParentId)).ToHashSet();
+            .ToListAsync(cancellationToken))
+            .ToDictionary(suggestion => (suggestion.ChildId, suggestion.ParentId));
+        var seenNewPairs = new HashSet<(string ChildId, string ParentId)>();
 
         var task = TagHierarchyPrompt.TaskFor(
-            confirmed.Select(tag => tag.Name).ToList(),
+            allTags.Select(tag => tag.Name).ToList(),
             unplaced.Select(tag => tag.Name).ToList());
 
         var result = await analyzer.RunAsync<TagHierarchySuggestionResult>(task, cancellationToken);
 
-        var confirmedByName = confirmed.ToDictionary(tag => tag.Name, StringComparer.OrdinalIgnoreCase);
+        var byName = allTags.ToDictionary(tag => tag.Name, StringComparer.OrdinalIgnoreCase);
         var unplacedByName = unplaced.ToDictionary(tag => tag.Name, StringComparer.OrdinalIgnoreCase);
 
         foreach (var suggestion in result.Suggestions ?? [])
@@ -62,25 +70,42 @@ public sealed class TagHierarchyHandler(KnowledgeBaseDbContext database, IConten
                 continue;
             }
 
-            foreach (var parentName in suggestion.Parents ?? [])
+            foreach (var candidate in suggestion.Parents ?? [])
             {
-                if (string.IsNullOrWhiteSpace(parentName))
+                if (string.IsNullOrWhiteSpace(candidate.Name))
                 {
                     continue;
                 }
 
-                if (!confirmedByName.TryGetValue(parentName.Trim(), out var parent) || parent.Id == child.Id)
+                if (!byName.TryGetValue(candidate.Name.Trim(), out var parent) || parent.Id == child.Id)
                 {
                     continue;
                 }
 
-                if (!seen.Add((child.Id, parent.Id)))
+                if (existingByPair.TryGetValue((child.Id, parent.Id), out var existing))
+                {
+                    if (existing.DeclineCount < DeclineCap)
+                    {
+                        existing.Dismissed = false;
+                        existing.Confidence = SuggestionConfidenceParsing.Parse(candidate.Confidence);
+                    }
+
+                    continue;
+                }
+
+                if (!seenNewPairs.Add((child.Id, parent.Id)))
                 {
                     continue;
                 }
 
-                database.TagParentSuggestions.Add(
-                    new TagParentSuggestion { ChildId = child.Id, ParentId = parent.Id, Dismissed = false });
+                database.TagParentSuggestions.Add(new TagParentSuggestion
+                {
+                    ChildId = child.Id,
+                    ParentId = parent.Id,
+                    Dismissed = false,
+                    DeclineCount = 0,
+                    Confidence = SuggestionConfidenceParsing.Parse(candidate.Confidence),
+                });
             }
         }
 

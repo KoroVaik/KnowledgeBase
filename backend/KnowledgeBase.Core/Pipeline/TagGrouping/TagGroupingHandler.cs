@@ -52,6 +52,7 @@ public sealed class TagGroupingHandler(KnowledgeBaseDbContext database, IContent
             }
 
             tag.SuggestedMergeIntoId = target.Id;
+            tag.SuggestedMergeConfidence = SuggestionConfidenceParsing.Parse(suggestion.Confidence);
         }
 
         return null;

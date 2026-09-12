@@ -87,9 +87,17 @@ SET NULL (target); `Notes → Assets` (`SourceAssetId`) SET NULL; `NoteTags → 
   re-running — a tag already placed, or already reviewed and rejected, does not need
   asking again. Mirrors the *Tag review* re-run guard above.
 - Accepting a suggestion is the existing `AddParent` path (same cycle check); rejecting
-  sets a `Dismissed` flag rather than deleting the row, so the same guess is not proposed
-  again next run.
-- UI: [`frontend.md`](frontend.md) *Tag hierarchy tree* and *Placement suggestions*.
+  sets `Dismissed` and increments `DeclineCount` rather than deleting the row.
+- **A dismissed pair can be revived, up to a cap.** Chat with the owner 2026-09-12: a
+  single reject used to block that exact pair forever. Now `TagHierarchyHandler` clears
+  `Dismissed` (and refreshes `Confidence`) if the model proposes the same pair again while
+  `DeclineCount < 3`; past the cap it is left alone for good, same as before. Deliberately
+  **narrow scope**: this only ever applies to a tag with zero real parents yet — a tag
+  that already has one is still never reconsidered for an *additional* parent, even
+  though the hierarchy is a DAG and could take one. Widening that (re-running the search
+  for already-placed tags, on demand rather than automatically) is a later Open item, not
+  done now.
+- UI: [`frontend.md`](frontend.md) *One review queue, not two*.
 
 ### `NoteKind` — one table, three lifecycles
 
@@ -179,3 +187,21 @@ UTC as local time. Fixed with a value converter in the model; **not needed in Po
       not tied to any file. The `JobKind` → `IPipelineHandler` seam is in place — each new
       kind is a handler class. Pipeline side: [`ai-pipeline.md`](ai-pipeline.md).
 - [ ] Orphan sweep — reconcile `Assets` against the store (also in [`backend.md`](backend.md)).
+- [ ] **Decline-and-revive for tag placement suggestions** (see *Tag hierarchy* above,
+      migration `AddTagSuggestionDeclineCount`). Build passes; **run pending** — apply the
+      migration locally, then a full reject → re-run `suggest-hierarchy` → reject → re-run
+      → third reject cycle against real Ollama output to see a pair actually come back
+      and then stay gone for good.
+- [ ] **Search additional parents for an already-placed tag.** Today `TagHierarchyHandler`
+      only ever looks at a tag with zero real parents; a tag with one confirmed parent is
+      never reconsidered even though the hierarchy allows several. Flagged in chat
+      2026-09-12 as worth doing later, on demand rather than as part of the automatic
+      `suggest-hierarchy` run.
+- [ ] **Reciprocal placement suggestions.** Two tags with no parent yet search
+      independently, so they can each end up suggesting the other as parent at the same
+      time (seen live: "Iceland"/"Travel", "Programming"/"Type Hints") - two separate,
+      contradictory `TagParentSuggestion` rows for the same pair. Accepting one no longer
+      corrupts the other (see `archive.md`), but nothing stops the pair from being
+      generated, and the UI shows both as if independent. Worth either having
+      `TagHierarchyHandler` skip a tag whose candidate already has *it* as a pending
+      suggestion, or having the UI show a reciprocal pair as one decision.

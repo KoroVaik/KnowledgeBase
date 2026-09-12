@@ -255,6 +255,10 @@ namespace KnowledgeBase.Core.Persistence.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
 
+                    b.Property<string>("SuggestedMergeConfidence")
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
                     b.Property<string>("SuggestedMergeIntoId")
                         .HasMaxLength(32)
                         .HasColumnType("character varying(32)");
@@ -295,6 +299,14 @@ namespace KnowledgeBase.Core.Persistence.Migrations
                     b.Property<string>("ParentId")
                         .HasMaxLength(32)
                         .HasColumnType("character varying(32)");
+
+                    b.Property<string>("Confidence")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.Property<int>("DeclineCount")
+                        .HasColumnType("integer");
 
                     b.Property<bool>("Dismissed")
                         .HasColumnType("boolean");

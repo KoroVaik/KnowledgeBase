@@ -36,6 +36,10 @@ If you can't tell whether it's functional or layout — **ask the user a clarify
 question** (e.g. via `AskUserQuestion`) instead of guessing. Getting this wrong means
 verifying with the wrong tool later and missing the actual regression.
 
+When the report is about UI and the description alone doesn't pin down where or what's
+wrong, ask the user for a screenshot of the problem spot instead of guessing or hunting
+for it blind — a screenshot settles it faster than reading code speculatively.
+
 If diagnosing means you need to look at the live page yourself (not just read the code) —
 seeing a layout bug rendered, reproducing a functional one — that's still browser testing
 and the same rule as step 6 applies: one quick look is fine directly, anything more goes

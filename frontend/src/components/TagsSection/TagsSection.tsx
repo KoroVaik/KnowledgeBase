@@ -1,15 +1,35 @@
+import { useState } from 'react'
 import type { Tag } from '../../api/tags'
 import { notesText } from '../../format'
 import { useTagsSection } from './useTagsSection'
 import { ConfirmedTags } from './ConfirmedTags'
-import { TagMergeOptions } from './TagMergeOptions'
 import { TagPicker } from '../TagPicker/TagPicker'
 import { TagHierarchyTree } from '../TagHierarchyTree/TagHierarchyTree'
+import { TagHierarchyGraph } from '../TagHierarchyGraph/TagHierarchyGraph'
 import { TagPlacementSuggestions } from '../TagPlacementSuggestions/TagPlacementSuggestions'
+import { TagSuggestionChip } from '../TagPlacementSuggestions/TagSuggestionChip'
+import { TagSuggestionGraph } from '../TagSuggestionGraph/TagSuggestionGraph'
 import { useCollapsibleSection } from '../../hooks/useCollapsibleSection'
 import './TagsSection.css'
 
 const MIN_NOTES = 2
+
+// A tag with no pending parent suggestion is likely a root/abstract one - reviewing it blocks on
+// nothing. One whose suggested parent is already confirmed is ready to decide with full context;
+// one whose suggested parent is itself still unconfirmed is better left for after that parent's
+// own fate is settled. Confirming a parent tag re-ranks its children up on the next reload -
+// that is what gives the effect of "abstract tags first, their children follow".
+function reviewRank(tag: Tag, tagsById: Map<string, Tag>): number {
+  if (tag.pendingParentSuggestions.length === 0) {
+    return 0
+  }
+
+  const aParentIsAlreadyConfirmed = tag.pendingParentSuggestions.some(
+    (suggestion) => tagsById.get(suggestion.parentId)?.confirmed === true,
+  )
+
+  return aParentIsAlreadyConfirmed ? 1 : 2
+}
 
 export function TagsSection() {
   const {
@@ -21,9 +41,11 @@ export function TagsSection() {
     remove,
     merge,
     confirm,
+    confirmWithParent,
+    confirmWithParentFlipped,
+    flipSuggestion,
     synthesiseTagNote,
-    suggestMerges,
-    suggestHierarchy,
+    suggestForReview,
     buildIndex,
     addParent,
     removeParent,
@@ -32,8 +54,9 @@ export function TagsSection() {
   } = useTagsSection()
   const { collapsed, toggle } = useCollapsibleSection('tags')
   const { collapsed: reviewCollapsed, toggle: toggleReview } = useCollapsibleSection('tags:review')
-  const { collapsed: placeCollapsed, toggle: togglePlace } = useCollapsibleSection('tags:place')
   const { collapsed: hierarchyCollapsed, toggle: toggleHierarchy } = useCollapsibleSection('tags:hierarchy')
+  const [hierarchyView, setHierarchyView] = useState<'tree' | 'graph'>('tree')
+  const [reviewView, setReviewView] = useState<'list' | 'graph'>('list')
 
   if (state.status === 'loading') {
     return null
@@ -51,43 +74,103 @@ export function TagsSection() {
   }
 
   const { tags } = state
-  const toReview = tags.filter((tag) => !tag.confirmed)
+  const tagsById = new Map(tags.map((tag) => [tag.id, tag]))
+  const toReview = tags
+    .filter((tag) => !tag.confirmed)
+    .slice()
+    .sort((a, b) => reviewRank(a, tagsById) - reviewRank(b, tagsById) || b.noteCount - a.noteCount)
   const confirmed = tags.filter((tag) => tag.confirmed)
-  const toPlace = tags.filter((tag) => tag.hasPendingPlacementSuggestion)
+  // Confirmed only - an unconfirmed tag's own pending suggestion already shows inline in its
+  // review row via TagParentOptions; including it here too would show the same guess twice.
+  const toPlace = confirmed.filter((tag) => tag.hasPendingPlacementSuggestion)
 
   function row(tag: Tag) {
     const suggestion = tags.find((other) => other.id === tag.suggestedMergeIntoId)
 
+    const parentCandidates = tag.confirmed
+      ? []
+      : tag.pendingParentSuggestions.flatMap((pending) => {
+          const parent = tagsById.get(pending.parentId)
+          return parent === undefined ? [] : [{ parent, confidence: pending.confidence }]
+        })
+
+    const showGraph = reviewView === 'graph' && parentCandidates.length > 0
+
+    const mergeControl = (
+      <TagPicker
+        source={tag}
+        suggestion={suggestion}
+        ariaLabel={`Merge ${tag.name} into another tag`}
+        disabled={busy !== null}
+        onPick={(into) => merge(tag, into)}
+        chip
+      />
+    )
+
     return (
       <li key={tag.id} className="tags-row">
-        <span
-          className={
-            tag.confirmed ? 'tag-chip chip-compact' : 'tag-chip tag-chip-unconfirmed chip-compact chip-review'
-          }
-        >
-          {tag.name}
-        </span>
-
-        {!tag.confirmed && suggestion !== undefined ? (
-          <TagMergeOptions
-            tag={tag}
-            suggestion={suggestion}
-            disabled={busy !== null}
-            onPick={(into) => merge(tag, into)}
-          />
-        ) : (
-          <TagPicker
-            source={tag}
-            suggestion={suggestion}
-            ariaLabel={`Merge ${tag.name} into another tag`}
-            disabled={busy !== null}
-            onPick={(into) => merge(tag, into)}
-          />
+        {!showGraph && (
+          <span
+            className={
+              tag.confirmed ? 'tag-chip chip-compact' : 'tag-chip tag-chip-unconfirmed chip-compact chip-review'
+            }
+          >
+            {tag.name}
+          </span>
         )}
+
+        {parentCandidates.length > 0 &&
+          (() => {
+            const candidates = parentCandidates.map(({ parent, confidence }) => ({
+              id: parent.id,
+              name: parent.name,
+              confidence,
+              confirmed: parent.confirmed,
+            }))
+            const onAcceptParent = (parentId: string) => {
+              const candidate = parentCandidates.find(({ parent }) => parent.id === parentId)
+              if (candidate !== undefined) {
+                confirmWithParent(tag, candidate.parent)
+              }
+            }
+            const onRejectParent = (parentId: string) => rejectSuggestion(tag.id, parentId)
+
+            if (reviewView !== 'graph') {
+              return (
+                <TagSuggestionChip
+                  label="Parent"
+                  direction="parent"
+                  candidates={candidates}
+                  disabled={busy !== null}
+                  onAccept={onAcceptParent}
+                  onReject={onRejectParent}
+                />
+              )
+            }
+
+            // Flip only offered with exactly one candidate - with more, swapping the center
+            // would leave the other candidates' edges pointing at a center that just changed.
+            const sole = parentCandidates.length === 1 ? parentCandidates[0] : null
+
+            return (
+              <TagSuggestionGraph
+                centerName={tag.name}
+                centerConfirmed={tag.confirmed}
+                parents={candidates}
+                childCandidates={[]}
+                disabled={busy !== null}
+                onAcceptParent={onAcceptParent}
+                onRejectParent={onRejectParent}
+                onFlipAcceptParent={sole !== null ? () => confirmWithParentFlipped(tag, sole.parent) : undefined}
+              />
+            )
+          })()}
 
         <span className="tags-count">{notesText(tag.noteCount)}</span>
 
         <span className="tags-actions">
+          {mergeControl}
+
           {!tag.confirmed && (
             <button
               type="button"
@@ -134,21 +217,13 @@ export function TagsSection() {
             <button
               type="button"
               className="btn btn-sm"
-              onClick={suggestMerges}
-              disabled={busy !== null || toReview.length === 0 || tags.length < 2}
-              title="Re-check every unreviewed tag against the whole vocabulary"
+              onClick={suggestForReview}
+              disabled={busy !== null || tags.length < 2}
+              title="Re-check unreviewed tags for duplicates, and find a parent for any tag that has none yet"
             >
-              {queued.includes('suggest-merges') ? 'Suggestions queued' : 'Suggest merges'}
-            </button>
-
-            <button
-              type="button"
-              className="btn btn-sm"
-              onClick={suggestHierarchy}
-              disabled={busy !== null || confirmed.length < 2}
-              title="Find a parent for every confirmed tag that has none yet"
-            >
-              {queued.includes('suggest-hierarchy') ? 'Placement queued' : 'Suggest hierarchy'}
+              {queued.includes('suggest-merges') || queued.includes('suggest-hierarchy')
+                ? 'Suggestions queued'
+                : 'Suggest for review'}
             </button>
 
             <button
@@ -180,7 +255,7 @@ export function TagsSection() {
 
           {tags.length === 0 && <p className="tags-empty">No tags yet.</p>}
 
-          {toReview.length > 0 && (
+          {(toReview.length > 0 || confirmed.length >= 2) && (
             <div className="subsection-panel">
               <h3 className="tags-subhead">
                 <button
@@ -191,41 +266,58 @@ export function TagsSection() {
                 >
                   <span className="section-toggle-caret" aria-hidden="true">▾</span>
                   To review
-                  <span className="section-count">{toReview.length}</span>
+                  <span className="section-count">{toReview.length + toPlace.length}</span>
                 </button>
-              </h3>
-              {!reviewCollapsed && <ul className="tags-list">{toReview.map(row)}</ul>}
-            </div>
-          )}
 
-          {confirmed.length >= 2 && (
-            <div className="subsection-panel">
-              <h3 className="tags-subhead">
-                <button
-                  type="button"
-                  className="subsection-toggle"
-                  aria-expanded={!placeCollapsed}
-                  onClick={togglePlace}
-                >
-                  <span className="section-toggle-caret" aria-hidden="true">▾</span>
-                  To place
-                  {toPlace.length > 0 && <span className="section-count">{toPlace.length}</span>}
-                </button>
+                {!reviewCollapsed && (
+                  <div className="tags-view-tabs" role="tablist" aria-label="Review view">
+                    <button
+                      type="button"
+                      role="tab"
+                      aria-selected={reviewView === 'list'}
+                      className={reviewView === 'list' ? 'tags-view-tab tags-view-tab-active' : 'tags-view-tab'}
+                      onClick={() => setReviewView('list')}
+                    >
+                      List
+                    </button>
+                    <button
+                      type="button"
+                      role="tab"
+                      aria-selected={reviewView === 'graph'}
+                      className={reviewView === 'graph' ? 'tags-view-tab tags-view-tab-active' : 'tags-view-tab'}
+                      onClick={() => setReviewView('graph')}
+                    >
+                      Graph
+                    </button>
+                  </div>
+                )}
               </h3>
-              {!placeCollapsed &&
-                (toPlace.length > 0 ? (
-                  <TagPlacementSuggestions
-                    tags={toPlace}
-                    disabled={busy !== null}
-                    onAccept={acceptSuggestion}
-                    onReject={rejectSuggestion}
-                  />
-                ) : (
-                  <p className="tags-empty">
-                    No pending placements. Click “Suggest hierarchy” above, then check back once the
-                    worker has run.
-                  </p>
-                ))}
+              {!reviewCollapsed && (
+                <>
+                  {(toReview.length > 0 || toPlace.length > 0) && (
+                    <ul className="tags-list">
+                      {toReview.map(row)}
+                      <TagPlacementSuggestions
+                        tags={toPlace}
+                        tagsById={tagsById}
+                        view={reviewView}
+                        disabled={busy !== null}
+                        onAccept={acceptSuggestion}
+                        onReject={rejectSuggestion}
+                        onFlip={flipSuggestion}
+                        onMerge={merge}
+                      />
+                    </ul>
+                  )}
+
+                  {toReview.length === 0 && toPlace.length === 0 && confirmed.length >= 2 && (
+                    <p className="tags-empty">
+                      No pending placements. Click “Suggest for review” above, then check back once
+                      the worker has run.
+                    </p>
+                  )}
+                </>
+              )}
             </div>
           )}
 
@@ -243,15 +335,41 @@ export function TagsSection() {
                   <span className="section-toggle-caret" aria-hidden="true">▾</span>
                   Hierarchy
                 </button>
+
+                {!hierarchyCollapsed && (
+                  <div className="tags-view-tabs" role="tablist" aria-label="Hierarchy view">
+                    <button
+                      type="button"
+                      role="tab"
+                      aria-selected={hierarchyView === 'tree'}
+                      className={hierarchyView === 'tree' ? 'tags-view-tab tags-view-tab-active' : 'tags-view-tab'}
+                      onClick={() => setHierarchyView('tree')}
+                    >
+                      Tree
+                    </button>
+                    <button
+                      type="button"
+                      role="tab"
+                      aria-selected={hierarchyView === 'graph'}
+                      className={hierarchyView === 'graph' ? 'tags-view-tab tags-view-tab-active' : 'tags-view-tab'}
+                      onClick={() => setHierarchyView('graph')}
+                    >
+                      Graph
+                    </button>
+                  </div>
+                )}
               </h3>
-              {!hierarchyCollapsed && (
-                <TagHierarchyTree
-                  tags={confirmed}
-                  disabled={busy !== null}
-                  onAddParent={addParent}
-                  onRemoveParent={removeParent}
-                />
-              )}
+              {!hierarchyCollapsed &&
+                (hierarchyView === 'tree' ? (
+                  <TagHierarchyTree
+                    tags={confirmed}
+                    disabled={busy !== null}
+                    onAddParent={addParent}
+                    onRemoveParent={removeParent}
+                  />
+                ) : (
+                  <TagHierarchyGraph tags={confirmed} />
+                ))}
             </div>
           )}
         </>

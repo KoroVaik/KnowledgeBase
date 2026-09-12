@@ -22,6 +22,7 @@ export function useTagPicker({ source, suggestion, excludeIds, onPick }: UseTagP
   const [text, setText] = useState('')
   const [open, setOpen] = useState(false)
   const [spelling, setSpelling] = useState<Tag[]>([])
+  const [spellingIsFallback, setSpellingIsFallback] = useState(false)
   const [results, setResults] = useState<Tag[]>([])
   const [creating, setCreating] = useState(false)
   const [createError, setCreateError] = useState<string | null>(null)
@@ -43,11 +44,24 @@ export function useTagPicker({ source, suggestion, excludeIds, onPick }: UseTagP
         // busiest tags instead, same as the vocabulary browser with no query.
         const listing = source === undefined ? fetchTags() : fetchTags({ query: source.name, excludeId: source.id })
 
-        void listing.then((tags) =>
-          setSpelling(
-            tags.filter((tag) => tag.id !== suggestion?.id && !excludeIds.includes(tag.id)).slice(0, SPELLING_LIMIT),
-          ),
-        )
+        void listing.then((tags) => {
+          const close = tags.filter((tag) => tag.id !== suggestion?.id && !excludeIds.includes(tag.id))
+
+          if (close.length > 0 || source === undefined) {
+            setSpellingIsFallback(false)
+            setSpelling(close.slice(0, SPELLING_LIMIT))
+            return
+          }
+
+          // Nothing shares spelling with source's name - fall back to the busiest-tags listing
+          // rather than leaving the panel empty; at least offers real candidates to pick from.
+          void fetchTags({ excludeId: source.id }).then((allTags) => {
+            setSpellingIsFallback(true)
+            setSpelling(
+              allTags.filter((tag) => tag.id !== suggestion?.id && !excludeIds.includes(tag.id)).slice(0, SPELLING_LIMIT),
+            )
+          })
+        })
       } else {
         void fetchTags({ query: term, excludeId: source?.id }).then((tags) =>
           setResults(tags.filter((tag) => !excludeIds.includes(tag.id)).slice(0, SEARCH_LIMIT)),
@@ -107,6 +121,7 @@ export function useTagPicker({ source, suggestion, excludeIds, onPick }: UseTagP
     text,
     open,
     spelling,
+    spellingIsFallback,
     results,
     creating,
     createError,

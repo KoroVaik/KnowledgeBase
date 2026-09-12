@@ -240,6 +240,18 @@ not just compiled.
   startup, a seeded suggestion row rendered correctly on both tags it names, accept wrote
   the real link and removed the suggestion, reject kept it dismissed, `suggest-hierarchy`
   returned 202 and queued the job.
+- Fixed: accepting/rejecting a tag placement suggestion matched *either* direction
+  (`ChildId`/`ParentId` swapped) in one query, so when two tags independently suggested
+  each other as parent (both lack a parent, each searches on its own - seen live with
+  "Iceland"/"Travel" and "Programming"/"Type Hints"), an Accept click could silently
+  resolve the wrong one of the two rows, leaving the suggestion the UI still showed
+  pointing at nothing - a later click on it 404s with no visible error. `TagsController`
+  now checks the exact requested direction first, only falling back to the reversed one
+  (kept for the Flip feature's reject call, which intentionally sends the swapped pair).
+  Verified live: accepting one direction of a real reciprocal pair now always removes
+  that exact row and leaves its mirror intact; accepting the mirror after correctly 409s
+  (cycle) instead of misbehaving; a normal (non-reciprocal) accept via the real UI button
+  still works end-to-end.
 
 ## Infra & deploy
 

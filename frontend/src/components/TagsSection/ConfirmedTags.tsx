@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { ReactElement } from 'react'
 import { fetchTags } from '../../api/tags'
 import type { Tag } from '../../api/tags'
+import { useCollapsibleSection } from '../../hooks/useCollapsibleSection'
 
 const CONFIRMED_PREVIEW = 10
 const SEARCH_DEBOUNCE_MS = 200
@@ -22,6 +23,7 @@ export function ConfirmedTags({
   const [results, setResults] = useState<{ term: string; ids: string[] } | null>(null)
   const [error, setError] = useState<string | null>(null)
   const latestSearch = useRef(0)
+  const { collapsed, toggle } = useCollapsibleSection('tags:confirmed')
 
   const term = query.trim()
 
@@ -65,37 +67,44 @@ export function ConfirmedTags({
   return (
     <div className="subsection-panel">
       <h3 className="tags-subhead">
-        Confirmed
-        <span className="section-count">{tags.length}</span>
+        <button type="button" className="subsection-toggle" aria-expanded={!collapsed} onClick={toggle}>
+          <span className="section-toggle-caret" aria-hidden="true">▾</span>
+          Confirmed
+          <span className="section-count">{tags.length}</span>
+        </button>
       </h3>
 
-      <input
-        type="text"
-        className="tags-search field field-xs"
-        placeholder="Search tags…"
-        aria-label="Search confirmed tags"
-        value={query}
-        onChange={(event) => setQuery(event.target.value)}
-      />
+      {!collapsed && (
+        <>
+          <input
+            type="text"
+            className="tags-search field field-xs"
+            placeholder="Search tags…"
+            aria-label="Search confirmed tags"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+          />
 
-      {error !== null && (
-        <p className="notes-error" role="alert">
-          {error}
-        </p>
-      )}
+          {error !== null && (
+            <p className="notes-error" role="alert">
+              {error}
+            </p>
+          )}
 
-      {searching && <p className="tags-empty">Searching…</p>}
+          {searching && <p className="tags-empty">Searching…</p>}
 
-      {!searching && term !== '' && visible.length === 0 && error === null && (
-        <p className="tags-empty">No matches.</p>
-      )}
+          {!searching && term !== '' && visible.length === 0 && error === null && (
+            <p className="tags-empty">No matches.</p>
+          )}
 
-      {!searching && <ul className="tags-list">{visible.map(renderRow)}</ul>}
+          {!searching && <ul className="tags-list">{visible.map(renderRow)}</ul>}
 
-      {term === '' && tags.length > CONFIRMED_PREVIEW && (
-        <p className="tags-more">
-          Showing {CONFIRMED_PREVIEW} of {tags.length}.
-        </p>
+          {term === '' && tags.length > CONFIRMED_PREVIEW && (
+            <p className="tags-more">
+              Showing {CONFIRMED_PREVIEW} of {tags.length}.
+            </p>
+          )}
+        </>
       )}
     </div>
   )

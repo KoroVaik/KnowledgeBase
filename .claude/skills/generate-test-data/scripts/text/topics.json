@@ -4,28 +4,24 @@
   { "cluster": "python", "file": "python-testing-pytest.txt", "topic": "a personal note with pytest tips: fixtures, parametrize, monkeypatch, mocking external calls, and coverage reports" },
   { "cluster": "python", "file": "python-type-hints.txt", "topic": "a personal note evaluating Python type hints and mypy on an existing project, including bugs mypy caught and pain points with third-party libraries" },
   { "cluster": "python", "file": "python-packaging-poetry.txt", "topic": "a personal note about switching a Python project from requirements.txt to Poetry for dependency and package management" },
-  { "cluster": "python", "file": "python-list-comprehensions.txt", "topic": "a personal note collecting idiomatic Python one-liners: list/dict/set comprehensions, generator expressions, and when they hurt readability" },
 
   { "cluster": "cooking", "file": "recipe-pasta-carbonara.txt", "topic": "a personal recipe note for classic pasta carbonara, with notes on common mistakes like scrambling the eggs" },
   { "cluster": "cooking", "file": "recipe-sourdough-bread.txt", "topic": "a personal note documenting a sourdough starter and bread baking attempts, timings and what went wrong" },
   { "cluster": "cooking", "file": "recipe-thai-green-curry.txt", "topic": "a personal recipe note for Thai green curry from scratch, including the curry paste and ingredient substitutions" },
   { "cluster": "cooking", "file": "kitchen-knife-skills.txt", "topic": "a personal note on practicing basic kitchen knife skills: grip, julienne, dicing an onion safely" },
   { "cluster": "cooking", "file": "recipe-homemade-pizza.txt", "topic": "a personal note about making homemade pizza dough and getting a home oven hot enough for a good crust" },
-  { "cluster": "cooking", "file": "fermentation-basics.txt", "topic": "a personal note on learning basic fermentation at home: sauerkraut and kimchi, salt ratios and troubleshooting mold" },
 
   { "cluster": "travel", "file": "trip-lisbon-itinerary.txt", "topic": "a personal travel itinerary note for a long weekend in Lisbon, Portugal, with neighborhoods, food, and transport tips" },
   { "cluster": "travel", "file": "trip-japan-packing-list.txt", "topic": "a personal packing list and prep note for a two-week trip to Japan, including a JR pass and etiquette reminders" },
   { "cluster": "travel", "file": "trip-iceland-road-trip.txt", "topic": "a personal note planning a road trip around Iceland's Ring Road, weather concerns and must-see stops" },
   { "cluster": "travel", "file": "budget-travel-tips.txt", "topic": "a personal note collecting general budget travel tips learned from several trips: flights, accommodation, avoiding tourist traps" },
   { "cluster": "travel", "file": "trip-georgia-tbilisi-notes.txt", "topic": "a personal travel note about visiting Tbilisi, Georgia, focused on the food, wine region day trips, and the old town" },
-  { "cluster": "travel", "file": "travel-photography-basics.txt", "topic": "a personal note on improving travel photography with just a phone camera: composition, light, and editing basics" },
 
   { "cluster": "books", "file": "book-notes-atomic-habits.txt", "topic": "personal reading notes on the book Atomic Habits by James Clear, with the key ideas that actually stuck" },
   { "cluster": "books", "file": "book-notes-dune.txt", "topic": "personal reading notes on the science fiction novel Dune by Frank Herbert, covering the world of Arrakis, politics, and themes" },
   { "cluster": "books", "file": "book-notes-thinking-fast-and-slow.txt", "topic": "personal reading notes on Thinking, Fast and Slow by Daniel Kahneman, covering System 1 and System 2 thinking" },
   { "cluster": "books", "file": "reading-list-2026.txt", "topic": "a personal reading list note for the year with a few books queued up and why each one was picked" },
   { "cluster": "books", "file": "book-notes-project-hail-mary.txt", "topic": "personal reading notes on the science fiction novel Project Hail Mary by Andy Weir" },
-  { "cluster": "books", "file": "book-club-discussion-notes.txt", "topic": "personal notes from a book club discussion, general reflections on how the group picks and debates books" },
 
   { "cluster": "fitness", "file": "home-workout-no-equipment.txt", "topic": "a personal note on a bodyweight home workout routine with no equipment, done a few times a week" },
   { "cluster": "fitness", "file": "running-half-marathon-plan.txt", "topic": "a personal training log note for a half marathon training plan, weekly mileage and how the body is holding up" },
@@ -44,5 +40,82 @@
   { "cluster": "movies", "file": "sci-fi-movie-watchlist.txt", "topic": "a personal watchlist note of science fiction movies to watch, with a short reason for each pick" },
   { "cluster": "movies", "file": "movie-notes-interstellar.txt", "topic": "personal notes on the movie Interstellar, the science behind it and the emotional core of the story" },
   { "cluster": "movies", "file": "movie-notes-arrival.txt", "topic": "personal notes on the movie Arrival and its ideas about language and time" },
-  { "cluster": "movies", "file": "sci-fi-book-vs-movie-dune.txt", "topic": "a personal note comparing the Dune novel to its movie adaptations, what changed and what was kept" }
+
+  { "cluster": "music", "file": "music-learning-guitar-basics.txt", "topic": "a personal note about starting to learn acoustic guitar as an adult beginner: chords, calluses, and a practice routine" },
+  { "cluster": "music", "file": "music-vinyl-collection-notes.txt", "topic": "a personal note about building a small vinyl record collection, favorite finds and what to look for at record shops" },
+  { "cluster": "music", "file": "music-concert-notes-live-show.txt", "topic": "personal notes after attending a live concert, the setlist highlights and how the venue sound compared to recordings" },
+  { "cluster": "music", "file": "music-theory-basics-for-guitar.txt", "topic": "a personal note working through basic music theory for guitar: scales, keys, and how chords relate to each other" },
+  { "cluster": "music", "file": "music-playlist-making-notes.txt", "topic": "a personal note about curating mood-based playlists, what makes a good transition between songs" },
+
+  { "cluster": "history", "file": "history-notes-roman-empire.txt", "topic": "personal reading notes on the fall of the Roman Empire, key causes historians point to" },
+  { "cluster": "history", "file": "history-notes-world-war-two-pacific.txt", "topic": "personal reading notes on the Pacific theater of World War Two, focused on a few key battles" },
+  { "cluster": "history", "file": "history-documentary-notes-ancient-egypt.txt", "topic": "personal notes after watching a documentary series on ancient Egypt, the pyramids and daily life" },
+  { "cluster": "history", "file": "history-local-history-walk.txt", "topic": "a personal note from a self-guided historical walking tour of an old town, buildings and their backstories" },
+  { "cluster": "history", "file": "history-notes-cold-war-overview.txt", "topic": "personal reading notes giving an overview of the Cold War, major events and how they connected" },
+
+  { "cluster": "finance", "file": "finance-budgeting-notes.txt", "topic": "a personal note about setting up a monthly budget for the first time, categories and where the money actually goes" },
+  { "cluster": "finance", "file": "finance-index-fund-investing-basics.txt", "topic": "a personal note learning the basics of index fund investing, why low fees matter" },
+  { "cluster": "finance", "file": "finance-emergency-fund-notes.txt", "topic": "a personal note about building up an emergency fund, how big it should be and where to keep it" },
+  { "cluster": "finance", "file": "finance-tracking-subscriptions.txt", "topic": "a personal note auditing recurring subscriptions and cutting the ones not being used" },
+  { "cluster": "finance", "file": "finance-tax-filing-notes.txt", "topic": "a personal note on preparing to file taxes for the first time as a freelancer, what receipts to keep" },
+
+  { "cluster": "language-learning", "file": "language-learning-spanish-notes.txt", "topic": "a personal note on learning Spanish as an adult beginner, apps used and common mistakes" },
+  { "cluster": "language-learning", "file": "language-learning-japanese-kanji.txt", "topic": "a personal note on the slow process of learning Japanese kanji, mnemonics that actually help" },
+  { "cluster": "language-learning", "file": "language-exchange-meetup-notes.txt", "topic": "personal notes after attending a language exchange meetup, what worked and what felt awkward" },
+  { "cluster": "language-learning", "file": "language-learning-grammar-struggles.txt", "topic": "a personal note on wrestling with a confusing grammar point in a language being learned" },
+  { "cluster": "language-learning", "file": "language-learning-immersion-trip.txt", "topic": "a personal note about trying to immerse in a language during a short trip abroad, what helped fluency" },
+
+  { "cluster": "home-improvement", "file": "home-improvement-painting-a-room.txt", "topic": "a personal note about painting a room for the first time, prep work and mistakes made" },
+  { "cluster": "home-improvement", "file": "home-improvement-ikea-furniture-build.txt", "topic": "a personal note assembling flat-pack furniture, what went wrong and lessons for next time" },
+  { "cluster": "home-improvement", "file": "home-improvement-small-apartment-storage.txt", "topic": "a personal note on solving storage problems in a small apartment" },
+  { "cluster": "home-improvement", "file": "home-improvement-basic-plumbing-fix.txt", "topic": "a personal note about fixing a leaky faucet for the first time, tools needed and what was scary about it" },
+  { "cluster": "home-improvement", "file": "home-improvement-organizing-garage.txt", "topic": "a personal note on a weekend spent organizing a cluttered garage" },
+
+  { "cluster": "board-games", "file": "board-games-new-favorites.txt", "topic": "a personal note about a few board games recently discovered and why they're now regulars for game night" },
+  { "cluster": "board-games", "file": "board-games-teaching-new-players.txt", "topic": "a personal note on lessons learned teaching board games to new players without overwhelming them" },
+  { "cluster": "board-games", "file": "board-games-solo-mode-notes.txt", "topic": "a personal note about board games with good solo modes, played on quiet weeknights" },
+  { "cluster": "board-games", "file": "board-games-collection-organizing.txt", "topic": "a personal note on organizing and storing a growing board game collection" },
+  { "cluster": "board-games", "file": "board-games-game-night-notes.txt", "topic": "personal notes from a recurring game night, which games are hits and which flopped" },
+
+  { "cluster": "coffee", "file": "coffee-home-brewing-notes.txt", "topic": "a personal note on getting into home coffee brewing, pour-over technique and grind size lessons" },
+  { "cluster": "coffee", "file": "coffee-espresso-machine-notes.txt", "topic": "a personal note about learning to use a home espresso machine, dialing in shots" },
+  { "cluster": "coffee", "file": "coffee-bean-tasting-notes.txt", "topic": "a personal note comparing coffee beans from different roasters, tasting notes and preferences" },
+  { "cluster": "coffee", "file": "coffee-latte-art-practice.txt", "topic": "a personal note practicing latte art at home, what keeps going wrong with the milk" },
+  { "cluster": "coffee", "file": "coffee-shop-recommendations.txt", "topic": "a personal note collecting favorite local coffee shops and what makes each one worth visiting" },
+
+  { "cluster": "cycling", "file": "cycling-commute-notes.txt", "topic": "a personal note about switching to biking as a daily commute, route choices and weather gear" },
+  { "cluster": "cycling", "file": "cycling-first-century-ride.txt", "topic": "a personal note training for and completing a first 100-mile bike ride" },
+  { "cluster": "cycling", "file": "cycling-bike-maintenance-basics.txt", "topic": "a personal note learning basic bike maintenance: fixing a flat, adjusting brakes, chain care" },
+  { "cluster": "cycling", "file": "cycling-gear-notes.txt", "topic": "a personal note about cycling gear picked up over time and what turned out to be worth it" },
+  { "cluster": "cycling", "file": "cycling-group-ride-notes.txt", "topic": "personal notes after joining a local group cycling ride for the first time" },
+
+  { "cluster": "meditation", "file": "meditation-daily-practice-notes.txt", "topic": "a personal note on starting a daily meditation habit, apps tried and what actually stuck" },
+  { "cluster": "meditation", "file": "meditation-retreat-notes.txt", "topic": "personal notes from attending a short meditation retreat, what it was like and takeaways" },
+  { "cluster": "meditation", "file": "meditation-sleep-and-anxiety.txt", "topic": "a personal note on using meditation to help with sleep and anxiety, what helped and what didn't" },
+  { "cluster": "meditation", "file": "meditation-breathing-techniques.txt", "topic": "a personal note trying out different breathing techniques for stress" },
+  { "cluster": "meditation", "file": "meditation-mindfulness-at-work.txt", "topic": "a personal note on bringing small mindfulness moments into a busy workday" },
+
+  { "cluster": "career", "file": "career-notes-job-search.txt", "topic": "a personal note reflecting on a recent job search, what worked in interviews and what didn't" },
+  { "cluster": "career", "file": "career-notes-performance-review-prep.txt", "topic": "a personal note preparing for an annual performance review, accomplishments to bring up" },
+  { "cluster": "career", "file": "career-notes-switching-fields.txt", "topic": "a personal note thinking through switching careers into a new field, worries and a rough plan" },
+  { "cluster": "career", "file": "career-notes-mentor-conversation.txt", "topic": "personal notes from a conversation with a mentor about career growth" },
+  { "cluster": "career", "file": "career-notes-negotiating-offer.txt", "topic": "a personal note about negotiating a job offer for the first time, what was said and the outcome" },
+
+  { "cluster": "astronomy", "file": "astronomy-notes-first-telescope.txt", "topic": "a personal note about buying a first telescope and what could actually be seen with it" },
+  { "cluster": "astronomy", "file": "astronomy-stargazing-trip-notes.txt", "topic": "personal notes from a stargazing trip away from city lights, what was visible and how it felt" },
+  { "cluster": "astronomy", "file": "astronomy-notes-learning-constellations.txt", "topic": "a personal note on learning to identify constellations and using a star map app" },
+  { "cluster": "astronomy", "file": "astronomy-notes-meteor-shower-watch.txt", "topic": "personal notes from staying up to watch a meteor shower" },
+  { "cluster": "astronomy", "file": "astronomy-notes-space-news-reading.txt", "topic": "a personal note collecting thoughts after reading about recent space mission news" },
+
+  { "cluster": "pets", "file": "pets-new-puppy-notes.txt", "topic": "a personal note about the first weeks with a new puppy, training struggles and what actually worked" },
+  { "cluster": "pets", "file": "pets-cat-behavior-notes.txt", "topic": "a personal note trying to understand a cat's odd behavior changes and what a vet said" },
+  { "cluster": "pets", "file": "pets-dog-training-basics.txt", "topic": "a personal note working through basic obedience training with a dog" },
+  { "cluster": "pets", "file": "pets-vet-visit-notes.txt", "topic": "personal notes from a routine vet visit, questions asked and advice given" },
+  { "cluster": "pets", "file": "pets-adopting-a-shelter-dog.txt", "topic": "a personal note about the process and adjustment period of adopting a shelter dog" },
+
+  { "cluster": "minimalism", "file": "minimalism-decluttering-notes.txt", "topic": "a personal note on a big decluttering push at home, what was hardest to let go of" },
+  { "cluster": "minimalism", "file": "minimalism-capsule-wardrobe-notes.txt", "topic": "a personal note trying out a capsule wardrobe, what stayed and what got donated" },
+  { "cluster": "minimalism", "file": "minimalism-digital-declutter.txt", "topic": "a personal note about decluttering digital life: apps, files, and notifications" },
+  { "cluster": "minimalism", "file": "minimalism-minimal-desk-setup.txt", "topic": "a personal note paring down a home desk setup to the essentials" },
+  { "cluster": "minimalism", "file": "minimalism-rethinking-purchases.txt", "topic": "a personal note on trying to be more deliberate before buying anything new" }
 ]

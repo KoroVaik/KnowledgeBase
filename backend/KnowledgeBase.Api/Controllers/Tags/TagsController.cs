@@ -56,6 +56,13 @@ public sealed class TagsController(KnowledgeBaseDbContext database, IChangeNotif
         var tagIdsWithPendingSuggestion = pendingSuggestions
             .SelectMany(suggestion => new[] { suggestion.ChildId, suggestion.ParentId })
             .ToHashSet();
+        var parentSuggestionsByChild = pendingSuggestions
+            .GroupBy(suggestion => suggestion.ChildId)
+            .ToDictionary(
+                group => group.Key,
+                group => (IReadOnlyList<TagParentSuggestionRef>)group
+                    .Select(suggestion => new TagParentSuggestionRef(suggestion.ParentId, suggestion.Confidence.ToString()))
+                    .ToList());
 
         var tags = await _database.Tags.ToListAsync(cancellationToken);
 
@@ -81,8 +88,10 @@ public sealed class TagsController(KnowledgeBaseDbContext database, IChangeNotif
                 row.Tag.Confirmed,
                 counts.GetValueOrDefault(row.Tag.Id),
                 row.Tag.SuggestedMergeIntoId,
+                row.Tag.SuggestedMergeConfidence?.ToString(),
                 parentsByChild.GetValueOrDefault(row.Tag.Id, Array.Empty<string>()),
-                tagIdsWithPendingSuggestion.Contains(row.Tag.Id)))
+                tagIdsWithPendingSuggestion.Contains(row.Tag.Id),
+                parentSuggestionsByChild.GetValueOrDefault(row.Tag.Id, Array.Empty<TagParentSuggestionRef>())))
             .ToList();
 
         return Ok(response);
@@ -141,7 +150,9 @@ public sealed class TagsController(KnowledgeBaseDbContext database, IChangeNotif
         _notifier.Publish(new ChangeEvent(ChangeResources.Notes, ChangeActions.Updated));
 
         return CreatedAtAction(
-            nameof(List), new TagResponse(tag.Id, tag.Name, tag.Confirmed, 0, null, Array.Empty<string>(), false));
+            nameof(List),
+            new TagResponse(
+                tag.Id, tag.Name, tag.Confirmed, 0, null, null, Array.Empty<string>(), false, Array.Empty<TagParentSuggestionRef>()));
     }
 
     /// <summary>Marks a tag as vouched for by the user. Its merge suggestion is dropped.</summary>
@@ -407,14 +418,14 @@ public sealed class TagsController(KnowledgeBaseDbContext database, IChangeNotif
             from suggestion in _database.TagParentSuggestions
             join tag in _database.Tags on suggestion.ParentId equals tag.Id
             where suggestion.ChildId == id && !suggestion.Dismissed
-            select new TagSuggestionResponse(tag.Id, tag.Name))
+            select new TagSuggestionResponse(tag.Id, tag.Name, suggestion.Confidence.ToString()))
             .ToListAsync(cancellationToken);
 
         var suggestedChildren = await (
             from suggestion in _database.TagParentSuggestions
             join tag in _database.Tags on suggestion.ChildId equals tag.Id
             where suggestion.ParentId == id && !suggestion.Dismissed
-            select new TagSuggestionResponse(tag.Id, tag.Name))
+            select new TagSuggestionResponse(tag.Id, tag.Name, suggestion.Confidence.ToString()))
             .ToListAsync(cancellationToken);
 
         return Ok(new TagParentSuggestionsResponse(suggestedParents, suggestedChildren));
@@ -436,9 +447,7 @@ public sealed class TagsController(KnowledgeBaseDbContext database, IChangeNotif
     [ProducesResponseType(StatusCodes.Status409Conflict)]
     public async Task<IActionResult> AcceptParentSuggestion(string id, string otherId, CancellationToken cancellationToken)
     {
-        var suggestion = await _database.TagParentSuggestions.FirstOrDefaultAsync(
-            row => (row.ChildId == id && row.ParentId == otherId) || (row.ChildId == otherId && row.ParentId == id),
-            cancellationToken);
+        var suggestion = await FindSuggestionAsync(id, otherId, cancellationToken);
 
         if (suggestion is null)
         {
@@ -460,9 +469,23 @@ public sealed class TagsController(KnowledgeBaseDbContext database, IChangeNotif
         return NoContent();
     }
 
+    // Every caller other than the Flip commit already knows which side is the child, so this
+    // checks that exact pairing first. The reversed fallback exists only for Flip's reject
+    // (useTagsSection.ts flipSuggestion) sending the *new*, not the stored, direction. Checking
+    // "either direction" in one query - the previous approach - picked whichever row an OR
+    // matched first, which was wrong whenever both directions of a pair existed as separate rows
+    // (two tags with no parent yet can each independently suggest the other): it could delete
+    // the wrong one and leave the pair the UI was actually showing to 404 on the next click.
+    private async Task<TagParentSuggestion?> FindSuggestionAsync(string id, string otherId, CancellationToken cancellationToken) =>
+        await _database.TagParentSuggestions.FirstOrDefaultAsync(
+            row => row.ChildId == id && row.ParentId == otherId, cancellationToken)
+        ?? await _database.TagParentSuggestions.FirstOrDefaultAsync(
+            row => row.ChildId == otherId && row.ParentId == id, cancellationToken);
+
     /// <summary>
     /// Rejects a placement suggestion between <c>id</c> and <c>otherId</c>. Kept as a dismissed
-    /// row, not deleted, so <c>suggest-hierarchy</c> does not propose the same pair again.
+    /// row, not deleted - <c>suggest-hierarchy</c> may revive the same pair on a later run, up to
+    /// three rejections, after which it is never proposed again.
     /// </summary>
     /// <response code="204">Rejected.</response>
     /// <response code="401">No session, or it has expired.</response>
@@ -473,9 +496,7 @@ public sealed class TagsController(KnowledgeBaseDbContext database, IChangeNotif
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> RejectParentSuggestion(string id, string otherId, CancellationToken cancellationToken)
     {
-        var suggestion = await _database.TagParentSuggestions.FirstOrDefaultAsync(
-            row => (row.ChildId == id && row.ParentId == otherId) || (row.ChildId == otherId && row.ParentId == id),
-            cancellationToken);
+        var suggestion = await FindSuggestionAsync(id, otherId, cancellationToken);
 
         if (suggestion is null)
         {
@@ -483,6 +504,7 @@ public sealed class TagsController(KnowledgeBaseDbContext database, IChangeNotif
         }
 
         suggestion.Dismissed = true;
+        suggestion.DeclineCount += 1;
         await _database.SaveChangesAsync(CancellationToken.None);
 
         _notifier.Publish(new ChangeEvent(ChangeResources.Notes, ChangeActions.Updated));
@@ -491,23 +513,23 @@ public sealed class TagsController(KnowledgeBaseDbContext database, IChangeNotif
     }
 
     /// <summary>
-    /// Queues a job that finds a parent for every confirmed tag that has none yet and no
-    /// pending suggestion - see "Tag hierarchy" in docs/database.md.
+    /// Queues a job that finds a parent for every tag (confirmed or still awaiting review) that
+    /// has none yet and no pending suggestion - see "Tag hierarchy" in docs/database.md.
     /// </summary>
     /// <response code="202">Queued.</response>
     /// <response code="401">No session, or it has expired.</response>
-    /// <response code="409">Fewer than two confirmed tags, or a run is already queued.</response>
+    /// <response code="409">Fewer than two tags, or a run is already queued.</response>
     [HttpPost("suggest-hierarchy")]
     [ProducesResponseType(StatusCodes.Status202Accepted)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(StatusCodes.Status409Conflict)]
     public async Task<IActionResult> SuggestHierarchy(CancellationToken cancellationToken)
     {
-        var confirmedCount = await _database.Tags.CountAsync(tag => tag.Confirmed, cancellationToken);
+        var totalCount = await _database.Tags.CountAsync(cancellationToken);
 
-        if (confirmedCount < 2)
+        if (totalCount < 2)
         {
-            return Conflict(new { error = "Needs at least two confirmed tags." });
+            return Conflict(new { error = "Needs at least two tags in the vocabulary." });
         }
 
         var queued = await TagHierarchyQueue.EnqueueAsync(_database, cancellationToken);

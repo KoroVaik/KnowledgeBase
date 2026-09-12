@@ -1,59 +1,54 @@
-/* Placement-suggestion mini graph - TagPlacementSuggestions. Only the rows with an actual
-   suggestion get rendered, so a tag with one guess is a single pill and one connector, not a
-   fixed four-slot graph. */
-.tag-suggestion-cards {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  margin: 8px 0 4px;
-}
-
-.tag-suggestion-card {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 6px;
-  padding: 12px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-}
-
-.tag-suggestion-row {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 8px;
-}
-
-.tag-suggestion-center {
-  padding: 4px 14px;
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--accent);
-  background: var(--accent-bg);
-  border: 1px solid var(--accent-border);
-  border-radius: 999px;
-}
-
-.tag-suggestion-pill {
-  display: flex;
+/* Placement-suggestion candidates inside a tags-row - see TagPlacementSuggestions.tsx for why
+   these render as plain <li> siblings of the "To review" rows instead of their own cards. */
+.tag-suggestion-candidate {
+  display: inline-flex;
   align-items: center;
   gap: 4px;
-  padding: 3px 4px 3px 10px;
-  font-size: 12px;
-  border: 1px dashed var(--border);
-  border-radius: 999px;
-  background: var(--surface-hover);
+  padding: 2px 4px 2px 8px;
+  font-size: 10px;
 }
 
-.tag-suggestion-pill button {
-  width: 18px;
-  height: 18px;
+.tag-suggestion-candidate + .tag-suggestion-candidate {
+  border-left: 1px solid var(--border);
+}
+
+.tag-suggestion-candidate-pill {
+  padding: 1px 6px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+}
+
+/* Same purple-vs-orange cue as the confirmed/unconfirmed tag chip everywhere else - see the
+   matching note in TagSuggestionGraph.css. */
+.tag-suggestion-candidate-confirmed {
+  color: var(--accent);
+  background: var(--accent-bg);
+  border-color: var(--accent-border);
+}
+
+.tag-suggestion-candidate-unconfirmed {
+  color: var(--warn);
+  background: var(--warn-bg);
+  border-color: var(--warn);
+}
+
+.tag-action-chip-child {
+  border-color: var(--accent-border);
+}
+
+.tag-action-chip-child > .tag-action-label {
+  color: var(--text-muted);
+}
+
+.tag-suggestion-accept,
+.tag-suggestion-reject {
+  width: 16px;
+  height: 16px;
   padding: 0;
   border: 0;
   border-radius: 50%;
   line-height: 1;
-  font-size: 11px;
+  font-size: 10px;
   cursor: pointer;
 }
 
@@ -67,7 +62,8 @@
   background: var(--danger-bg);
 }
 
-.tag-suggestion-pill button:disabled {
+.tag-suggestion-accept:disabled,
+.tag-suggestion-reject:disabled {
   cursor: not-allowed;
   opacity: 0.5;
 }

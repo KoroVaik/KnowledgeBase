@@ -23,10 +23,11 @@ export type TagsState =
   | { status: 'ready'; tags: Tag[]; synthesisCount: number }
   | { status: 'error'; message: string }
 
-/** State and every action behind TagsSection: load/reload, confirm, merge, delete, the two
- *  synthesis jobs (suggest-merges, build index), and parent add/remove. `TagsSection.tsx`
- *  only turns this into markup - `queued`/`busy` key off the same string each action uses
- *  (a tag id, or 'suggest-merges' / 'index') so a button can tell whether it is the one running. */
+/** State and every action behind TagsSection: load/reload, confirm, merge, delete, the review
+ *  suggestion jobs (suggest-review, build index), and parent add/remove. `TagsSection.tsx` only
+ *  turns this into markup - `queued`/`busy` key off the same string each action uses (a tag id,
+ *  or 'suggest-review' / 'suggest-merges' / 'suggest-hierarchy' / 'index') so a button can tell
+ *  whether it is the one running. */
 export function useTagsSection() {
   const [state, setState] = useState<TagsState>({ status: 'loading' })
   const [busy, setBusy] = useState<string | null>(null)
@@ -131,16 +132,93 @@ export function useTagsSection() {
     void change(tag.id, () => confirmTagApi(tag.id))
   }
 
+  // Confirms the tag and accepts one of its AI parent suggestions in one action - the merged
+  // "90% AI, one approval" flow instead of confirming now and finding the same tag again later
+  // in "To place".
+  function confirmWithParent(tag: Tag, parent: Tag) {
+    void change(tag.id, async () => {
+      await confirmTagApi(tag.id)
+      await acceptTagParentSuggestion(tag.id, parent.id)
+    })
+  }
+
+  // The Flip control's commit for an unconfirmed tag's own suggested parent: same outcome as
+  // confirmWithParent, but the model had parent/child backwards. acceptTagParentSuggestion always
+  // honours the direction the suggestion row was stored in regardless of argument order, so a
+  // reversed link needs the plain addParent + a reject to clear the original guess.
+  function confirmWithParentFlipped(tag: Tag, candidate: Tag) {
+    void change(tag.id, async () => {
+      await confirmTagApi(tag.id)
+      await addTagParentApi(candidate.id, tag.id)
+      await rejectTagParentSuggestion(tag.id, candidate.id)
+    })
+  }
+
+  // Same idea for a confirmed tag's placement suggestion (TagPlacementSuggestions) - no confirm
+  // needed there, just the reversed link plus dismissing the original guess.
+  function flipSuggestion(newChildId: string, newParentId: string) {
+    void change(`${newChildId}:${newParentId}`, async () => {
+      await addTagParentApi(newChildId, newParentId)
+      await rejectTagParentSuggestion(newChildId, newParentId)
+    })
+  }
+
   function synthesiseTagNote(tag: Tag) {
     void synthesise(tag.name, () => synthesiseTagApi(tag.name))
   }
 
-  function suggestMerges() {
-    void synthesise('suggest-merges', suggestTagMerges)
+  // One button queues both passes: the merge re-check needs an unreviewed tag, the placement
+  // search just needs two tags to compare - each is skipped when its own precondition is not
+  // met, rather than surfacing a 409 for a check the UI could see coming.
+  function suggestForReview() {
+    void runSuggestForReview()
   }
 
-  function suggestHierarchy() {
-    void synthesise('suggest-hierarchy', suggestTagHierarchy)
+  async function runSuggestForReview() {
+    if (state.status !== 'ready') {
+      return
+    }
+
+    const canSuggestMerges = state.tags.length >= 2 && state.tags.some((tag) => !tag.confirmed)
+    const canSuggestHierarchy = state.tags.length >= 2
+
+    if (!canSuggestMerges && !canSuggestHierarchy) {
+      return
+    }
+
+    setError(null)
+    setBusy('suggest-review')
+
+    const queuedLabels: string[] = []
+    const errors: string[] = []
+
+    if (canSuggestMerges) {
+      try {
+        await suggestTagMerges()
+        queuedLabels.push('suggest-merges')
+      } catch (err) {
+        errors.push(messageOf(err))
+      }
+    }
+
+    if (canSuggestHierarchy) {
+      try {
+        await suggestTagHierarchy()
+        queuedLabels.push('suggest-hierarchy')
+      } catch (err) {
+        errors.push(messageOf(err))
+      }
+    }
+
+    setBusy(null)
+
+    if (queuedLabels.length > 0) {
+      setQueued((current) => [...current, ...queuedLabels])
+    }
+
+    if (queuedLabels.length === 0 && errors.length > 0) {
+      setError(errors.join(' · '))
+    }
   }
 
   function buildIndex() {
@@ -172,9 +250,11 @@ export function useTagsSection() {
     remove,
     merge,
     confirm,
+    confirmWithParent,
+    confirmWithParentFlipped,
+    flipSuggestion,
     synthesiseTagNote,
-    suggestMerges,
-    suggestHierarchy,
+    suggestForReview,
     buildIndex,
     addParent,
     removeParent,

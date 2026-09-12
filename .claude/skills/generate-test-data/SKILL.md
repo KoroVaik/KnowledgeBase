@@ -21,7 +21,9 @@ pipeline (`SourceNoteHandler` -> Ollama -> tags) - not hand-placed into
   least 2 Source notes carrying the same tag to group them (`ai-pipeline.md`, *Synthesis
   pipeline*), and varying the phrasing of the same subtopic within a cluster gives the
   still-unverified `GroupTags` pass (`ai-pipeline.md` Open list) something real to merge.
-  Add topics by editing the JSON, not the script.
+  Add topics by editing the JSON, not the script. For a one-off batch that isn't worth
+  curating into `topics.json`, pass `-Topics`/`-CountPerTopic` instead (see below) - the
+  model is asked to vary the angle itself.
 - **Model/BaseUrl are read from `backend/KnowledgeBase.Worker/appsettings.json`** at run
   time (override with `-Model`/`-OllamaUrl`) - test content should always be generated
   with whatever model the worker actually tags with, not a value that can quietly drift
@@ -46,6 +48,12 @@ Options:
 - `-Count 5` - cap how many topics to generate (after the cluster filter).
 - `-OutDir <path>` - default is `<repo root>/test-data/text`.
 - `-Model` / `-OllamaUrl` - override the auto-detected worker settings.
+- `-Topics "home coffee brewing","urban beekeeping"` - skip `topics.json` and generate
+  ad hoc: each string becomes its own cluster/theme.
+- `-CountPerTopic 4` - how many files per `-Topics` entry (default 5); each one asks the
+  model for a distinct angle so they don't repeat.
+- `-Files a.txt,b.txt` - re-roll only these `topics.json` entries (by `file` name) -
+  handy when the model way over/undershot the target length on a few notes.
 
 Requires Ollama running locally (`http://localhost:11434` by default) with the
 configured model pulled. One failed generation does not abort the run - it's logged and
