@@ -1,0 +1,79 @@
+.jobs-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.job {
+  padding: 11px 18px;
+  margin: 0 -18px;
+  border-bottom: 1px solid var(--border);
+}
+
+.job:last-child {
+  border-bottom: 0;
+}
+
+.job-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.job-kind {
+  font: 14px/150% var(--mono);
+  color: var(--text-h);
+  overflow-wrap: anywhere;
+}
+
+.job-meta {
+  margin-top: 2px;
+  font-size: 14px;
+  color: var(--text-muted);
+}
+
+.job-error {
+  margin-top: 4px;
+  font-size: 14px;
+  color: var(--danger);
+}
+
+/* Same shape as .asset-status (AssetList.css) - a dot + tinted pill rather than bare coloured
+   text, so a row reads as "the same kind of status" across sections. */
+.job-status {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 10px;
+  font-size: 12px;
+  line-height: 160%;
+  border-radius: 10px;
+}
+
+.job-status::before {
+  content: '';
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.job-status-pending {
+  color: var(--pending);
+  background: var(--pending-bg);
+}
+
+.job-status-running {
+  color: var(--running);
+  background: var(--running-bg);
+}
+
+@media (max-width: 600px) {
+  .job {
+    padding-inline: 14px;
+    margin-inline: -14px;
+  }
+}

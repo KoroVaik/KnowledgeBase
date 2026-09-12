@@ -129,6 +129,22 @@ export async function purgeNote(id: string): Promise<void> {
   }
 }
 
+/** Attaches an existing tag to the note - the manual counterpart to what the pipeline
+ *  proposes on its own. Returns the note's tags after the add. */
+export async function addNoteTag(id: string, tagId: string): Promise<NoteTag[]> {
+  const response = await apiFetch(`${notePath(id)}/tags`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ tagId }),
+  })
+
+  if (!response.ok) {
+    throw new Error(await readErrorMessage(response, 'Could not add the tag'))
+  }
+
+  return (await response.json()) as NoteTag[]
+}
+
 /** Re-runs the pipeline over the file. The note stays until the new one is ready, then moves
  *  to the bin while the fresh one takes its place, links included. */
 export async function processNoteAgain(id: string): Promise<void> {

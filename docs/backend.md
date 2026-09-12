@@ -113,6 +113,17 @@ and `fetch()` would read the markup as success.
 Moot — there is no form binding in the API. `upload-link` and `confirm` take JSON, bytes
 go to the bucket past ASP.NET.
 
+### Worker status — `GET /api/jobs`
+
+Lists `ProcessingJob` rows still `Pending` or `Running`, oldest first, joined to `Assets` for a
+file name when the kind carries one (`BuildSourceNote`). A plain read over the same table the
+worker already polls — no new job-kind logic, no write path. Scoped to active jobs on purpose:
+`Done`/`Skipped` jobs are history, already visible per-file via `AssetSummaryResponse`; `Failed`
+is terminal too, `MaxAttempts` exhausted. `Error` is still returned for a `Pending` row — the
+worker resets a failed-but-not-final attempt back to `Pending` and leaves `Error` set (see
+`PipelineWorker.TickAsync`), so a queued job can already carry its last failure. UI:
+[`frontend.md`](frontend.md) *Jobs section*.
+
 ### Password in plaintext — deferred on purpose
 
 During local dev the password sits as a plain default (`Password`) in

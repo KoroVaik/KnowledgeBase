@@ -1,0 +1,97 @@
+/* Rendered Markdown - keep the block spacing sane inside the row. */
+.note-body {
+  margin: 4px 0 16px;
+  overflow-wrap: anywhere;
+}
+
+.note-body > :first-child {
+  margin-top: 0;
+}
+
+/* The body comes from the model as free Markdown; without this its headings inherit the
+   page's 56px marketing h1 and fill the whole row. */
+.note-body :is(h1, h2, h3, h4) {
+  font-family: var(--heading);
+  font-weight: 500;
+  line-height: 1.3;
+  letter-spacing: normal;
+  color: var(--text-h);
+  margin: 20px 0 8px;
+}
+
+.note-body h1 {
+  font-size: 20px;
+}
+
+.note-body h2 {
+  font-size: 17px;
+}
+
+.note-body h3 {
+  font-size: 15px;
+}
+
+.note-body h4 {
+  font-size: 14px;
+}
+
+.note-body :is(p, ul, ol) {
+  margin: 8px 0;
+}
+
+.note-body pre {
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow-x: auto;
+}
+
+.note-body code {
+  font-family: var(--mono);
+  font-size: 13px;
+}
+
+.note-body a {
+  color: var(--accent);
+  text-underline-offset: 2px;
+}
+
+/* A [[link]] in a rendered body. Three states, and only the first one is clickable. */
+.wiki-link {
+  font: inherit;
+}
+
+button.wiki-link {
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  color: var(--accent);
+  text-decoration: underline;
+}
+
+/* A resolved link where the click is not wired up (the file panel): show it is a reference,
+   but not as something to press. */
+.wiki-link-inert {
+  color: var(--accent);
+  border-bottom: 1px dashed currentColor;
+}
+
+.wiki-link-deleted,
+.wiki-link-missing {
+  color: var(--text-muted);
+}
+
+.wiki-link-deleted .wiki-link-text {
+  text-decoration: line-through;
+}
+
+/* currentColor, not --border: the border tone is meant for surfaces and all but disappears
+   against the page background. */
+.wiki-link-missing {
+  border-bottom: 1px dashed currentColor;
+}
+
+.wiki-link-tag {
+  font-size: 12px;
+}

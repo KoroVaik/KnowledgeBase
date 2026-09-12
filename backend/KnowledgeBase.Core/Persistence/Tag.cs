@@ -10,7 +10,7 @@ public sealed class Tag
     // just flagged for review.
     public required bool Confirmed { get; set; }
 
-    // The confirmed tag the pipeline judged closest in meaning when it invented this one -
+    // The tag (confirmed, or itself still unconfirmed) the pipeline judged closest in meaning -
     // the review UI's "merge into" offer. Similarity is the model's call, never string distance.
     public string? SuggestedMergeIntoId { get; set; }
 }

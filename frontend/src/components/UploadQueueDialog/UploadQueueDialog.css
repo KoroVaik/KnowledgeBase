@@ -1,0 +1,128 @@
+.upload-progress {
+  display: block;
+  width: 100%;
+  height: 6px;
+  margin-top: 12px;
+  /* Chrome and Firefox each style <progress> their own way; resetting the appearance is
+     what makes the two agree on a plain bar. */
+  appearance: none;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  overflow: hidden;
+  background: transparent;
+}
+
+.upload-progress::-webkit-progress-bar {
+  background: transparent;
+}
+
+.upload-progress::-webkit-progress-value {
+  background: var(--text-h);
+}
+
+.upload-progress::-moz-progress-bar {
+  background: var(--text-h);
+}
+
+/* The dialog sits in the browser's top layer, so it is positioned against the viewport and
+   owes nothing to the layout it is nested in. Only its own size needs saying. */
+.queue-dialog {
+  width: 720px;
+  max-width: calc(100vw - 32px);
+  padding: 24px;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: var(--shadow);
+}
+
+.queue-dialog::backdrop {
+  background: rgba(0, 0, 0, 0.45);
+}
+
+.queue-summary {
+  margin-bottom: 16px;
+  font-size: 14px;
+}
+
+/* A long queue scrolls inside the dialog instead of growing past the viewport. */
+.queue-scroll {
+  max-height: 50vh;
+  overflow-y: auto;
+}
+
+.queue-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+}
+
+.queue-table th {
+  position: sticky;
+  top: 0;
+  padding: 0 12px 8px 0;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text);
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+}
+
+.queue-table td {
+  padding: 10px 12px 10px 0;
+  vertical-align: top;
+  border-bottom: 1px solid var(--border);
+}
+
+.queue-name {
+  font: 14px/150% var(--mono);
+  color: var(--text-h);
+  overflow-wrap: anywhere;
+}
+
+.queue-size {
+  font-size: 14px;
+  white-space: nowrap;
+}
+
+.queue-status {
+  width: 45%;
+  font-size: 14px;
+  line-height: 150%;
+}
+
+.queue-note {
+  opacity: 0.7;
+}
+
+.queue-ok {
+  color: var(--ok);
+}
+
+.queue-warn {
+  color: var(--warn);
+}
+
+.queue-error {
+  color: var(--danger);
+}
+
+.queue-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.queue-footer {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 20px;
+}
+
+.queue-status .upload-progress {
+  margin: 4px 0 6px;
+}

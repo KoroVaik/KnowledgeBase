@@ -1,0 +1,34 @@
+.login-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  padding: 20px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.login-form label {
+  color: var(--text-h);
+}
+
+.login-form input {
+  font: inherit;
+  font-size: 16px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  color: var(--text-h);
+  background: var(--bg);
+  border: 1px solid var(--border);
+}
+
+.login-google {
+  display: inline-block;
+  margin-top: 16px;
+  text-decoration: none;
+}
+
+.login-error {
+  margin-top: 16px;
+  color: var(--danger);
+}

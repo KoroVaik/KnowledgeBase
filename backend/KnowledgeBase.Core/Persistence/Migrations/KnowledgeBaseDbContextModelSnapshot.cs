@@ -28,10 +28,19 @@ namespace KnowledgeBase.Core.Persistence.Migrations
                         .HasMaxLength(32)
                         .HasColumnType("character varying(32)");
 
+                    b.Property<DateTime?>("CapturedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<string>("ContentType")
                         .IsRequired()
                         .HasMaxLength(255)
                         .HasColumnType("character varying(255)");
+
+                    b.Property<double?>("Latitude")
+                        .HasColumnType("double precision");
+
+                    b.Property<double?>("Longitude")
+                        .HasColumnType("double precision");
 
                     b.Property<string>("OriginalFileName")
                         .IsRequired()
@@ -277,6 +286,26 @@ namespace KnowledgeBase.Core.Persistence.Migrations
                     b.ToTable("TagParents");
                 });
 
+            modelBuilder.Entity("KnowledgeBase.Core.Persistence.TagParentSuggestion", b =>
+                {
+                    b.Property<string>("ChildId")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("ParentId")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<bool>("Dismissed")
+                        .HasColumnType("boolean");
+
+                    b.HasKey("ChildId", "ParentId");
+
+                    b.HasIndex("ParentId");
+
+                    b.ToTable("TagParentSuggestions");
+                });
+
             modelBuilder.Entity("Microsoft.AspNetCore.DataProtection.EntityFrameworkCore.DataProtectionKey", b =>
                 {
                     b.Property<int>("Id")
@@ -365,6 +394,21 @@ namespace KnowledgeBase.Core.Persistence.Migrations
                 });
 
             modelBuilder.Entity("KnowledgeBase.Core.Persistence.TagParent", b =>
+                {
+                    b.HasOne("KnowledgeBase.Core.Persistence.Tag", null)
+                        .WithMany()
+                        .HasForeignKey("ChildId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("KnowledgeBase.Core.Persistence.Tag", null)
+                        .WithMany()
+                        .HasForeignKey("ParentId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("KnowledgeBase.Core.Persistence.TagParentSuggestion", b =>
                 {
                     b.HasOne("KnowledgeBase.Core.Persistence.Tag", null)
                         .WithMany()

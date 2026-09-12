@@ -1,0 +1,217 @@
+/* The button that collapses the section no longer spans the whole strip - the status
+   toggles to its right need their own clicks, so h2 lays the two out side by side instead
+   of nesting the toggles inside the collapse button (which nested buttons would break). */
+.assets > h2 {
+  display: flex;
+  align-items: center;
+}
+
+.assets > h2 .section-toggle {
+  width: auto;
+}
+
+/* Pushed to the strip's right edge - the per-status breakdown, doubling as the status
+   filter. Reuses .asset-status's own look (same dot + tone colours as the row badges)
+   rather than .section-count, so a toggle reads as "the same status" as the badge it
+   counts and filters. */
+.asset-status-counts {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+  margin-left: auto;
+  padding: 10px 18px;
+  /* h2 sets uppercase + letter-spacing for its own label; the row badge these pills copy
+     is neither, so reset both here instead of letting them inherit. */
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+.asset-status-counts .asset-status {
+  margin-top: 0;
+}
+
+/* .asset-status-info's own background is --surface-2 - identical to the h2 strip it sits
+   on here, so the pill nearly disappears. --bg gives it the contrast .section-count gets
+   the same way; the ok/warn/error tones already have their own tinted background. */
+.asset-status-counts .asset-status-info {
+  background: var(--bg);
+}
+
+.asset-status-toggle {
+  font: inherit;
+  cursor: pointer;
+  border: none;
+}
+
+/* Off = still a plain "count" pill, no tone colour - the same neutral look as
+   .asset-status-info, so an unselected toggle reads as excluded at a glance. */
+.asset-status-toggle.asset-status-off {
+  color: var(--text-muted);
+  background: var(--bg);
+  border-color: var(--border);
+}
+
+.assets-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.assets-selection {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 8px 18px;
+  margin: 0 -18px;
+  border-bottom: 1px solid var(--border);
+}
+
+.assets-selection-all {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+}
+
+/* Checkbox down the left; the second column holds the row head, then the status badge and
+   the detail panel stacked under it when the row is open. Rows bleed to the card edge so
+   the hover fill and the separator span its full width. */
+.asset {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: start;
+  gap: 4px 12px;
+  padding: 11px 18px;
+  margin: 0 -18px;
+  border-bottom: 1px solid var(--border);
+}
+
+.asset:last-child {
+  border-bottom: 0;
+}
+
+.asset:hover {
+  background: var(--surface-hover);
+}
+
+/* The open row carries the accent rail, so the panel below it does not need one too. */
+.asset-open {
+  background: var(--surface-hover);
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+
+.asset-select {
+  grid-column: 1;
+  grid-row: 1;
+  margin-top: 4px;
+}
+
+/* The whole head is the toggle: name on its own line, size and date under it. */
+.asset-head {
+  grid-column: 2;
+  grid-row: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  width: 100%;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  text-align: left;
+  cursor: pointer;
+  color: inherit;
+}
+
+.asset-name {
+  font: 14px/150% var(--mono);
+  overflow-wrap: anywhere;
+  color: var(--text-h);
+}
+
+.asset-meta {
+  font-size: 14px;
+}
+
+.asset-detail {
+  grid-column: 2;
+}
+
+.assets-show-more {
+  margin-top: 12px;
+}
+
+.assets-error {
+  margin-bottom: 16px;
+  color: var(--danger);
+}
+
+/* Second column, under the head. A badge rather than a line of coloured text: "Processed"
+   repeats on nearly every row, and as bare green text it shouted on all of them. */
+.asset-status {
+  grid-column: 2;
+  justify-self: start;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 2px;
+  padding: 2px 10px;
+  font-size: 12px;
+  line-height: 160%;
+  border: 1px solid transparent;
+  border-radius: 10px;
+}
+
+.asset-status::before {
+  content: '';
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.asset-status-info {
+  color: var(--text-muted);
+  background: var(--surface-2);
+  border-color: var(--border);
+}
+
+.asset-status-ok {
+  color: var(--ok);
+  background: var(--ok-bg);
+}
+
+.asset-status-warn {
+  color: var(--warn);
+  background: var(--warn-bg);
+}
+
+.asset-status-error {
+  color: var(--danger);
+  background: var(--danger-bg);
+}
+
+.asset-status-pending {
+  color: var(--pending);
+  background: var(--pending-bg);
+}
+
+.asset-status-running {
+  color: var(--running);
+  background: var(--running-bg);
+}
+
+@media (max-width: 600px) {
+  .assets-selection,
+  .asset {
+    padding-inline: 14px;
+    margin-inline: -14px;
+  }
+
+  .asset-status-counts {
+    padding-inline: 14px;
+  }
+}

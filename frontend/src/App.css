@@ -9,65 +9,110 @@
   color: var(--text-muted);
 }
 
-.drop-zone {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
-  width: 100%;
-  padding: 24px 20px;
+/* ---------- Atomic primitives -----------------------------------------------------
+   A component's own look lives here, once, keyed by what it IS (button/field/pill/chip) -
+   never by where it happens to render. A one-off tweak for a single spot is a small class
+   of its own next to that component's usage, not a selector like ".foo button". */
+
+.btn {
   font: inherit;
-  color: var(--text);
   cursor: pointer;
-  background: var(--surface);
-  border: 1px dashed var(--border);
-  border-radius: 12px;
+  color: var(--text);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 6px;
 }
 
-.drop-zone:hover {
+.btn:hover:not(:disabled) {
+  color: var(--text-h);
   background: var(--surface-hover);
-  border-color: var(--accent-border);
 }
 
-.drop-zone-active {
+.btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.btn-lg {
+  padding: 8px 20px;
+  font-size: 15px;
+}
+
+.btn-md {
+  padding: 8px 16px;
+  font-size: 14px;
+}
+
+.btn-sm {
+  padding: 6px 10px;
+  font-size: 13px;
+}
+
+.btn-xs {
+  padding: 4px 8px;
+  font-size: 12px;
+  line-height: 1;
+  border-radius: 999px;
+}
+
+.btn-primary {
   color: var(--text-h);
   background: var(--accent-bg);
   border-color: var(--accent-border);
 }
 
-.drop-zone-title {
-  font-size: 18px;
-  color: var(--text-h);
+.btn-danger {
+  color: var(--danger);
+  border-color: var(--danger);
 }
 
-.drop-zone-hint {
-  font-size: 14px;
+.btn-danger:hover:not(:disabled) {
+  background: var(--danger-bg);
 }
 
-.upload-progress {
-  display: block;
-  width: 100%;
-  height: 6px;
-  margin-top: 12px;
-  /* Chrome and Firefox each style <progress> their own way; resetting the appearance is
-     what makes the two agree on a plain bar. */
-  appearance: none;
+.field {
+  font: inherit;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.field:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+/* box-sizing + explicit height: unlike a button, a text <input>'s own intrinsic line box
+   does not shrink below its font's natural line height on line-height alone. */
+.field-xs {
+  box-sizing: border-box;
+  height: 22px;
+  padding: 4px 8px;
+  font-size: 12px;
+  line-height: 1;
+}
+
+.pill {
+  font: inherit;
+  font-size: 13px;
+  padding: 4px 12px;
+  cursor: pointer;
+  color: var(--text);
+  background: transparent;
   border: 1px solid var(--border);
   border-radius: 999px;
-  overflow: hidden;
-  background: transparent;
 }
 
-.upload-progress::-webkit-progress-bar {
-  background: transparent;
+.pill:hover:not(.pill-on) {
+  color: var(--text-h);
+  background: var(--surface-hover);
 }
 
-.upload-progress::-webkit-progress-value {
-  background: var(--text-h);
-}
-
-.upload-progress::-moz-progress-bar {
-  background: var(--text-h);
+.pill-on {
+  color: var(--text-h);
+  background: var(--accent-bg);
+  border-color: var(--accent-border);
 }
 
 /* A real app bar: the title sits on a rule instead of floating over the first list. */
@@ -81,93 +126,14 @@
   border-bottom: 1px solid var(--border);
 }
 
-.sign-out {
-  font: inherit;
-  font-size: 15px;
-  padding: 6px 16px;
-  border-radius: 6px;
-  cursor: pointer;
-  color: var(--text);
-  background: transparent;
-  border: 1px solid var(--border);
-}
-
-/* Every bordered ghost button lifts the same way on hover. */
-.sign-out:hover,
-.upload-action:hover,
-.asset-delete:hover:not(:disabled),
-.note-actions button:hover:not(:disabled),
-.queue-actions button:hover:not(:disabled),
-.queue-footer button:hover:not(:disabled),
-.confirm-actions button:not(.confirm-danger):hover:not(:disabled) {
-  color: var(--text-h);
-  background: var(--surface-hover);
-}
-
-.confirm-danger:hover:not(:disabled) {
-  background: var(--danger-bg);
-}
-
-.login-form {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 12px;
-  padding: 20px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-}
-
-.login-form label {
-  color: var(--text-h);
-}
-
-.login-form input {
-  font: inherit;
-  font-size: 16px;
-  padding: 8px 12px;
-  border-radius: 6px;
-  color: var(--text-h);
-  background: var(--bg);
-  border: 1px solid var(--border);
-}
-
-.login-form button {
-  font: inherit;
-  font-size: 16px;
-  padding: 8px 20px;
-  border-radius: 6px;
-  cursor: pointer;
-  color: var(--text-h);
-  background: var(--accent-bg);
-  border: 1px solid var(--accent-border);
-}
-
-.login-form button:disabled {
-  cursor: not-allowed;
-  opacity: 0.5;
-}
-
-.login-google {
-  display: inline-block;
-  margin-top: 16px;
-  padding: 8px 20px;
-  border-radius: 6px;
-  color: var(--text-h);
-  background: transparent;
-  border: 1px solid var(--border);
-  text-decoration: none;
-}
-
-.login-error {
-  margin-top: 16px;
-  color: var(--danger);
-}
-
 /* Both lists are cards with a header strip. They used to be a bare h2 over a hairline
-   list, which read as one endless wall of rows running down the page. */
+   list, which read as one endless wall of rows running down the page. Shared by
+   AssetList, NotesList and TagsSection - each keeps its own rows/content in its own CSS
+   file, but the card shell and its collapsible strip live here once. */
 .assets,
-.notes {
+.notes,
+.tags,
+.jobs {
   margin-top: 24px;
   padding: 0 18px 10px;
   border: 1px solid var(--border);
@@ -176,14 +142,14 @@
 }
 
 /* The negative inline margin bleeds the strip (and the rows below) out to the card edge
-   while the card's own padding still sets the text inset. */
+   while the card's own padding still sets the text inset. The strip's own flex/padding/
+   colour now live on .section-toggle - the button that makes the whole strip a collapse
+   control - so the h2 itself only carries the shape (margin, background, border). */
 .assets > h2,
-.notes > h2 {
-  display: flex;
-  align-items: center;
-  gap: 8px;
+.notes > h2,
+.tags > h2,
+.jobs > h2 {
   margin: 0 -18px 2px;
-  padding: 13px 18px;
   font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.08em;
@@ -192,6 +158,37 @@
   background: var(--surface-2);
   border-bottom: 1px solid var(--border);
   border-radius: 11px 11px 0 0;
+}
+
+.section-toggle {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  gap: 8px;
+  padding: 13px 18px;
+  font: inherit;
+  color: inherit;
+  text-transform: inherit;
+  letter-spacing: inherit;
+  text-align: left;
+  background: none;
+  border: none;
+  border-radius: inherit;
+  cursor: pointer;
+}
+
+.section-toggle:hover {
+  background: var(--surface-hover);
+}
+
+/* Rotates to point right when collapsed - same ▾ glyph the status filter and asset rows
+   already use, so a collapse control reads as "the same kind of thing" at a glance. */
+.section-toggle-caret {
+  transition: transform 0.15s ease;
+}
+
+.section-toggle[aria-expanded='false'] .section-toggle-caret {
+  transform: rotate(-90deg);
 }
 
 .section-count {
@@ -205,331 +202,11 @@
   border-radius: 999px;
 }
 
-.assets-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-}
-
-.assets-selection {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  padding: 8px 18px;
-  margin: 0 -18px;
-  border-bottom: 1px solid var(--border);
-}
-
-.assets-selection-all {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 14px;
-}
-
-/* Checkbox down the left; the second column holds the row head, then the status badge and
-   the detail panel stacked under it when the row is open. Rows bleed to the card edge so
-   the hover fill and the separator span its full width. */
-.asset {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  align-items: start;
-  gap: 4px 12px;
-  padding: 11px 18px;
-  margin: 0 -18px;
-  border-bottom: 1px solid var(--border);
-}
-
-.asset:last-child {
-  border-bottom: 0;
-}
-
-.asset:hover {
-  background: var(--surface-hover);
-}
-
-/* The open row carries the accent rail, so the panel below it does not need one too. */
-.asset-open {
-  background: var(--surface-hover);
-  box-shadow: inset 2px 0 0 var(--accent);
-}
-
-.asset-select {
-  grid-column: 1;
-  grid-row: 1;
-  margin-top: 4px;
-}
-
-/* The whole head is the toggle: name on its own line, size and date under it. */
-.asset-head {
-  grid-column: 2;
-  grid-row: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  width: 100%;
-  min-width: 0;
-  padding: 0;
-  border: 0;
-  background: none;
-  text-align: left;
-  cursor: pointer;
-  color: inherit;
-}
-
-.asset-name {
-  font: 14px/150% var(--mono);
-  overflow-wrap: anywhere;
-  color: var(--text-h);
-}
-
-.asset-meta {
-  font-size: 14px;
-}
-
-.asset-detail {
-  grid-column: 2;
-}
-
-.asset-delete {
-  font: inherit;
-  font-size: 14px;
-  padding: 8px 16px;
-  border-radius: 6px;
-  cursor: pointer;
-  color: var(--text);
-  background: transparent;
-  border: 1px solid var(--border);
-}
-
-.asset-delete:disabled {
-  cursor: not-allowed;
-  opacity: 0.5;
-}
-
-.assets-error {
+/* Generic error line, reused across AssetList/NotesList/TagsSection/TagPicker/
+   TagPlacementSuggestions rather than one class per section. */
+.notes-error {
   margin-bottom: 16px;
   color: var(--danger);
-}
-
-/* Second column, under the head. A badge rather than a line of coloured text: "Note ready"
-   repeats on nearly every row, and as bare green text it shouted on all of them. */
-.asset-status {
-  grid-column: 2;
-  justify-self: start;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  margin-top: 2px;
-  padding: 2px 10px;
-  font-size: 12px;
-  line-height: 160%;
-  border: 1px solid transparent;
-  border-radius: 10px;
-}
-
-.asset-status::before {
-  content: '';
-  flex: none;
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: currentColor;
-}
-
-.asset-status-info {
-  color: var(--text-muted);
-  background: var(--surface-2);
-  border-color: var(--border);
-}
-
-.asset-status-ok {
-  color: var(--ok);
-  background: var(--ok-bg);
-}
-
-.asset-status-warn {
-  color: var(--warn);
-  background: var(--warn-bg);
-}
-
-.asset-status-error {
-  color: var(--danger);
-  background: var(--danger-bg);
-}
-
-.upload-actions {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 8px;
-  margin-top: 12px;
-}
-
-.upload-action {
-  font: inherit;
-  font-size: 14px;
-  padding: 6px 16px;
-  border-radius: 6px;
-  cursor: pointer;
-  color: var(--text);
-  background: transparent;
-  border: 1px solid var(--border);
-}
-
-.upload-paste {
-  font: inherit;
-  font-size: 14px;
-  width: 220px;
-  padding: 6px 12px;
-  border-radius: 6px;
-  color: var(--text-h);
-  background: var(--bg);
-  border: 1px solid var(--border);
-}
-
-.upload-hint {
-  margin: 12px 0 0;
-  color: var(--warn);
-  font-size: 14px;
-}
-
-/* The dialog sits in the browser's top layer, so it is positioned against the viewport and
-   owes nothing to the layout it is nested in. Only its own size needs saying. */
-.queue-dialog {
-  width: 720px;
-  max-width: calc(100vw - 32px);
-  padding: 24px;
-  color: var(--text);
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  box-shadow: var(--shadow);
-}
-
-.queue-dialog::backdrop {
-  background: rgba(0, 0, 0, 0.45);
-}
-
-.queue-summary {
-  margin-bottom: 16px;
-  font-size: 14px;
-}
-
-/* A long queue scrolls inside the dialog instead of growing past the viewport. */
-.queue-scroll {
-  max-height: 50vh;
-  overflow-y: auto;
-}
-
-.queue-table {
-  width: 100%;
-  border-collapse: collapse;
-  text-align: left;
-}
-
-.queue-table th {
-  position: sticky;
-  top: 0;
-  padding: 0 12px 8px 0;
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--text);
-  background: var(--bg);
-  border-bottom: 1px solid var(--border);
-}
-
-.queue-table td {
-  padding: 10px 12px 10px 0;
-  vertical-align: top;
-  border-bottom: 1px solid var(--border);
-}
-
-.queue-name {
-  font: 14px/150% var(--mono);
-  color: var(--text-h);
-  overflow-wrap: anywhere;
-}
-
-.queue-size {
-  font-size: 14px;
-  white-space: nowrap;
-}
-
-.queue-status {
-  width: 45%;
-  font-size: 14px;
-  line-height: 150%;
-}
-
-.queue-note {
-  opacity: 0.7;
-}
-
-.queue-ok {
-  color: var(--ok);
-}
-
-.queue-warn {
-  color: var(--warn);
-}
-
-.queue-error {
-  color: var(--danger);
-}
-
-.queue-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 8px;
-}
-
-.queue-actions button {
-  font: inherit;
-  font-size: 13px;
-  padding: 4px 12px;
-  border-radius: 6px;
-  cursor: pointer;
-  color: var(--text);
-  background: transparent;
-  border: 1px solid var(--border);
-}
-
-.queue-footer {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: 12px;
-  margin-top: 20px;
-}
-
-.queue-footer button {
-  font: inherit;
-  font-size: 15px;
-  padding: 8px 20px;
-  border-radius: 6px;
-  cursor: pointer;
-  color: var(--text);
-  background: transparent;
-  border: 1px solid var(--border);
-}
-
-.queue-footer button:disabled {
-  cursor: not-allowed;
-  opacity: 0.5;
-}
-
-/* Scoped to the footer to outweigh `.queue-footer button`, which is the more specific
-   selector of the two and would otherwise win no matter which came last. */
-.queue-footer .queue-primary {
-  color: var(--text-h);
-  background: var(--accent-bg);
-  border-color: var(--accent-border);
-}
-
-.queue-status .upload-progress {
-  margin: 4px 0 6px;
 }
 
 .connection-banner {
@@ -552,673 +229,7 @@
   border: 1px solid var(--accent-border);
 }
 
-.notes-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-}
-
-.note {
-  padding: 4px 18px;
-  margin: 0 -18px;
-  border-bottom: 1px solid var(--border);
-}
-
-.note:last-child {
-  border-bottom: 0;
-}
-
-.note:hover {
-  background: var(--surface-hover);
-}
-
-/* The whole row is the toggle: title on its own line, tags and date under it. */
-.note-head {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 4px;
-  width: 100%;
-  padding: 8px 0;
-  border: 0;
-  background: none;
-  text-align: left;
-  cursor: pointer;
-  color: inherit;
-}
-
-.note-title {
-  font-size: 15px;
-  font-weight: 500;
-  color: var(--text-h);
-}
-
-.note-meta {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px;
-  font-size: 13px;
-  color: var(--text-muted);
-}
-
-.tag-chips {
-  display: inline-flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-.file-panel-tags {
-  margin-bottom: 12px;
-}
-
-.tag-chip {
-  padding: 2px 9px;
-  font-size: 12px;
-  color: var(--accent);
-  background: var(--accent-bg);
-  border: 1px solid var(--accent-border);
-  border-radius: 999px;
-}
-
-/* Dashed cue like an unresolved wiki-link: not yet vouched for. Body-text grey, not
-   --text-muted - muted enough against the confirmed chip while clearing AA contrast. */
-.tag-chip-unconfirmed {
-  color: var(--text);
-  background: transparent;
-  border-style: dashed;
-  border-color: currentColor;
-}
-
-.note-loading {
-  margin: 0 0 12px;
-}
-
-.note-removed-source {
-  padding: 2px 10px;
-  font-size: 12px;
-  border-radius: 10px;
-  color: var(--warn);
-  background: var(--warn-bg);
-}
-
-/* Rendered Markdown - keep the block spacing sane inside the row. */
-.note-body {
-  margin: 4px 0 16px;
-  overflow-wrap: anywhere;
-}
-
-.note-body > :first-child {
-  margin-top: 0;
-}
-
-/* The body comes from the model as free Markdown; without this its headings inherit the
-   page's 56px marketing h1 and fill the whole row. */
-.note-body :is(h1, h2, h3, h4) {
-  font-family: var(--heading);
-  font-weight: 500;
-  line-height: 1.3;
-  letter-spacing: normal;
-  color: var(--text-h);
-  margin: 20px 0 8px;
-}
-
-.note-body h1 {
-  font-size: 20px;
-}
-
-.note-body h2 {
-  font-size: 17px;
-}
-
-.note-body h3 {
-  font-size: 15px;
-}
-
-.note-body h4 {
-  font-size: 14px;
-}
-
-.note-body :is(p, ul, ol) {
-  margin: 8px 0;
-}
-
-.note-body pre {
-  padding: 12px;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  overflow-x: auto;
-}
-
-.note-body code {
-  font-family: var(--mono);
-  font-size: 13px;
-}
-
-.note-body a {
-  color: var(--accent);
-  text-underline-offset: 2px;
-}
-
-.notes-error {
-  margin-bottom: 16px;
-  color: var(--danger);
-}
-
-/* The section that opens under a file row. Recessed onto --bg inside the --surface card:
-   the open row already carries the accent rail, so depth is the only cue needed here. */
-.file-panel {
-  margin: 10px 0 4px;
-  padding: 16px;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  background: var(--bg);
-}
-
-.file-panel-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.file-panel-actions button {
-  font: inherit;
-  font-size: 14px;
-  padding: 6px 14px;
-  border-radius: 6px;
-  cursor: pointer;
-  color: var(--text);
-  background: transparent;
-  border: 1px solid var(--border);
-}
-
-.file-panel-actions button:hover:not(:disabled) {
-  color: var(--text-h);
-  background: var(--surface-hover);
-}
-
-.file-panel-actions button:disabled {
-  cursor: not-allowed;
-  opacity: 0.5;
-}
-
-.file-panel-error {
-  margin: 12px 0 0;
-  font-size: 13px;
-  color: var(--danger);
-}
-
-.file-panel-tabs {
-  display: flex;
-  gap: 4px;
-  margin: 16px 0 12px;
-  padding-top: 16px;
-  border-top: 1px solid var(--border);
-}
-
-.file-panel-tab {
-  font: inherit;
-  font-size: 13px;
-  padding: 4px 12px;
-  border-radius: 999px;
-  cursor: pointer;
-  color: var(--text);
-  background: transparent;
-  border: 1px solid var(--border);
-}
-
-.file-panel-tab:hover:not(.file-panel-tab-on) {
-  color: var(--text-h);
-  background: var(--surface-hover);
-}
-
-.file-panel-tab-on {
-  color: var(--text-h);
-  background: var(--accent-bg);
-  border-color: var(--accent-border);
-}
-
-.file-panel-body {
-  font-size: 14px;
-}
-
-.file-panel-image {
-  max-width: 100%;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-}
-
-/* The row is the toggle plus the buttons that act on it; the toggle takes what is left. */
-.note-row {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-}
-
-.note-row .note-head {
-  flex: 1;
-  /* Without this a long title refuses to shrink and pushes the buttons off the row. */
-  min-width: 0;
-}
-
-.note-actions {
-  display: flex;
-  flex-shrink: 0;
-  gap: 8px;
-  padding: 8px 0;
-}
-
-.note-actions button {
-  font: inherit;
-  font-size: 14px;
-  padding: 8px 12px;
-  border-radius: 6px;
-  cursor: pointer;
-  color: var(--text);
-  background: transparent;
-  border: 1px solid var(--border);
-}
-
-.note-actions button:disabled {
-  cursor: not-allowed;
-  opacity: 0.5;
-}
-
-.note-waiting {
-  padding: 2px 10px;
-  font-size: 12px;
-  border-radius: 10px;
-  color: var(--accent);
-  background: var(--accent-bg);
-}
-
-.note-binned .note-title {
-  color: var(--text);
-}
-
-/* Sits between the synthesis notes and the bin: pick a tag, merge its notes. Recessed
-   inside the Notes card, the same depth cue as the file panel. */
-.tags-section {
-  margin-top: 14px;
-  padding: 14px 16px 4px;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  background: var(--bg);
-}
-
-.tags-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 10px;
-}
-
-.tags-head-actions {
-  display: flex;
-  gap: 8px;
-}
-
-.tags-head h3 {
-  margin: 0;
-}
-
-.tags-section h3 {
-  margin: 0 0 10px;
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--text-muted);
-}
-
-.tags-head button,
-.tags-row button,
-.tag-picker input {
-  font: inherit;
-  font-size: 13px;
-  padding: 6px 10px;
-  border-radius: 6px;
-  cursor: pointer;
-  color: var(--text);
-  background: transparent;
-  border: 1px solid var(--border);
-}
-
-.tag-picker input {
-  max-width: 11em;
-  background: var(--bg);
-  cursor: text;
-}
-
-.tags-head button:hover:not(:disabled),
-.tags-row button:hover:not(:disabled) {
-  color: var(--text-h);
-  background: var(--surface-hover);
-}
-
-.tags-head button:disabled,
-.tags-row button:disabled,
-.tag-picker input:disabled {
-  cursor: not-allowed;
-  opacity: 0.5;
-}
-
-.tag-picker {
-  position: relative;
-}
-
-.tag-picker-panel {
-  position: absolute;
-  z-index: 1;
-  top: calc(100% + 4px);
-  left: 0;
-  min-width: 14em;
-  max-width: 20em;
-  padding: 4px;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  background: var(--bg);
-  box-shadow: 0 4px 12px rgb(0 0 0 / 0.2);
-}
-
-.tag-picker-heading {
-  margin: 6px 8px 2px;
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--text-muted);
-}
-
-.tag-picker-heading:first-child {
-  margin-top: 2px;
-}
-
-.tag-picker-results {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.tag-picker-results button {
-  display: block;
-  width: 100%;
-  padding: 6px 8px;
-  border: 0;
-  border-radius: 4px;
-  text-align: left;
-  font: inherit;
-  font-size: 13px;
-  cursor: pointer;
-  color: var(--text);
-  background: transparent;
-}
-
-/* The pipeline's semantic pick, one accent tone lighter than the plain-text spelling
-   matches below it - the two need to read apart at a glance, not just by heading. */
-.tag-picker-suggested button {
-  color: var(--accent);
-}
-
-.tag-picker-results button:hover {
-  color: var(--text-h);
-  background: var(--surface-hover);
-}
-
-.tags-row .tag-picker-add {
-  display: block;
-  width: 100%;
-  margin-top: 2px;
-  padding: 6px 8px;
-  border: 1px solid transparent;
-  border-radius: 4px;
-  text-align: left;
-  font: inherit;
-  font-size: 13px;
-  cursor: pointer;
-  color: var(--ok);
-  background: var(--ok-bg);
-}
-
-.tags-row .tag-picker-add:hover:not(:disabled) {
-  border-color: var(--ok);
-  background: var(--ok-bg);
-}
-
-.tag-picker-error {
-  margin: 6px 4px 2px;
-  font-size: 12px;
-  color: var(--danger);
-}
-
-.tags-subhead {
-  margin: 12px 0 2px;
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--text-muted);
-}
-
-.tags-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-}
-
-.tags-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px 12px;
-  padding: 8px 0;
-  border-bottom: 1px solid var(--border);
-}
-
-.tags-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-.tags-row:last-child {
-  border-bottom: 0;
-}
-
-.tags-count {
-  flex: 1;
-  font-size: 13px;
-  color: var(--text-muted);
-}
-
-/* flex-basis: 100% forces this onto its own line under the rest of the row, in the same
-   wrapping flex container - no extra markup needed for the line break. */
-.tags-parents {
-  display: flex;
-  flex-basis: 100%;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px;
-}
-
-.tags-parents-label {
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--text-muted);
-}
-
-.tags-parent-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.tags-parent-chip button {
-  padding: 0;
-  border: 0;
-  line-height: 1;
-  font-size: 14px;
-  color: inherit;
-  background: transparent;
-  cursor: pointer;
-}
-
-.tags-parent-chip button:disabled {
-  cursor: not-allowed;
-  opacity: 0.5;
-}
-
-.tags-empty {
-  margin: 0;
-  font-size: 13px;
-  color: var(--text-muted);
-}
-
-.notes-trash {
-  margin-top: 20px;
-}
-
-.notes-trash-toggle {
-  font: inherit;
-  font-size: 13px;
-  padding: 5px 14px;
-  border-radius: 999px;
-  cursor: pointer;
-  color: var(--text);
-  background: transparent;
-  border: 1px solid var(--border);
-}
-
-.notes-trash-toggle:hover {
-  color: var(--text-h);
-  background: var(--surface-hover);
-}
-
-/* A [[link]] in a rendered body. Three states, and only the first one is clickable. */
-.wiki-link {
-  font: inherit;
-}
-
-button.wiki-link {
-  padding: 0;
-  border: 0;
-  background: none;
-  cursor: pointer;
-  color: var(--accent);
-  text-decoration: underline;
-}
-
-/* A resolved link where the click is not wired up (the file panel): show it is a reference,
-   but not as something to press. */
-.wiki-link-inert {
-  color: var(--accent);
-  border-bottom: 1px dashed currentColor;
-}
-
-.wiki-link-deleted,
-.wiki-link-missing {
-  color: var(--text-muted);
-}
-
-.wiki-link-deleted .wiki-link-text {
-  text-decoration: line-through;
-}
-
-/* currentColor, not --border: the border tone is meant for surfaces and all but disappears
-   against the page background. */
-.wiki-link-missing {
-  border-bottom: 1px dashed currentColor;
-}
-
-.wiki-link-tag {
-  font-size: 12px;
-}
-
-.confirm-dialog {
-  /* Without this the padding is added on top of max-width, and the dialog ends up wider than
-     the viewport it was told to fit - clipping the Delete button on a narrow screen. */
-  box-sizing: border-box;
-  width: 480px;
-  max-width: calc(100vw - 32px);
-  padding: 24px;
-  color: var(--text);
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  box-shadow: var(--shadow);
-}
-
-.confirm-dialog::backdrop {
-  background: rgba(0, 0, 0, 0.45);
-}
-
-.confirm-dialog h3 {
-  margin: 0 0 12px;
-  font-size: 18px;
-  color: var(--text-h);
-}
-
-.confirm-line {
-  margin: 0 0 12px;
-  font-size: 14px;
-}
-
-.confirm-warn {
-  color: var(--warn);
-}
-
-.confirm-hint {
-  font-size: 13px;
-}
-
-.confirm-check {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  margin-bottom: 12px;
-  font-size: 14px;
-  cursor: pointer;
-}
-
-.confirm-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 12px;
-  margin-top: 20px;
-}
-
-.confirm-actions button {
-  font: inherit;
-  font-size: 15px;
-  padding: 8px 20px;
-  border-radius: 6px;
-  cursor: pointer;
-  color: var(--text);
-  background: transparent;
-  border: 1px solid var(--border);
-}
-
-.confirm-actions button:disabled {
-  cursor: not-allowed;
-  opacity: 0.5;
-}
-
-.confirm-danger {
-  color: var(--danger);
-  border-color: var(--danger);
-}
-
 @media (max-width: 600px) {
-  .note-row {
-    flex-direction: column;
-    gap: 0;
-  }
-
-  .note-actions {
-    padding: 0 0 12px;
-  }
-
   /* Tighter card inset on a phone; the bleed margins have to match it or the rows stop
      lining up with the header strip. */
   .app {
@@ -1226,20 +237,15 @@ button.wiki-link {
   }
 
   .assets,
-  .notes {
+  .notes,
+  .tags {
     padding: 0 14px 8px;
   }
 
   .assets > h2,
-  .notes > h2 {
+  .notes > h2,
+  .tags > h2 {
     margin: 0 -14px 2px;
     padding: 12px 14px;
-  }
-
-  .assets-selection,
-  .asset,
-  .note {
-    padding-inline: 14px;
-    margin-inline: -14px;
   }
 }

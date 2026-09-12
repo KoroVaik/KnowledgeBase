@@ -62,6 +62,14 @@ public sealed class AssetsController(
             .OrderByDescending(row => row.asset.UploadedAtUtc)
             .ToListAsync(cancellationToken);
 
+        var noteIds = rows.Where(row => row.note != null).Select(row => row.note!.Id).Distinct().ToList();
+        var taggedNoteIds = (await _database.NoteTags
+            .Where(link => noteIds.Contains(link.NoteId))
+            .Select(link => link.NoteId)
+            .Distinct()
+            .ToListAsync(cancellationToken))
+            .ToHashSet();
+
         var assets = rows
             .Select(row => new AssetSummaryResponse(
                 row.asset.StoredFileName,
@@ -71,7 +79,11 @@ public sealed class AssetsController(
                 row.asset.UploadedAtUtc,
                 row.job?.Status.ToString(),
                 row.job?.Error,
-                row.note?.Id))
+                row.note?.Id,
+                row.note != null && taggedNoteIds.Contains(row.note.Id),
+                row.asset.CapturedAtUtc,
+                row.asset.Latitude,
+                row.asset.Longitude))
             .ToList();
 
         return Ok(assets);

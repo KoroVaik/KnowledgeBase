@@ -156,6 +156,15 @@ function close() {
   setStatus('paused')
 }
 
+// A returning tab should not sit out the rest of a backoff already in flight - the reason
+// for that delay (repeated failures with nobody watching) no longer applies.
+function retryNow() {
+  clearTimer(reopenTimer)
+  reopenTimer = undefined
+  reopenDelayMs = REOPEN_MIN_MS
+  sync()
+}
+
 function reopenLater() {
   source?.close()
   source = null
@@ -197,7 +206,7 @@ function startWatchingTab() {
 
     if (document.visibilityState === 'visible') {
       markActive()
-      sync()
+      retryNow()
     } else {
       hiddenTimer = window.setTimeout(sync, HIDDEN_GRACE_MS)
     }

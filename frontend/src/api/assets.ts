@@ -23,6 +23,13 @@ export interface AssetSummary {
   /** Error text for 'Failed' / 'Skipped'. */
   processingError: string | null
   noteId: string | null
+  /** False with no note yet, or a note with no tag. */
+  hasTags: boolean
+  /** EXIF, filled in once the pipeline has run - null before that, and null after if the
+   *  file carried none (a screenshot, a re-encoded photo). */
+  capturedAtUtc: string | null
+  latitude: number | null
+  longitude: number | null
 }
 
 /** Mirrors AssetLinkResponse in backend/Controllers/Assets. */

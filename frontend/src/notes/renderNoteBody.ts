@@ -1,6 +1,7 @@
 import { Marked } from 'marked'
 import type { TokenizerAndRendererExtension, Tokens } from 'marked'
 import type { NoteLinkState } from '../api/notes'
+import './renderNoteBody.css'
 
 interface WikiLinkToken extends Tokens.Generic {
   type: 'wikiLink'

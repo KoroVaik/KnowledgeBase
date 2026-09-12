@@ -1,0 +1,115 @@
+.notes-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.note {
+  padding: 4px 18px;
+  margin: 0 -18px;
+  border-bottom: 1px solid var(--border);
+}
+
+.note:last-child {
+  border-bottom: 0;
+}
+
+.note:hover {
+  background: var(--surface-hover);
+}
+
+/* The whole row is the toggle: title on its own line, tags and date under it. */
+.note-head {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  width: 100%;
+  padding: 8px 0;
+  border: 0;
+  background: none;
+  text-align: left;
+  cursor: pointer;
+  color: inherit;
+}
+
+.note-title {
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--text-h);
+}
+
+.note-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.note-loading {
+  margin: 0 0 12px;
+}
+
+.note-removed-source {
+  padding: 2px 10px;
+  font-size: 12px;
+  border-radius: 10px;
+  color: var(--warn);
+  background: var(--warn-bg);
+}
+
+/* The row is the toggle plus the buttons that act on it; the toggle takes what is left. */
+.note-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.note-row .note-head {
+  flex: 1;
+  /* Without this a long title refuses to shrink and pushes the buttons off the row. */
+  min-width: 0;
+}
+
+.note-actions {
+  display: flex;
+  flex-shrink: 0;
+  gap: 8px;
+  padding: 8px 0;
+}
+
+.note-waiting {
+  padding: 2px 10px;
+  font-size: 12px;
+  border-radius: 10px;
+  color: var(--accent);
+  background: var(--accent-bg);
+}
+
+.note-binned .note-title {
+  color: var(--text);
+}
+
+.notes-trash {
+  margin-top: 20px;
+}
+
+@media (max-width: 600px) {
+  .note-row {
+    flex-direction: column;
+    gap: 0;
+  }
+
+  .note-actions {
+    padding: 0 0 12px;
+  }
+
+  /* Tighter card inset on a phone; the bleed margins have to match the shared card's
+     (see App.css) or the rows stop lining up with the header strip. */
+  .note {
+    padding-inline: 14px;
+    margin-inline: -14px;
+  }
+}

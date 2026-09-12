@@ -142,26 +142,54 @@ the handler merges whatever list it is given.
 
 ### Tag grouping pass
 
-`TagGroupingHandler` re-runs the closest-confirmed-tag idea (*Model does not obey the
+`TagGroupingHandler` re-runs the closest-matching-tag idea (*Model does not obey the
 prompt* above, `closestKnownTag`) as a standalone batch pass over the whole vocabulary,
 triggered by `POST /api/tags/suggest-merges` (see *Tag review* in
 [`database.md`](database.md)) rather than at note-write time.
 
 - One model call per run: every confirmed tag name and every unconfirmed one, in one
   prompt (`TagGroupingPrompt`) — tag names are short, so even a few hundred fit
-  comfortably, unlike a synthesis body. The reply is one `{tag, closestConfirmedTag}` pair
+  comfortably, unlike a synthesis body. The reply is one `{tag, closestMatchingTag}` pair
   per unconfirmed tag (`""` when nothing fits), written straight onto
   `Tag.SuggestedMergeIntoId` by exact name match.
-- Same reason it exists as a *separate* job from `BuildSourceNote`'s per-file suggestion:
-  that one only ever compares a freshly invented tag against the confirmed list at that
-  moment. Two tags invented on different uploads, before either is confirmed, are never
-  compared to each other until something confirms one of them and a re-run of this job
-  catches the other.
+- **The match can be a confirmed tag or another still-unconfirmed one** - not just
+  confirmed, unlike `closestKnownTag` at note-write time. Widened from confirmed-only
+  after ~30 unreviewed tags piled up with almost no suggestions: two tags invented on
+  different uploads, neither confirmed yet, is the common case once the vocabulary passes
+  a handful of tags, and it went unmatched before this - a chicken-and-egg problem, since
+  nothing gets confirmed without a suggestion to act on, and nothing got suggested without
+  something already confirmed to compare against.
 - Always overwrites `SuggestedMergeIntoId` on every unconfirmed tag it can decide for -
   it is a deliberate "recompute", not a fill-only pass.
 - Guarded like `BuildSynthesis`: the endpoint 409s instead of queuing when there is
-  nothing to group (no confirmed tag, or no unconfirmed one) or a run is already
-  pending/running.
+  nothing to group (no unconfirmed tag, or fewer than two tags total to compare it
+  against) or a run is already pending/running.
+- **Auto-merging a confident match was considered and rejected for now** - suggestions
+  stay one-click, not silent: a wrong automatic merge is not cleanly reversible (the
+  losing tag row is gone, its `NoteTag` rows already moved). Revisit only if manual review
+  volume is still the bottleneck after this widening.
+
+### Photo capture metadata (EXIF)
+
+For the eventual "history of the month" feature: when a photo was actually taken and, if
+present, where.
+
+- Read from the image **bytes**, not S3 object metadata — EXIF is embedded in the file, not
+  a bucket header. The backend never touches bytes at upload time (`architecture.md`), so
+  this cannot happen in `AssetsController.Confirm`; it runs in `SourceNoteHandler`, right
+  after the bytes it already pulled for the vision model, for `ContentKind.Image` only.
+- `PhotoCaptureReader.Read` (`MetadataExtractor` package) → `AssetRecord.CapturedAtUtc` /
+  `Latitude` / `Longitude`, all nullable on `AssetRecord` (not a separate table — three
+  columns do not earn one).
+- **Best-effort, not a pipeline step that can fail the job.** A screenshot, a PNG, or a
+  photo a messenger recompressed carries no EXIF at all — that leaves the columns `null`,
+  a normal result, same stance as an untagged note. Every exception inside the reader is
+  swallowed for the same reason `SkippableContentException` exists for text: bad/missing
+  metadata must not turn into a `Failed` job.
+- `DateTimeOriginal` has no timezone of its own (camera-local time); stored as UTC anyway —
+  precise enough for a month bucket, not worth chasing `OffsetTimeOriginal`.
+- Video is not handled yet — needs `ffprobe`/similar with a native binary, the same class of
+  problem as scanned-PDF rendering (Open below).
 
 ### Large text broke the worker — size limits + a Skipped state
 
@@ -187,6 +215,22 @@ mid-string (`done_reason: "length"`). Fixed:
 
 ## Open
 
+- [ ] **Photo capture metadata (EXIF) — full flow run pending.** `PhotoCaptureReader`
+      itself is verified: a synthetic JPEG built with `DateTimeOriginal` + GPS tags parses
+      to the exact expected date and decimal lat/lon, and a plain JPEG with no EXIF at all
+      returns nulls without throwing. `GET /api/assets` now returns the three fields and
+      `AssetList` shows them in the file row (`Taken …`, `lat, lon`) — see *Capture date +
+      geolocation in the file row* in [`frontend.md`](frontend.md). **Not yet verified**:
+      migration `AddAssetCaptureMetadata` applied to the local DB, and a real upload (a
+      phone photo, through `SourceNoteHandler`) landing correctly in `Assets.CapturedAtUtc`/
+      `Latitude`/`Longitude` and showing up in the browser — a real photo's EXIF layout can
+      differ from a hand-built one.
+- [ ] **Month-based history / synthesis.** The point of capturing EXIF dates: group Source
+      notes by `CapturedAtUtc` month (photos) the way `SynthesisHandler` already groups by
+      tag, and produce a narrative note per month. Needs a grouping axis beyond
+      `(Kind, SynthesisGroup)` by tag name — either a synthetic "group label" of
+      `yyyy-MM` or a genuinely new job kind. Not started; video support (Open above) would
+      feed the same grouping once it exists.
 - [ ] **`GroupTags` unverified against a real vocabulary.** Written but never run against
       Ollama: whether one prompt with a large tag list still gets good matches (same
       "model pads/ignores instructions" risk as the item below), and what the right

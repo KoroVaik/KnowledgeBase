@@ -4,3 +4,6 @@ node_modules/
 
 # Filled-in prod credentials for the home-PC worker.
 infra/worker/worker.env
+
+# Output of .claude/skills/generate-test-data.
+/test-data/

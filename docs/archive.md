@@ -108,6 +108,32 @@ not just compiled.
   text, `h1` down from a 56 px hero to a 28 px app bar with a rule, drop zone on `--surface`,
   `Bin (n)` a pill button. Build + lint green, checked in the browser in both themes (full
   page, open row with a long note body, Tags panel).
+- Tag hierarchy tree + placement suggestions UI: `TagHierarchyTree` (indented, collapsible,
+  chevron opens children) replaces the `TagParentsControl` popover - dragging a tag onto
+  another *adds* it as a parent (never replaces; a tag can have several), matching the
+  backend DAG. `TagPlacementSuggestions` renders one card per flagged tag with only the
+  rows that have a real suggestion (no empty parent/child placeholder). "Suggest hierarchy"
+  button next to "Suggest merges". Verified in the browser by subagent: dragging one tag
+  onto another created the real `TagParent` link and the tree nested it, removing via the
+  tree's `×` put it back at root; a seeded suggestion rendered on both tags with working
+  Accept/Reject. First pass looked flat and the "To place" section vanished entirely when
+  empty (owner: "де suggestions?") - fixed with a bordered `.tag-tree` card, a left-border
+  guide line per nesting level, a visible drop-target outline, no toggle glyph on a leaf,
+  and "To place" always rendering (an explanatory empty state instead of disappearing).
+- `TagHierarchyTree` phone-width fix: `.tag-tree-row` had no `flex-wrap` (unlike the flat
+  `.tags-row`), so a long tag name didn't wrap the row - it shrank the chip and the count
+  instead, breaking the pill onto several lines and stranding the remove `×` off to the
+  side. Row now wraps as a whole; count + remove grouped in `.tag-tree-meta` so they wrap
+  together, never orphaning the `×`. Toggle/remove tap targets bumped 13-20px → 32px.
+  Verified in the browser: real data at desktop + 375px width, and a temporarily
+  long-named tag at 375px to force the wrap.
+- `TagHierarchyTree` redesign: the full-bleed row dividers and the left-border guide line
+  (owner: "ці лінії виглядають жахливо") replaced with each tag as its own bordered section,
+  a child's section nested inside its parent's - depth reads through actual nesting instead
+  of a line down the side, background stepping through `--surface` / `--surface-hover` /
+  `--bg` per level (same elevation tokens as "Sections are cards", no depth counter in the
+  component). Verified in the browser with real nested data (`Computer` → `Windows
+  Activation` → two children).
 
 ## Worker & AI pipeline
 
@@ -201,6 +227,19 @@ not just compiled.
   browser by subagent: add, duplicate rejected, cycle rejected, multiple parents at once,
   remove, delete-with-a-link cascades clean (no FK error); `zz-test-*` cleanup left the
   real tags untouched.
+- AI tag placement suggestions: `TagParentSuggestion` table (migration
+  `AddTagParentSuggestions`, same DAG shape as `TagParent` plus `Dismissed`),
+  `TagHierarchyHandler` pipeline job (`JobKind.SuggestTagParents`) that searches one
+  direction only - a parent for a confirmed tag with none yet - so "suggested children" on
+  a tag is just the same rows read from the other side, no second model call. Four
+  endpoints: `GET {id}/parent-suggestions`, `POST .../accept` (creates the real
+  `TagParent`, same cycle check as `AddParent`), `POST .../reject` (dismisses, not
+  deletes, so it is not re-proposed), `POST suggest-hierarchy` (queues the job).
+  `TagResponse.HasPendingPlacementSuggestion` lets the frontend find flagged tags without
+  an all-tags detail fetch. Verified in the browser by subagent: migration applied on API
+  startup, a seeded suggestion row rendered correctly on both tags it names, accept wrote
+  the real link and removed the suggestion, reject kept it dismissed, `suggest-hierarchy`
+  returned 202 and queued the job.
 
 ## Infra & deploy
 

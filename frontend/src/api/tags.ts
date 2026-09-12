@@ -8,10 +8,25 @@ export interface Tag {
   confirmed: boolean
   /** Live Source notes carrying it. A synthesis needs at least two. */
   noteCount: number
-  /** For an invented tag: the confirmed tag the model judged closest in meaning. */
+  /** For an invented tag: the tag (confirmed, or itself still unconfirmed) the model judged
+   *  closest in meaning. */
   suggestedMergeIntoId: string | null
   /** Ids of the tags this one is a child of (is-a). Manual/API-driven, not the model's call. */
   parentIds: string[]
+  /** On either side of a pending AI placement guess - fetch `fetchTagParentSuggestions`. */
+  hasPendingPlacementSuggestion: boolean
+}
+
+/** One tag named in a placement suggestion - just enough for the suggestion graph. */
+export interface TagSuggestion {
+  id: string
+  name: string
+}
+
+/** Mirrors TagParentSuggestionsResponse: the two sides of the same underlying rows. */
+export interface TagParentSuggestions {
+  suggestedParents: TagSuggestion[]
+  suggestedChildren: TagSuggestion[]
 }
 
 export interface TagSearch {
@@ -109,7 +124,8 @@ export async function synthesiseIndex(): Promise<void> {
   }
 }
 
-/** Queues a job re-running the closest-confirmed-tag suggestion over every unconfirmed tag. */
+/** Queues a job re-running the closest-matching-tag suggestion over every unconfirmed tag,
+ *  against the whole vocabulary (confirmed and other unconfirmed tags alike). */
 export async function suggestTagMerges(): Promise<void> {
   const response = await apiFetch('/api/tags/suggest-merges', { method: 'POST' })
 
@@ -140,5 +156,51 @@ export async function removeTagParent(id: string, parentId: string): Promise<voi
 
   if (!response.ok) {
     throw new Error(await readErrorMessage(response, 'Could not remove the parent tag'))
+  }
+}
+
+/** Pending AI placement suggestions for one tag, both sides of the same rows. */
+export async function fetchTagParentSuggestions(id: string): Promise<TagParentSuggestions> {
+  const response = await apiFetch(`/api/tags/${encodeURIComponent(id)}/parent-suggestions`)
+
+  if (!response.ok) {
+    throw new Error(await readErrorMessage(response, 'Could not load placement suggestions'))
+  }
+
+  return (await response.json()) as TagParentSuggestions
+}
+
+/** Accepts the placement suggestion between two tags, in whichever direction it was proposed -
+ *  creates the real parent link and removes the suggestion. */
+export async function acceptTagParentSuggestion(id: string, otherId: string): Promise<void> {
+  const response = await apiFetch(
+    `/api/tags/${encodeURIComponent(id)}/parent-suggestions/${encodeURIComponent(otherId)}/accept`,
+    { method: 'POST' },
+  )
+
+  if (!response.ok) {
+    throw new Error(await readErrorMessage(response, 'Could not accept the suggestion'))
+  }
+}
+
+/** Rejects the placement suggestion between two tags - kept as dismissed so it is not proposed
+ *  again on the next suggest-hierarchy run. */
+export async function rejectTagParentSuggestion(id: string, otherId: string): Promise<void> {
+  const response = await apiFetch(
+    `/api/tags/${encodeURIComponent(id)}/parent-suggestions/${encodeURIComponent(otherId)}/reject`,
+    { method: 'POST' },
+  )
+
+  if (!response.ok) {
+    throw new Error(await readErrorMessage(response, 'Could not reject the suggestion'))
+  }
+}
+
+/** Queues a job finding a parent for every confirmed tag with none yet and no pending suggestion. */
+export async function suggestTagHierarchy(): Promise<void> {
+  const response = await apiFetch('/api/tags/suggest-hierarchy', { method: 'POST' })
+
+  if (!response.ok) {
+    throw new Error(await readErrorMessage(response, 'Could not queue placement suggestions'))
   }
 }

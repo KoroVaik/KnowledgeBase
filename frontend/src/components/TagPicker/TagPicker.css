@@ -1,0 +1,111 @@
+/* .field-xs sizes the text; the picker itself still needs its own width cap and text cursor.
+   Fixed px, not em: the input and the panel below sit in different font-size contexts, so
+   matching em values (e.g. 11em/14em) would not actually come out to the same pixel width -
+   that mismatch was the dropdown looking wider than its own input. */
+.tag-picker input {
+  width: 200px;
+  cursor: text;
+}
+
+.tag-picker {
+  position: relative;
+}
+
+.tag-picker-panel {
+  position: absolute;
+  z-index: 1;
+  top: calc(100% + 4px);
+  left: 0;
+  box-sizing: border-box;
+  width: 200px;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  box-shadow: 0 4px 12px rgb(0 0 0 / 0.2);
+}
+
+/* line-height: 1.45 (unitless, not "normal") - a percentage line-height on :root resolves
+   to a fixed px value that is inherited literally, too tall for this smaller font-size (see
+   the same note on .chip-compact in TagChips.css). "normal" would depend on the font's own
+   metrics instead of scaling with font-size, so it is pinned to the root's own 145% ratio. */
+.tag-picker-heading {
+  margin: 6px 8px 2px;
+  font-size: 11px;
+  line-height: 1.45;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.tag-picker-heading:first-child {
+  margin-top: 2px;
+}
+
+.tag-picker-results {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tag-picker-results button {
+  display: block;
+  width: 100%;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: 4px;
+  text-align: left;
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.45;
+  cursor: pointer;
+  color: var(--text);
+  background: transparent;
+}
+
+/* The pipeline's semantic pick, one accent tone lighter than the plain-text spelling
+   matches below it - the two need to read apart at a glance, not just by heading. */
+.tag-picker-suggested button {
+  color: var(--accent);
+}
+
+.tag-picker-results button:hover {
+  color: var(--text-h);
+  background: var(--surface-hover);
+}
+
+.tags-row .tag-picker-add {
+  display: block;
+  width: 100%;
+  margin-top: 2px;
+  padding: 6px 8px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  text-align: left;
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.45;
+  cursor: pointer;
+  color: var(--ok);
+  background: var(--ok-bg);
+}
+
+.tags-row .tag-picker-add:hover:not(:disabled) {
+  border-color: var(--ok);
+  background: var(--ok-bg);
+}
+
+.tag-picker-error {
+  margin: 6px 4px 2px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--danger);
+}
+
+.tag-picker-empty {
+  margin: 6px 4px 2px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--text-muted);
+}

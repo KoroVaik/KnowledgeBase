@@ -22,6 +22,8 @@ public sealed class KnowledgeBaseDbContext(DbContextOptions<KnowledgeBaseDbConte
 
     public DbSet<TagParent> TagParents => Set<TagParent>();
 
+    public DbSet<TagParentSuggestion> TagParentSuggestions => Set<TagParentSuggestion>();
+
     public DbSet<DataProtectionKey> DataProtectionKeys => Set<DataProtectionKey>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder) =>

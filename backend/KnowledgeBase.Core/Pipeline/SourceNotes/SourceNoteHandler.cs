@@ -49,6 +49,14 @@ public sealed class SourceNoteHandler(
         var extracted = await extractor.ExtractAsync(
             new SourceAsset(bytes, asset.ContentType, asset.OriginalFileName), cancellationToken);
 
+        if (kind is ContentKind.Image)
+        {
+            var captured = PhotoCaptureReader.Read(bytes);
+            asset.CapturedAtUtc = captured.CapturedAtUtc;
+            asset.Latitude = captured.Latitude;
+            asset.Longitude = captured.Longitude;
+        }
+
         // Caught here, not left to Ollama's silent truncation: a bounded slice would make a
         // note that looks fine but came from a fraction of the source.
         if (extracted.Text is { Length: var length } && length > _maxSourceChars)

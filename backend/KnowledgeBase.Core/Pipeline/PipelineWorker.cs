@@ -123,6 +123,11 @@ public sealed class PipelineWorker(
             job.Error = error.Message;
 
             await database.SaveChangesAsync(CancellationToken.None);
+
+            // Otherwise a job with nothing to do (e.g. no tag left to place) leaves the UI
+            // waiting forever - it only ever hears about the Done path below.
+            services.GetRequiredService<IChangeNotifier>()
+                .Publish(new ChangeEvent(ChangeResources.Notes, ChangeActions.Updated));
         }
         catch (Exception error) when (error is not OperationCanceledException)
         {
@@ -140,6 +145,12 @@ public sealed class PipelineWorker(
             job.Error = error.Message;
 
             await database.SaveChangesAsync(CancellationToken.None);
+
+            if (giveUp)
+            {
+                services.GetRequiredService<IChangeNotifier>()
+                    .Publish(new ChangeEvent(ChangeResources.Notes, ChangeActions.Updated));
+            }
         }
 
         return true;

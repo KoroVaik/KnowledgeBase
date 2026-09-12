@@ -1,0 +1,39 @@
+.tag-chips {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+/* line-height: 145% on :root resolves to a fixed px value and is inherited as such, not
+   recomputed per descendant font-size - without this a small chip inherits a tall line box. */
+.chip-compact {
+  line-height: normal;
+}
+
+.tag-chip {
+  padding: 2px 9px;
+  font-size: 12px;
+  color: var(--accent);
+  background: var(--accent-bg);
+  border: 1px solid var(--accent-border);
+  border-radius: 999px;
+}
+
+/* Dashed cue like an unresolved wiki-link: not yet vouched for. Body-text grey, not
+   --text-muted - muted enough against the confirmed chip while clearing AA contrast. */
+.tag-chip-unconfirmed {
+  color: var(--text);
+  background: transparent;
+  border-style: dashed;
+  border-color: currentColor;
+}
+
+/* Tags section only - the dashed cue above is the shared "unresolved wiki-link" look
+   TagChips.tsx relies on elsewhere, so this is an additional class (chained for
+   specificity), not an edit to the base .tag-chip-unconfirmed. */
+.tag-chip-unconfirmed.chip-review {
+  color: var(--warn);
+  background: var(--warn-bg);
+  border-style: solid;
+  border-color: var(--warn);
+}

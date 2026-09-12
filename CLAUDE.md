@@ -57,6 +57,11 @@ development on this project — mostly from *reading* other people's code at wor
 **Explain before you change code**: first *why this matters in practice*, then wait for a
 "yes", then edit files.
 
+**Proposing a CSS/styling fix**: describe what will look or behave differently, not the
+CSS itself. "Card перестане вилазити за правий край на вузьких екранах" is right;
+"додам `overflow: hidden` і `flex-wrap: wrap`" is not — CSS property names and selectors
+read as noise, not information, to someone who doesn't know what they render.
+
 ## Comment policy
 
 **Comments are the exception, not the norm.** The owner does not like reading them — the
@@ -79,7 +84,13 @@ those.
   dependencies, look at the files. (The project description has drifted from reality
   before: the linter turned out to be oxlint, not typescript-eslint; the CI workflow did
   not exist at all.)
-- **Clean up after yourself**: test files in `data/assets`, stopped dev servers.
+- **Dev servers: check before starting, stop what you started.** Before starting Vite,
+  the API, or the worker for a check, verify whether it's already running instead of
+  assuming — Vite in particular has hot reload, so an already-running instance already
+  reflects your latest changes; starting a second one wastes time and can collide on the
+  port. If you did start one yourself to run a check, you own stopping it again before you
+  finish — this has been skipped before, so don't rely on it happening on its own.
+- **Clean up after yourself**: test files in `data/assets`.
 - **Do not commit or push without being asked.**
 - **Do not create git branches without being asked.** Work on the current branch; if that
   seems wrong, say so and wait.

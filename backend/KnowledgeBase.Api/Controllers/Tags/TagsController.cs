@@ -1,6 +1,7 @@
 using KnowledgeBase.Api.Controllers.Tags.Contracts;
 using KnowledgeBase.Core.Persistence;
 using KnowledgeBase.Core.Pipeline.TagGrouping;
+using KnowledgeBase.Core.Pipeline.TagHierarchy;
 using KnowledgeBase.Core.RealTime;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -49,6 +50,13 @@ public sealed class TagsController(KnowledgeBaseDbContext database, IChangeNotif
             .GroupBy(link => link.ChildId)
             .ToDictionary(group => group.Key, group => (IReadOnlyList<string>)group.Select(link => link.ParentId).ToList());
 
+        var pendingSuggestions = await _database.TagParentSuggestions
+            .Where(suggestion => !suggestion.Dismissed)
+            .ToListAsync(cancellationToken);
+        var tagIdsWithPendingSuggestion = pendingSuggestions
+            .SelectMany(suggestion => new[] { suggestion.ChildId, suggestion.ParentId })
+            .ToHashSet();
+
         var tags = await _database.Tags.ToListAsync(cancellationToken);
 
         IEnumerable<Tag> matching = excludeId is null ? tags : tags.Where(tag => tag.Id != excludeId);
@@ -73,7 +81,8 @@ public sealed class TagsController(KnowledgeBaseDbContext database, IChangeNotif
                 row.Tag.Confirmed,
                 counts.GetValueOrDefault(row.Tag.Id),
                 row.Tag.SuggestedMergeIntoId,
-                parentsByChild.GetValueOrDefault(row.Tag.Id, Array.Empty<string>())))
+                parentsByChild.GetValueOrDefault(row.Tag.Id, Array.Empty<string>()),
+                tagIdsWithPendingSuggestion.Contains(row.Tag.Id)))
             .ToList();
 
         return Ok(response);
@@ -131,7 +140,8 @@ public sealed class TagsController(KnowledgeBaseDbContext database, IChangeNotif
 
         _notifier.Publish(new ChangeEvent(ChangeResources.Notes, ChangeActions.Updated));
 
-        return CreatedAtAction(nameof(List), new TagResponse(tag.Id, tag.Name, tag.Confirmed, 0, null, Array.Empty<string>()));
+        return CreatedAtAction(
+            nameof(List), new TagResponse(tag.Id, tag.Name, tag.Confirmed, 0, null, Array.Empty<string>(), false));
     }
 
     /// <summary>Marks a tag as vouched for by the user. Its merge suggestion is dropped.</summary>
@@ -260,11 +270,6 @@ public sealed class TagsController(KnowledgeBaseDbContext database, IChangeNotif
         [FromBody] AddTagParentRequest request,
         CancellationToken cancellationToken)
     {
-        if (id == request.ParentId)
-        {
-            return BadRequest(new { error = "A tag cannot be its own parent." });
-        }
-
         var childExists = await _database.Tags.AnyAsync(tag => tag.Id == id, cancellationToken);
         var parentExists = await _database.Tags.AnyAsync(tag => tag.Id == request.ParentId, cancellationToken);
 
@@ -273,25 +278,48 @@ public sealed class TagsController(KnowledgeBaseDbContext database, IChangeNotif
             return NotFound();
         }
 
+        var conflict = await AddParentLinkAsync(id, request.ParentId, cancellationToken);
+
+        if (conflict is not null)
+        {
+            return conflict;
+        }
+
+        await _database.SaveChangesAsync(CancellationToken.None);
+
+        _notifier.Publish(new ChangeEvent(ChangeResources.Notes, ChangeActions.Updated));
+
+        return NoContent();
+    }
+
+    /// <summary>
+    /// Adds the child -&gt; parent link (staged, not saved) after the same checks
+    /// <see cref="AddParent"/> makes. Shared with <see cref="AcceptParentSuggestion"/>, the only
+    /// other place a real <see cref="TagParent"/> link gets created.
+    /// </summary>
+    private async Task<IActionResult?> AddParentLinkAsync(string childId, string parentId, CancellationToken cancellationToken)
+    {
+        if (childId == parentId)
+        {
+            return BadRequest(new { error = "A tag cannot be its own parent." });
+        }
+
         var alreadyLinked = await _database.TagParents.AnyAsync(
-            link => link.ChildId == id && link.ParentId == request.ParentId, cancellationToken);
+            link => link.ChildId == childId && link.ParentId == parentId, cancellationToken);
 
         if (alreadyLinked)
         {
             return Conflict(new { error = "Already a parent of this tag." });
         }
 
-        if (await CreatesCycleAsync(id, request.ParentId, cancellationToken))
+        if (await CreatesCycleAsync(childId, parentId, cancellationToken))
         {
             return Conflict(new { error = "That would make the tag its own ancestor." });
         }
 
-        _database.TagParents.Add(new TagParent { ChildId = id, ParentId = request.ParentId });
-        await _database.SaveChangesAsync(CancellationToken.None);
+        _database.TagParents.Add(new TagParent { ChildId = childId, ParentId = parentId });
 
-        _notifier.Publish(new ChangeEvent(ChangeResources.Notes, ChangeActions.Updated));
-
-        return NoContent();
+        return null;
     }
 
     /// <summary>Adding child -&gt; parent would cycle if parent can already reach child by
@@ -355,9 +383,149 @@ public sealed class TagsController(KnowledgeBaseDbContext database, IChangeNotif
     }
 
     /// <summary>
-    /// Queues a job that re-runs the closest-confirmed-tag suggestion over every unconfirmed
-    /// tag, not only ones invented in the same run as a source note - useful once a tag gets
-    /// confirmed after others that could have matched it already exist.
+    /// Pending AI placement suggestions for one tag: confirmed tags it could go under
+    /// (<c>suggestedParents</c>), and confirmed tags that could go under it
+    /// (<c>suggestedChildren</c>) - the same rows, read from each side.
+    /// </summary>
+    /// <response code="200">The suggestions, possibly both empty.</response>
+    /// <response code="401">No session, or it has expired.</response>
+    /// <response code="404">No such tag.</response>
+    [HttpGet("{id}/parent-suggestions")]
+    [ProducesResponseType(typeof(TagParentSuggestionsResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> ParentSuggestions(string id, CancellationToken cancellationToken)
+    {
+        var exists = await _database.Tags.AnyAsync(tag => tag.Id == id, cancellationToken);
+
+        if (!exists)
+        {
+            return NotFound();
+        }
+
+        var suggestedParents = await (
+            from suggestion in _database.TagParentSuggestions
+            join tag in _database.Tags on suggestion.ParentId equals tag.Id
+            where suggestion.ChildId == id && !suggestion.Dismissed
+            select new TagSuggestionResponse(tag.Id, tag.Name))
+            .ToListAsync(cancellationToken);
+
+        var suggestedChildren = await (
+            from suggestion in _database.TagParentSuggestions
+            join tag in _database.Tags on suggestion.ChildId equals tag.Id
+            where suggestion.ParentId == id && !suggestion.Dismissed
+            select new TagSuggestionResponse(tag.Id, tag.Name))
+            .ToListAsync(cancellationToken);
+
+        return Ok(new TagParentSuggestionsResponse(suggestedParents, suggestedChildren));
+    }
+
+    /// <summary>
+    /// Accepts a placement suggestion between <c>id</c> and <c>otherId</c>, in whichever
+    /// direction it was proposed - the real <see cref="TagParent"/> link is created (same cycle
+    /// check as <see cref="AddParent"/>) and the suggestion is removed.
+    /// </summary>
+    /// <response code="204">Accepted.</response>
+    /// <response code="401">No session, or it has expired.</response>
+    /// <response code="404">No such suggestion.</response>
+    /// <response code="409">The link would make a tag its own ancestor.</response>
+    [HttpPost("{id}/parent-suggestions/{otherId}/accept")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> AcceptParentSuggestion(string id, string otherId, CancellationToken cancellationToken)
+    {
+        var suggestion = await _database.TagParentSuggestions.FirstOrDefaultAsync(
+            row => (row.ChildId == id && row.ParentId == otherId) || (row.ChildId == otherId && row.ParentId == id),
+            cancellationToken);
+
+        if (suggestion is null)
+        {
+            return NotFound();
+        }
+
+        var conflict = await AddParentLinkAsync(suggestion.ChildId, suggestion.ParentId, cancellationToken);
+
+        if (conflict is not null)
+        {
+            return conflict;
+        }
+
+        _database.TagParentSuggestions.Remove(suggestion);
+        await _database.SaveChangesAsync(CancellationToken.None);
+
+        _notifier.Publish(new ChangeEvent(ChangeResources.Notes, ChangeActions.Updated));
+
+        return NoContent();
+    }
+
+    /// <summary>
+    /// Rejects a placement suggestion between <c>id</c> and <c>otherId</c>. Kept as a dismissed
+    /// row, not deleted, so <c>suggest-hierarchy</c> does not propose the same pair again.
+    /// </summary>
+    /// <response code="204">Rejected.</response>
+    /// <response code="401">No session, or it has expired.</response>
+    /// <response code="404">No such suggestion.</response>
+    [HttpPost("{id}/parent-suggestions/{otherId}/reject")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> RejectParentSuggestion(string id, string otherId, CancellationToken cancellationToken)
+    {
+        var suggestion = await _database.TagParentSuggestions.FirstOrDefaultAsync(
+            row => (row.ChildId == id && row.ParentId == otherId) || (row.ChildId == otherId && row.ParentId == id),
+            cancellationToken);
+
+        if (suggestion is null)
+        {
+            return NotFound();
+        }
+
+        suggestion.Dismissed = true;
+        await _database.SaveChangesAsync(CancellationToken.None);
+
+        _notifier.Publish(new ChangeEvent(ChangeResources.Notes, ChangeActions.Updated));
+
+        return NoContent();
+    }
+
+    /// <summary>
+    /// Queues a job that finds a parent for every confirmed tag that has none yet and no
+    /// pending suggestion - see "Tag hierarchy" in docs/database.md.
+    /// </summary>
+    /// <response code="202">Queued.</response>
+    /// <response code="401">No session, or it has expired.</response>
+    /// <response code="409">Fewer than two confirmed tags, or a run is already queued.</response>
+    [HttpPost("suggest-hierarchy")]
+    [ProducesResponseType(StatusCodes.Status202Accepted)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> SuggestHierarchy(CancellationToken cancellationToken)
+    {
+        var confirmedCount = await _database.Tags.CountAsync(tag => tag.Confirmed, cancellationToken);
+
+        if (confirmedCount < 2)
+        {
+            return Conflict(new { error = "Needs at least two confirmed tags." });
+        }
+
+        var queued = await TagHierarchyQueue.EnqueueAsync(_database, cancellationToken);
+
+        if (!queued)
+        {
+            return Conflict(new { error = "A placement run is already queued." });
+        }
+
+        await _database.SaveChangesAsync(CancellationToken.None);
+
+        return Accepted();
+    }
+
+    /// <summary>
+    /// Queues a job that re-runs the closest-matching-tag suggestion over every unconfirmed tag
+    /// against the whole vocabulary (confirmed and other unconfirmed tags alike) - not only ones
+    /// invented in the same run as a source note, and not only against already-confirmed tags.
     /// </summary>
     /// <response code="202">Queued.</response>
     /// <response code="401">No session, or it has expired.</response>
@@ -368,12 +536,12 @@ public sealed class TagsController(KnowledgeBaseDbContext database, IChangeNotif
     [ProducesResponseType(StatusCodes.Status409Conflict)]
     public async Task<IActionResult> SuggestMerges(CancellationToken cancellationToken)
     {
-        var hasConfirmed = await _database.Tags.AnyAsync(tag => tag.Confirmed, cancellationToken);
         var hasUnconfirmed = await _database.Tags.AnyAsync(tag => !tag.Confirmed, cancellationToken);
+        var totalCount = await _database.Tags.CountAsync(cancellationToken);
 
-        if (!hasConfirmed || !hasUnconfirmed)
+        if (!hasUnconfirmed || totalCount < 2)
         {
-            return Conflict(new { error = "Needs at least one confirmed and one unreviewed tag." });
+            return Conflict(new { error = "Needs an unreviewed tag and something else in the vocabulary to compare it to." });
         }
 
         var queued = await TagGroupingQueue.EnqueueAsync(_database, cancellationToken);

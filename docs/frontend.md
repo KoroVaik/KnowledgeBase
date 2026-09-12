@@ -5,8 +5,41 @@ typescript-eslint. See [`architecture.md`](architecture.md) for constraints,
 [`backend.md`](backend.md) for the API side.
 
 Layout: `api/` (one module per resource + `http.ts` + `realtime.ts`), `components/`,
-`hooks/`, `upload/` (queue + classifier), `notes/` (body renderer), `format.ts`,
-`assetKind.ts` (is-image / is-processable, mirrors the backend), `download.ts`.
+`hooks/`, `upload/` (queue, classifier, drop-zone state), `notes/` (body renderer),
+`format.ts`, `assetKind.ts` (is-image / is-processable, mirrors the backend), `download.ts`.
+
+### Component vs hook split, co-located per component
+
+Every component that mixed state/fetch/handlers with markup was split into a component file
+(JSX only) plus a `use<Name>.ts` hook (state, effects, every handler) - then each such pair
+(and any sub-component private to it) was moved into its own folder under `components/`,
+e.g. `components/AssetList/{AssetList.tsx,useAssetList.ts}`. Group-by-feature, not
+group-by-type: easier to find and delete everything one component owns, at the cost of
+`hooks/` no longer listing every hook in the app.
+
+- `NotesList/` - `NotesList.tsx`, `useNotesList.ts`, `NoteRow.tsx` (the row shell shared by
+  the active and bin lists, private to this component).
+- `TagsSection/` - `TagsSection.tsx`, `useTagsSection.ts`, `ConfirmedTags.tsx`,
+  `TagParentsControl.tsx` (both private to this component, confirmed by grep before moving).
+- `AssetList/`, `DeleteNoteDialog/`, `FilePanel/`, `LoginForm/`, `TagPicker/`,
+  `UploadQueueDialog/` - component + its one hook, no sub-components.
+- **Stayed flat, not co-located:**
+  - `hooks/useResourceChanges.ts`, `hooks/useConnectionStatus.ts` - used by several
+    components (`NotesList`, `AssetList`, `TagsSection`, `App`), so they have no single
+    component to live inside. Left in `hooks/` for now rather than invented a `shared/` home.
+  - `components/TagChips.tsx` - no hook, used by both `NotesList` and `FilePanel`.
+  - `components/UploadDropZone.tsx` + `upload/useUploadDropZone.ts` - the hook already lives
+    in `upload/` next to the related `useUploadQueue.ts` and `classify.ts`, an existing
+    domain module rather than a private one-component hook.
+  - `App.tsx` + `hooks/useAppAuth.ts` - the root composition `main.tsx` mounts, not "a
+    component among components".
+  - `TagPicker/` is not nested inside `TagsSection/` even though that is its only two
+    callers today (`TagsSection`'s row and `TagParentsControl`) - it is built generic on
+    purpose (see its own doc comment) for any future picker over the tag vocabulary.
+
+No behaviour changed doing any of this - e.g. `NoteRow`'s one existing asymmetry (the active
+list shows a loading/error state for the expanded body, the bin only ever shows the ready
+state) was kept as-is, not unified.
 
 ## Decisions
 
@@ -138,6 +171,14 @@ one. `AssetList` is now the only list; a row expands (one open at a time) to a `
   the fetch effects never call `setState` for "loading" — that would trip oxlint
   `react(set-state-in-effect)`.
 
+### Capture date + geolocation in the file row
+
+`AssetList`'s meta line (`formatSize · formatDateTime(uploadedAtUtc)`) appends `Taken …`
+and `lat, lon` when `AssetSummary.capturedAtUtc`/`latitude`/`longitude` are present — null
+before the pipeline has run, and null after if the photo carried no EXIF (a screenshot, a
+re-encoded one). See *Photo capture metadata* in [`ai-pipeline.md`](ai-pipeline.md) for
+where these come from. The `Done` badge text is `Processed`, not `Note ready`.
+
 ### Notes list — synthesis only
 
 `NotesList` now fetches `GET /api/notes?kind=Synthesis` (Source notes are under their file)
@@ -183,6 +224,15 @@ Before this the sections were a bare `h2` over a hairline list on the page backg
 the whole page read as one continuous wall of rows, and restyling inside the rows changed
 nothing you could see from a step back.
 
+`.subsection-panel` (`TagsSection.css`) mirrors the same card-with-header-strip shape one
+depth step below the card itself: bordered box, `.tags-subhead` as the bled header strip
+(uppercase, `.section-count` pill), body below. Both its tones step up from the card's own
+(`--surface-2` body, `--surface-hover` strip) rather than reusing `--surface`/`--surface-2`
+— reusing those exactly would make the subsection blend into the card instead of reading as
+nested inside it. Generic on purpose so any subsection (not just Tags') can opt in. Used
+today by every subsection in `TagsSection`: "To review", "To place", "Confirmed" and
+"Hierarchy".
+
 ### Colour tokens — surface vs accent
 
 `--surface` / `--surface-hover` are the raised-panel and hover fills; `--accent-*` is a
@@ -202,6 +252,31 @@ could not surface a match that was not yet confirmed (see *Tag review* in
 component just renders what comes back (top 8). Built with no dependency on the merge
 flow specifically (`onPick(tag)`, `excludeId`), so a future manual "add a tag to this
 note" picker can reuse it rather than growing its own search.
+
+For an **unconfirmed** tag that already carries an AI suggestion (`suggestedMergeIntoId`),
+`TagsSection`'s row skips the picker entirely and renders `TagMergeOptions` instead — one
+button per candidate (the suggestion, then confirmed tags close in spelling), fetched once,
+no search box, no click-to-open. A tag with no suggestion falls back to `TagPicker` — there
+is nothing to make explicit yet. Confirmed tags always keep `TagPicker`; a search box still
+earns its place there since there is no AI guess to shortcut.
+
+### Jobs section — worker status
+
+`JobsSection` lists jobs the pipeline has queued or is running, via `GET /api/jobs`
+([backend.md](backend.md)). Kept simple on purpose:
+
+- **Continuous polling (5 s), not SSE.** The worker flips `Pending` → `Running` → `Done`
+  entirely inside its own process with no ping to the API in between (only a finished note
+  triggers one, see *Worker → API bridge* in [`worker.md`](worker.md)), so an event-based
+  refresh would miss the states this section exists to show. Same reasoning as `NotesList`'s
+  post-`Process again` poll, just running all the time instead of only after one action —
+  this section's whole point is being a live worker heartbeat.
+- **Does not hide when empty** — shows "No active jobs.", unlike `NotesList` returning `null`
+  when there is nothing to show. An empty list here is itself the useful signal ("worker is
+  caught up"), not a section with nothing to say.
+- One list, status as a badge (`Queued`/`Running`), not two separate blocks — see chat decision
+  2026-09-12, kept out of a Decisions-worthy debate: job count is small (single-user), so a
+  badge reads fine without the extra grouping markup.
 
 ### Note body is untrusted-shape Markdown
 
@@ -240,6 +315,10 @@ marketing `h1` and fills the row.
 
 ### Pending browser verification
 
+- [ ] **Jobs section** (`GET /api/jobs`, `JobsSection`): build + lint pass, **browser run
+      pending** — a queued job appearing (upload, `suggest-merges`, `suggest-hierarchy`), the
+      `Running` badge while the worker has it, the row disappearing once `Done`/`Failed`, the
+      retry case (`Error` shown on a re-queued `Pending` row), phone width.
 - [ ] Bulk upload: drop several files, per-row progress popup, a `warning` file (text
       over 12 000 bytes) with "Upload anyway", a `blocked` file (empty and over 25 MB)
       with `Dismiss`, "Upload all anyway", "Dismiss all", ESC during upload (ignored) and
@@ -252,6 +331,9 @@ marketing `h1` and fills the row.
       note).
 - [ ] Tag chips (`FilePanel` note tab + `NotesList` `.note-meta`) — confirmed vs
       unconfirmed styling, wrapping with a long tag set, both themes.
+- [ ] `.subsection-panel` background + larger `.tags-subhead` font on "To review",
+      "Confirmed", "Hierarchy" — build + lint pass, **browser run pending** (both themes;
+      how the tint reads behind `TagHierarchyTree`'s own `--surface` nodes).
 - [ ] Bulk select in `AssetList`: still unverified in the browser — the partial-failure
       path (some deletes fail → rows stay ticked + "Could not delete X of N") and
       checkboxes/buttons disabled while a bulk delete runs. (Selection, select-all,
@@ -285,12 +367,22 @@ marketing `h1` and fills the row.
       `FilePanel`; build + lint pass, **browser run pending**. Faceted / "Untagged" filter
       and the review UI are the items below.
 - [ ] Tag review UI in `TagsSection`: every tag listed, "To review" block for unconfirmed
-      ones — "Merge into «suggested»" (one click), Confirm, Synthesise (≥2 notes), a
-      searchable "Merge into…" (`TagPicker`, asks first), Delete (asks first for a
+      ones — explicit "→ «candidate»" merge buttons (`TagMergeOptions`) when there is an AI
+      suggestion, a searchable "Merge into…" (`TagPicker`) as fallback when there is none —
+      both ask before merging, Confirm, Synthesise (≥2 notes), Delete (asks first for a
       confirmed tag). "Suggest merges" head button queues the `GroupTags` job (see
       *Synthesis pipeline* in [`ai-pipeline.md`](ai-pipeline.md)). Build + lint pass,
-      **browser run pending** (incl. phone width — the row wraps, and the picker's
-      dropdown position).
+      **browser run pending** (incl. phone width — the row wraps with several merge
+      buttons, and the picker's dropdown position).
+- [ ] Tag hierarchy tree and placement suggestions panel — done in code and verified in the
+      browser (see [`archive.md`](archive.md)); **phone width still unchecked** for the
+      tree's drag-and-drop and the suggestion cards' pill wrapping (the tree's own row
+      wrapping at phone width was checked and fixed — see archive.md).
+- [ ] `TagHierarchyTree` drag-and-drop, real-mouse check: the `onDragLeave` flicker fix
+      (`useTagHierarchyTree.ts`) is build+lint clean but unverified by an actual drag —
+      browser automation's synthetic mouse drag does not fire native HTML5 `dragstart` at
+      all (confirmed: no request, no tree change after a scripted drag), so this needs the
+      owner's own mouse, not a subagent.
 
 ### Larger features
 

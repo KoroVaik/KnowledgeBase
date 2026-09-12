@@ -1,7 +1,7 @@
-import { useEffect, useRef } from 'react'
-import { formatSize } from '../format'
-import { isBusy, needsAttention } from '../upload/useUploadQueue'
-import type { QueuedItem } from '../upload/useUploadQueue'
+import { formatSize } from '../../format'
+import { useUploadQueueDialog } from './useUploadQueueDialog'
+import type { QueuedItem } from '../../upload/useUploadQueue'
+import './UploadQueueDialog.css'
 
 interface UploadQueueDialogProps {
   open: boolean
@@ -20,27 +20,7 @@ export function UploadQueueDialog({
   onDismiss,
   onClose,
 }: UploadQueueDialogProps) {
-  const dialogRef = useRef<HTMLDialogElement>(null)
-
-  // Modality only exists as an imperative call - React has to reach into the DOM here.
-  useEffect(() => {
-    const dialog = dialogRef.current
-
-    if (dialog === null) {
-      return
-    }
-
-    if (open && !dialog.open) {
-      dialog.showModal()
-    } else if (!open && dialog.open) {
-      dialog.close()
-    }
-  }, [open])
-
-  const busy = isBusy(items)
-  const warnings = items.filter((item) => item.state.status === 'needs-decision')
-  const attention = items.filter(needsAttention)
-  const done = items.filter((item) => item.state.status === 'done').length
+  const { dialogRef, busy, warnings, attention, done } = useUploadQueueDialog(open, items)
 
   return (
     <dialog
@@ -90,7 +70,7 @@ export function UploadQueueDialog({
         {warnings.length > 0 && (
           <button
             type="button"
-            className="queue-primary"
+            className="btn btn-lg btn-primary"
             onClick={() => onUploadNow(warnings)}
           >
             Upload all anyway
@@ -98,13 +78,17 @@ export function UploadQueueDialog({
         )}
 
         {attention.length > 0 && (
-          <button type="button" onClick={() => onDismiss(attention.map((item) => item.id))}>
+          <button
+            type="button"
+            className="btn btn-lg"
+            onClick={() => onDismiss(attention.map((item) => item.id))}
+          >
             Dismiss all
           </button>
         )}
 
         {/* close(), so every exit path arrives through the same `close` event. */}
-        <button type="button" onClick={() => dialogRef.current?.close()} disabled={busy}>
+        <button type="button" className="btn btn-lg" onClick={() => dialogRef.current?.close()} disabled={busy}>
           Close
         </button>
       </div>
@@ -150,10 +134,10 @@ function StatusCell({ item, onUploadNow, onDismiss }: StatusCellProps) {
         <>
           <span className="queue-error">{item.state.message}</span>
           <span className="queue-actions">
-            <button type="button" onClick={() => onUploadNow([item])}>
+            <button type="button" className="btn btn-sm" onClick={() => onUploadNow([item])}>
               Retry
             </button>
-            <button type="button" onClick={() => onDismiss([item.id])}>
+            <button type="button" className="btn btn-sm" onClick={() => onDismiss([item.id])}>
               Dismiss
             </button>
           </span>
@@ -165,10 +149,10 @@ function StatusCell({ item, onUploadNow, onDismiss }: StatusCellProps) {
         <>
           <span className="queue-warn">{item.problem?.message}</span>
           <span className="queue-actions">
-            <button type="button" onClick={() => onUploadNow([item])}>
+            <button type="button" className="btn btn-sm" onClick={() => onUploadNow([item])}>
               Upload anyway
             </button>
-            <button type="button" onClick={() => onDismiss([item.id])}>
+            <button type="button" className="btn btn-sm" onClick={() => onDismiss([item.id])}>
               Dismiss
             </button>
           </span>
@@ -181,7 +165,7 @@ function StatusCell({ item, onUploadNow, onDismiss }: StatusCellProps) {
         <>
           <span className="queue-error">{item.problem?.message}</span>
           <span className="queue-actions">
-            <button type="button" onClick={() => onDismiss([item.id])}>
+            <button type="button" className="btn btn-sm" onClick={() => onDismiss([item.id])}>
               Dismiss
             </button>
           </span>

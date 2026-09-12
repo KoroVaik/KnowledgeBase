@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState } from 'react'
-import { fetchBacklinks } from '../api/notes'
-import type { Backlink, NoteSummary } from '../api/notes'
+import { useDeleteNoteDialog } from './useDeleteNoteDialog'
+import type { NoteSummary } from '../../api/notes'
+import './DeleteNoteDialog.css'
 
 interface DeleteNoteDialogProps {
   /** The note to delete, or null when the dialog is closed. */
@@ -10,58 +10,9 @@ interface DeleteNoteDialogProps {
   onConfirm: (deleteSource: boolean) => void
 }
 
-type BacklinkState =
-  | { status: 'loading' }
-  | { status: 'ready'; backlinks: Backlink[] }
-  | { status: 'error' }
-
 // Names what the delete takes with it - which notes lose a link, which file goes along.
 export function DeleteNoteDialog({ note, busy, onCancel, onConfirm }: DeleteNoteDialogProps) {
-  const dialogRef = useRef<HTMLDialogElement>(null)
-  const [deleteSource, setDeleteSource] = useState(true)
-  const [backlinks, setBacklinks] = useState<BacklinkState>({ status: 'loading' })
-
-  // Modality only exists as an imperative call - React has to reach into the DOM here.
-  useEffect(() => {
-    const dialog = dialogRef.current
-
-    if (dialog === null) {
-      return
-    }
-
-    if (note !== null && !dialog.open) {
-      dialog.showModal()
-    } else if (note === null && dialog.open) {
-      dialog.close()
-    }
-  }, [note])
-
-  const noteId = note?.id ?? null
-
-  useEffect(() => {
-    if (noteId === null) {
-      return
-    }
-
-    let cancelled = false
-
-    void fetchBacklinks(noteId)
-      .then((found) => {
-        if (!cancelled) {
-          setBacklinks({ status: 'ready', backlinks: found })
-        }
-      })
-      .catch(() => {
-        // The count is context, not a precondition - a failed fetch must not block the delete.
-        if (!cancelled) {
-          setBacklinks({ status: 'error' })
-        }
-      })
-
-    return () => {
-      cancelled = true
-    }
-  }, [noteId])
+  const { dialogRef, deleteSource, setDeleteSource, backlinks } = useDeleteNoteDialog(note)
 
   return (
     <dialog
@@ -117,12 +68,12 @@ export function DeleteNoteDialog({ note, busy, onCancel, onConfirm }: DeleteNote
           )}
 
           <div className="confirm-actions">
-            <button type="button" onClick={onCancel} disabled={busy}>
+            <button type="button" className="btn btn-lg" onClick={onCancel} disabled={busy}>
               Cancel
             </button>
             <button
               type="button"
-              className="confirm-danger"
+              className="btn btn-lg btn-danger"
               onClick={() => onConfirm(deleteSource)}
               disabled={busy}
             >

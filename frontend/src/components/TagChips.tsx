@@ -1,4 +1,5 @@
 import type { NoteTag } from '../api/notes'
+import './TagChips.css'
 
 /** A note's tags. First chip is the primary tag; an unconfirmed one shows grey and dashed,
  *  the same cue as an unresolved wiki-link. Renders nothing when the note is untagged. */

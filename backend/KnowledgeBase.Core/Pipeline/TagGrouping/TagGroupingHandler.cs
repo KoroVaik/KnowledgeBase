@@ -4,9 +4,11 @@ using Microsoft.EntityFrameworkCore;
 
 namespace KnowledgeBase.Core.Pipeline.TagGrouping;
 
-// Re-runs the closest-confirmed-tag suggestion (see docs/database.md, Tag review) over every
+// Re-runs the closest-matching-tag suggestion (see docs/database.md, Tag review) over every
 // unconfirmed tag in one model call, not just ones invented in the same run as a source note.
-// Writes SuggestedMergeIntoId directly; produces no note.
+// The match can be a confirmed tag or another still-unconfirmed one - two tags invented on
+// different uploads are otherwise never compared to each other. Writes SuggestedMergeIntoId
+// directly; produces no note.
 public sealed class TagGroupingHandler(KnowledgeBaseDbContext database, IContentAnalyzer analyzer) : IPipelineHandler
 {
     public JobKind Kind => JobKind.GroupTags;
@@ -17,10 +19,10 @@ public sealed class TagGroupingHandler(KnowledgeBaseDbContext database, IContent
         var confirmed = tags.Where(tag => tag.Confirmed).ToList();
         var unconfirmed = tags.Where(tag => !tag.Confirmed).ToList();
 
-        if (confirmed.Count == 0 || unconfirmed.Count == 0)
+        if (unconfirmed.Count == 0 || tags.Count < 2)
         {
             throw new SkippableContentException(
-                "Nothing to group: needs at least one confirmed and one unreviewed tag.");
+                "Nothing to group: needs an unreviewed tag and something else in the vocabulary to compare it to.");
         }
 
         var task = TagGroupingPrompt.TaskFor(
@@ -29,12 +31,12 @@ public sealed class TagGroupingHandler(KnowledgeBaseDbContext database, IContent
 
         var result = await analyzer.RunAsync<TagGroupingResult>(task, cancellationToken);
 
-        var confirmedByName = confirmed.ToDictionary(tag => tag.Name, StringComparer.OrdinalIgnoreCase);
         var unconfirmedByName = unconfirmed.ToDictionary(tag => tag.Name, StringComparer.OrdinalIgnoreCase);
+        var byName = tags.ToDictionary(tag => tag.Name, StringComparer.OrdinalIgnoreCase);
 
         foreach (var suggestion in result.Suggestions ?? [])
         {
-            if (string.IsNullOrWhiteSpace(suggestion.ClosestConfirmedTag))
+            if (string.IsNullOrWhiteSpace(suggestion.ClosestMatchingTag))
             {
                 continue;
             }
@@ -44,7 +46,7 @@ public sealed class TagGroupingHandler(KnowledgeBaseDbContext database, IContent
                 continue;
             }
 
-            if (!confirmedByName.TryGetValue(suggestion.ClosestConfirmedTag.Trim(), out var target))
+            if (!byName.TryGetValue(suggestion.ClosestMatchingTag.Trim(), out var target) || target.Id == tag.Id)
             {
                 continue;
             }

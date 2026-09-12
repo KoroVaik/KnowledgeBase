@@ -1,0 +1,126 @@
+/* Indented, collapsible view of the confirmed tag DAG - TagHierarchyTree. A tag can appear
+   under more than one parent, so the key is `parentId:childId`, not just the tag id. Each
+   tag is its own bordered section; a child's section sits nested inside its parent's, so
+   depth reads through actual nesting instead of a guide line down the side. */
+.tag-tree,
+.tag-tree-root,
+.tag-tree-children {
+  display: flex;
+  flex-direction: column;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  gap: 6px;
+}
+
+.tag-tree-children {
+  margin-top: 6px;
+}
+
+/* Depth colour comes from --tag-node-color, set inline per node from the --tag-depth-N
+   cycle (TagHierarchyTree.tsx) - a thin accent stripe, not a fill, so it stays legible on
+   both themes and never competes with the flat list's status colours. */
+.tag-tree-node {
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--tag-node-color, var(--border));
+  border-radius: 10px;
+  padding: 2px 8px;
+  background: var(--surface);
+}
+
+.tag-tree-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  padding: 4px 4px;
+  border-radius: 6px;
+  cursor: grab;
+}
+
+.tag-tree-row .tag-chip {
+  white-space: nowrap;
+}
+
+/* Unlike the flat list, a tree row has no action group to push against - `.tags-count`'s
+   flex: 1 just strands the remove button far to the right here. Grouped with the remove
+   button in .tag-tree-meta so the two wrap onto a new line together, never separately. */
+.tag-tree-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px 12px;
+}
+
+.tag-tree-row .tags-count {
+  flex: 0 1 auto;
+  white-space: nowrap;
+}
+
+/* Hover highlights the whole section, not just its header row - but only the innermost
+   hovered section, never its ancestors too, since a child's box physically sits inside its
+   parent's. :has() checks "do I contain a currently-hovered nested section?" so a parent
+   backs off as soon as the pointer is over one of its children instead of just itself. */
+.tag-tree-node:hover:not(:has(.tag-tree-node:hover)) {
+  box-shadow: inset 0 0 0 999px rgba(127, 127, 127, 0.06);
+}
+
+/* Highlighted while a dragged tag hovers over this row as a drop target - see
+   useTagHierarchyTree's rowDragProps. Heavier than a hover so "this is where it lands" is
+   unambiguous mid-drag. */
+.tag-tree-row.tag-tree-drop-target {
+  background: var(--accent-bg);
+  outline: 2px dashed var(--accent-border);
+  outline-offset: -2px;
+}
+
+/* The section currently being dragged (source, not the drop target) - a thin outline so it
+   reads as "this is what's moving" without competing with the drop target's heavier one. */
+.tag-tree-node.tag-tree-dragging {
+  outline: 1px solid var(--accent-border);
+  outline-offset: -1px;
+}
+
+.tag-tree-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  padding: 0;
+  border: 0;
+  font-size: 16px;
+  color: var(--text);
+  background: transparent;
+  cursor: pointer;
+}
+
+.tag-tree-toggle:disabled {
+  cursor: default;
+}
+
+.tag-tree-remove {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 32px;
+  min-height: 32px;
+  flex-shrink: 0;
+  padding: 2px 6px;
+  border: 0;
+  border-radius: 4px;
+  font-size: 14px;
+  color: var(--text-muted);
+  background: transparent;
+  cursor: pointer;
+}
+
+.tag-tree-remove:hover:not(:disabled) {
+  color: var(--danger);
+  background: var(--danger-bg);
+}
+
+.tag-tree-remove:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}

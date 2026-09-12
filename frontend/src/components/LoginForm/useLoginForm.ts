@@ -1,17 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
 import type { ChangeEvent, SubmitEvent } from 'react'
-import { login } from '../api/auth'
-import type { CurrentUser } from '../api/auth'
+import { login } from '../../api/auth'
+import type { CurrentUser } from '../../api/auth'
 
-type LoginState =
+export type LoginState =
   | { status: 'idle' }
   | { status: 'submitting' }
   | { status: 'error'; message: string }
-
-interface LoginFormProps {
-  onSignedIn: (user: CurrentUser) => void
-  googleSignInEnabled: boolean
-}
 
 const googleErrors: Record<string, string> = {
   'google-not-allowed': 'That Google account is not allowed to sign in here.',
@@ -27,7 +22,9 @@ function readGoogleError(): LoginState {
     : { status: 'error', message: googleErrors[code] }
 }
 
-export function LoginForm({ onSignedIn, googleSignInEnabled }: LoginFormProps) {
+/** State and handlers behind LoginForm: the password field, the Google-redirect error read
+ *  from the URL once, and the submit itself. */
+export function useLoginForm(onSignedIn: (user: CurrentUser) => void) {
   const [password, setPassword] = useState('')
   const [state, setState] = useState<LoginState>(readGoogleError)
 
@@ -70,38 +67,12 @@ export function LoginForm({ onSignedIn, googleSignInEnabled }: LoginFormProps) {
     }
   }
 
-  const isSubmitting = state.status === 'submitting'
-
-  return (
-    <section className="login">
-      <form className="login-form" onSubmit={handleSubmit}>
-        <label htmlFor="password">Password</label>
-        <input
-          id="password"
-          ref={inputRef}
-          type="password"
-          value={password}
-          onChange={handlePasswordChange}
-          disabled={isSubmitting}
-          autoComplete="current-password"
-          autoFocus
-        />
-        <button type="submit" disabled={password === '' || isSubmitting}>
-          {isSubmitting ? 'Signing in…' : 'Sign in'}
-        </button>
-      </form>
-
-      {googleSignInEnabled && (
-        <a className="login-google" href="/api/auth/google/start">
-          Continue with Google
-        </a>
-      )}
-
-      {state.status === 'error' && (
-        <p className="login-error" role="alert">
-          {state.message}
-        </p>
-      )}
-    </section>
-  )
+  return {
+    password,
+    state,
+    inputRef,
+    handlePasswordChange,
+    handleSubmit,
+    isSubmitting: state.status === 'submitting',
+  }
 }

@@ -24,7 +24,7 @@ Deploy order: **API first** (applies the migration to Neon), then restart the wo
 
 | Table | Notes |
 |---|---|
-| `Assets` (`AssetRecord`) | File metadata. **Source of truth** — `GET /api/assets` reads this, not the store. `AssetRecord.For` is a factory taking separate values, not `IFormFile` (the pipeline creates rows too). Empty name → stored name; empty MIME → `application/octet-stream`. `UploadedAtUtc` is `timestamp with time zone`. |
+| `Assets` (`AssetRecord`) | File metadata. **Source of truth** — `GET /api/assets` reads this, not the store. `AssetRecord.For` is a factory taking separate values, not `IFormFile` (the pipeline creates rows too). Empty name → stored name; empty MIME → `application/octet-stream`. `UploadedAtUtc` is `timestamp with time zone`. `CapturedAtUtc`/`Latitude`/`Longitude` (all nullable) hold EXIF read from image bytes — see *Photo capture metadata* in [`ai-pipeline.md`](ai-pipeline.md). |
 | `ProcessingJobs` (`ProcessingJob`) | `Id`, `Kind` (`JobKind` enum-as-string), `AssetId?` FK, `Payload?` (JSON, synthesis only), `Status` (enum-as-string), `Attempts`, times, `Error`. Unique index on `AssetId` **among non-null** (aggregation jobs carry none). Index `(Status, CreatedAtUtc)` for polling. |
 | `Notes` (`Note`) | `Id`, `Title`, `Body` (`text`), `Kind`, `SourceAssetId?` FK, `SourceFileName`, `SynthesisGroup?`, times, `DeletedAtUtc`. Classification is via `NoteTag`, not a column. Unique `(Kind, SynthesisGroup)` among the living — one aggregate note per group. |
 | `NoteLinks` (`NoteLink`) | `Id`, `SourceNoteId` FK, `TargetTitle` (raw), `TargetNoteId?` (nullable for a dangling `[[...]]`). Unique `(SourceNoteId, TargetTitle)`. |
@@ -52,13 +52,15 @@ SET NULL (target); `Notes → Assets` (`SourceAssetId`) SET NULL; `NoteTags → 
   stays `SuggestedMergeIntoId`, below). `excludeId` drops one tag (the one being merged)
   from the results. See `TagPicker` in [`frontend.md`](frontend.md).
 - `POST /api/tags/suggest-merges` queues a `GroupTags` job (see *Synthesis pipeline* in
-  [`ai-pipeline.md`](ai-pipeline.md)) that re-runs the closest-confirmed-tag call over
+  [`ai-pipeline.md`](ai-pipeline.md)) that re-runs the closest-matching-tag call over
   **every** unconfirmed tag in one pass, not only ones invented in the same run as a
-  source note. Fixes the case that motivated it: tag A is invented and points nowhere
-  (nothing confirmed is close yet); tag B is invented later and would have been A's
+  source note, and against the **whole vocabulary** - confirmed tags and other
+  unconfirmed ones alike, not confirmed-only. Fixes the case that motivated it: tag A is
+  invented and points nowhere (nothing confirmed is close yet, and the old batch pass only
+  checked against confirmed tags too); tag B is invented later and would have been A's
   match, but the per-file pipeline never compares tags to each other, only to the
-  confirmed list at that moment. 409 when there is nothing to group (no confirmed tag, or
-  no unconfirmed one) or a run is already queued.
+  confirmed list at that moment. 409 when there is nothing to group (no unconfirmed tag,
+  or fewer than two tags total) or a run is already queued.
 - **Merge A → B**: every `NoteTag` of A moves to B (a note carrying both keeps the lower
   `Ordinal`), tags suggesting A now suggest B, B becomes `Confirmed` (merging into it
   vouches for it), A is deleted.
@@ -67,6 +69,27 @@ SET NULL (target); `Notes → Assets` (`SourceAssetId`) SET NULL; `NoteTags → 
   synthesis for a vanished tag is `Skipped`.
 - **A synthesis carries exactly its group tag; the index carries none.** The model is not
   asked for tags there — it used to invent some.
+
+### Tag hierarchy
+
+- `TagParent` (`ChildId → ParentId`) is a **DAG, not a tree** — a tag may have several
+  parents (e.g. "Porsche" under both "Cars" and "German brands"). `POST /api/tags/{id}/parents`
+  rejects a link that would create a cycle (`CreatesCycleAsync` walks the new parent's own
+  ancestors looking for the child).
+- **AI placement suggestions run in one direction only**: for a confirmed tag with no
+  parent yet, a pipeline handler asks the model which existing confirmed tag(s) it could
+  go under, and stores each guess as a row — `TagParentSuggestion (ChildId, ParentId)`,
+  separate from the real `TagParent` table until a human accepts one. There is no separate
+  model call that searches for a tag's *children*: a tag's "suggested children" are just
+  every `TagParentSuggestion` where it is the `ParentId` — the flip side of another tag's
+  own placement search. One search direction, one table, two ways to filter it.
+- Only tags with **zero parents and zero pending (non-dismissed) suggestions** are worth
+  re-running — a tag already placed, or already reviewed and rejected, does not need
+  asking again. Mirrors the *Tag review* re-run guard above.
+- Accepting a suggestion is the existing `AddParent` path (same cycle check); rejecting
+  sets a `Dismissed` flag rather than deleting the row, so the same guess is not proposed
+  again next run.
+- UI: [`frontend.md`](frontend.md) *Tag hierarchy tree* and *Placement suggestions*.
 
 ### `NoteKind` — one table, three lifecycles
 

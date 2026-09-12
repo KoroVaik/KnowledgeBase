@@ -1,0 +1,64 @@
+.file-panel-tags {
+  margin-bottom: 12px;
+}
+
+.file-panel-tags-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+/* margin-left: auto, not justify-content: space-between on the row - this keeps the
+   picker pinned to the right even when it wraps alone onto its own line (many tags). */
+.file-panel-tags-row .tag-picker {
+  margin-left: auto;
+}
+
+/* The section that opens under a file row. Recessed onto --bg inside the --surface card:
+   the open row already carries the accent rail, so depth is the only cue needed here. */
+.file-panel {
+  margin: 10px 0 4px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg);
+}
+
+.file-panel-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.file-panel-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.file-panel-error {
+  margin: 12px 0 0;
+  font-size: 13px;
+  color: var(--danger);
+}
+
+.file-panel-tabs {
+  display: flex;
+  gap: 4px;
+}
+
+.file-panel-body {
+  margin-top: 16px;
+  font-size: 14px;
+}
+
+.file-panel-image {
+  max-width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}

@@ -2,8 +2,9 @@ using System.Text.Json.Nodes;
 
 namespace KnowledgeBase.Core.Pipeline.TagGrouping;
 
-// What the model returns for one grouping pass: for each unreviewed tag, the confirmed tag it
-// means the same thing as, or "" when none does.
+// What the model returns for one grouping pass: for each unreviewed tag, the other tag in the
+// vocabulary (confirmed or itself still unreviewed) it means the same thing as, or "" when none
+// does.
 public sealed record TagGroupingResult(IReadOnlyList<TagMergeSuggestion>? Suggestions)
 {
     public static JsonObject Schema() =>
@@ -21,9 +22,9 @@ public sealed record TagGroupingResult(IReadOnlyList<TagMergeSuggestion>? Sugges
                         ["properties"] = new JsonObject
                         {
                             ["tag"] = new JsonObject { ["type"] = "string" },
-                            ["closestConfirmedTag"] = new JsonObject { ["type"] = "string" },
+                            ["closestMatchingTag"] = new JsonObject { ["type"] = "string" },
                         },
-                        ["required"] = new JsonArray("tag", "closestConfirmedTag"),
+                        ["required"] = new JsonArray("tag", "closestMatchingTag"),
                     },
                 },
             },
@@ -31,4 +32,4 @@ public sealed record TagGroupingResult(IReadOnlyList<TagMergeSuggestion>? Sugges
         };
 }
 
-public sealed record TagMergeSuggestion(string Tag, string ClosestConfirmedTag);
+public sealed record TagMergeSuggestion(string Tag, string ClosestMatchingTag);

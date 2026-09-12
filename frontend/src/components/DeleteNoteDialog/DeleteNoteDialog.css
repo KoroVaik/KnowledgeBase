@@ -1,0 +1,52 @@
+.confirm-dialog {
+  /* Without this the padding is added on top of max-width, and the dialog ends up wider than
+     the viewport it was told to fit - clipping the Delete button on a narrow screen. */
+  box-sizing: border-box;
+  width: 480px;
+  max-width: calc(100vw - 32px);
+  padding: 24px;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: var(--shadow);
+}
+
+.confirm-dialog::backdrop {
+  background: rgba(0, 0, 0, 0.45);
+}
+
+.confirm-dialog h3 {
+  margin: 0 0 12px;
+  font-size: 18px;
+  color: var(--text-h);
+}
+
+.confirm-line {
+  margin: 0 0 12px;
+  font-size: 14px;
+}
+
+.confirm-warn {
+  color: var(--warn);
+}
+
+.confirm-hint {
+  font-size: 13px;
+}
+
+.confirm-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-bottom: 12px;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 20px;
+}

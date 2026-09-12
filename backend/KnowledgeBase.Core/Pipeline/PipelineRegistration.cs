@@ -2,6 +2,7 @@ using KnowledgeBase.Core.Pipeline.Extraction;
 using KnowledgeBase.Core.Pipeline.SourceNotes;
 using KnowledgeBase.Core.Pipeline.Synthesis;
 using KnowledgeBase.Core.Pipeline.TagGrouping;
+using KnowledgeBase.Core.Pipeline.TagHierarchy;
 
 namespace KnowledgeBase.Core.Pipeline;
 
@@ -24,6 +25,7 @@ public static class PipelineRegistration
         services.AddScoped<IPipelineHandler, SourceNoteHandler>();
         services.AddScoped<IPipelineHandler, SynthesisHandler>();
         services.AddScoped<IPipelineHandler, TagGroupingHandler>();
+        services.AddScoped<IPipelineHandler, TagHierarchyHandler>();
         services.AddScoped<PipelineHandlerSelector>();
 
         services.AddHostedService<PipelineWorker>();

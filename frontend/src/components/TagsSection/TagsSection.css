@@ -1,0 +1,123 @@
+.tags-notice {
+  margin-bottom: 16px;
+  color: var(--accent);
+  font-size: 13px;
+}
+
+/* Sits between the synthesis notes and the bin: pick a tag, merge its notes. Recessed
+   inside the Notes card, the same depth cue as the file panel. */
+.tags-head-actions {
+  display: flex;
+  gap: 8px;
+  margin: 10px 0;
+}
+
+/* A subsection (To review, To place, Confirmed, Hierarchy) is a small card in the same
+   shape as the page-level .tags/.assets/.notes cards (App.css): bordered box, a header
+   strip in a different tone bled to its edges, content below. One depth step further in
+   than the outer card, so both tones step up from it (--surface-2 body, --surface-hover
+   strip) rather than reusing the card's own --surface/--surface-2 - reusing those exactly
+   would make the subsection blend into the card instead of reading as nested inside it.
+   Generic on purpose so any subsection (not just Tags') can opt in. */
+.subsection-panel {
+  padding: 0 12px 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-2);
+}
+
+.subsection-panel + .subsection-panel {
+  margin-top: 16px;
+}
+
+.subsection-panel > .tags-subhead {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 -12px 8px;
+  padding: 8px 12px;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  background: var(--surface-hover);
+  border-bottom: 1px solid var(--border);
+  border-radius: 7px 7px 0 0;
+}
+
+/* Same collapse control as .section-toggle (App.css) - the strip's padding/background/
+   bleed live on .tags-subhead above, this just fills it and makes the whole strip
+   clickable. */
+.subsection-toggle {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  gap: 6px;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  text-transform: inherit;
+  letter-spacing: inherit;
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+.subsection-toggle:hover {
+  color: var(--text-h);
+}
+
+.tags-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.tags-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.tags-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.tags-row:last-child {
+  border-bottom: 0;
+}
+
+.tags-count {
+  flex: 1;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.tags-search {
+  display: block;
+  width: 100%;
+  max-width: 20em;
+  margin: 0 0 10px;
+}
+
+.tags-more {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.tags-empty {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-muted);
+}

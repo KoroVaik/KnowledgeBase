@@ -19,8 +19,23 @@
   --danger: #dc2626;
   --danger-bg: rgba(220, 38, 38, 0.08);
   --danger-border: rgba(220, 38, 38, 0.35);
+  /* Queue states - a hue each so "Pending" and "Running" read apart at a glance, not just
+     by label text. Kept clear of --accent (violet) and --ok/--warn/--danger. */
+  --pending: #4f46e5;
+  --pending-bg: rgba(79, 70, 229, 0.08);
+  --running: #0891b2;
+  --running-bg: rgba(8, 145, 178, 0.08);
   --shadow:
     rgba(0, 0, 0, 0.1) 0 10px 15px -3px, rgba(0, 0, 0, 0.05) 0 4px 6px -2px;
+
+  /* Tag tree depth colours - 6-step cycle, hues picked clear of --ok/--warn/--danger
+     (green/amber/red) so a coloured tag level never reads as a status. */
+  --tag-depth-0: hsl(175 75% 32%);
+  --tag-depth-1: hsl(210 80% 45%);
+  --tag-depth-2: hsl(235 75% 52%);
+  --tag-depth-3: hsl(270 70% 52%);
+  --tag-depth-4: hsl(300 65% 42%);
+  --tag-depth-5: hsl(335 75% 42%);
 
   --sans: system-ui, 'Segoe UI', Roboto, sans-serif;
   --heading: system-ui, 'Segoe UI', Roboto, sans-serif;
@@ -58,13 +73,24 @@
     --social-bg: rgba(47, 48, 58, 0.5);
     --ok: #4ade80;
     --ok-bg: rgba(74, 222, 128, 0.1);
-    --warn: #fbbf24;
-    --warn-bg: rgba(251, 191, 36, 0.1);
+    --warn: #c69e39;
+    --warn-bg: rgba(198, 158, 57, 0.1);
     --danger: #f87171;
     --danger-bg: rgba(248, 113, 113, 0.12);
     --danger-border: rgba(248, 113, 113, 0.32);
+    --pending: #818cf8;
+    --pending-bg: rgba(129, 140, 248, 0.12);
+    --running: #22d3ee;
+    --running-bg: rgba(34, 211, 238, 0.12);
     --shadow:
       rgba(0, 0, 0, 0.4) 0 10px 15px -3px, rgba(0, 0, 0, 0.25) 0 4px 6px -2px;
+
+    --tag-depth-0: hsl(175 65% 50%);
+    --tag-depth-1: hsl(210 75% 62%);
+    --tag-depth-2: hsl(235 70% 68%);
+    --tag-depth-3: hsl(270 65% 68%);
+    --tag-depth-4: hsl(300 60% 64%);
+    --tag-depth-5: hsl(335 70% 62%);
   }
 
   #social .button-icon {

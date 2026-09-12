@@ -274,6 +274,60 @@ public sealed class NotesController(
     }
 
     /// <summary>
+    /// Attaches an existing tag to this note - the manual counterpart to what the pipeline
+    /// proposes on its own.
+    /// </summary>
+    /// <response code="200">The note's tags after the add.</response>
+    /// <response code="401">No session, or it has expired.</response>
+    /// <response code="404">No such note, or no such tag.</response>
+    /// <response code="409">The note already carries this tag.</response>
+    [HttpPost("{id}/tags")]
+    [ProducesResponseType(typeof(IReadOnlyList<NoteTagResponse>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> AddTag(
+        string id,
+        [FromBody] AddNoteTagRequest request,
+        CancellationToken cancellationToken)
+    {
+        var note = await _database.Notes.FirstOrDefaultAsync(note => note.Id == id, cancellationToken);
+
+        if (note is null)
+        {
+            return NotFound();
+        }
+
+        var tag = await _database.Tags.FirstOrDefaultAsync(tag => tag.Id == request.TagId, cancellationToken);
+
+        if (tag is null)
+        {
+            return NotFound();
+        }
+
+        var alreadyTagged = await _database.NoteTags
+            .AnyAsync(link => link.NoteId == id && link.TagId == tag.Id, cancellationToken);
+
+        if (alreadyTagged)
+        {
+            return Conflict(new { error = $"This note already has “{tag.Name}”." });
+        }
+
+        var nextOrdinal = await _database.NoteTags
+            .Where(link => link.NoteId == id)
+            .Select(link => (int?)link.Ordinal)
+            .MaxAsync(cancellationToken) ?? -1;
+
+        _database.NoteTags.Add(new NoteTag { NoteId = id, TagId = tag.Id, Ordinal = nextOrdinal + 1 });
+
+        await _database.SaveChangesAsync(CancellationToken.None);
+
+        _notifier.Publish(new ChangeEvent(ChangeResources.Notes, ChangeActions.Updated, id));
+
+        return Ok(await LoadTagsAsync(id, cancellationToken));
+    }
+
+    /// <summary>
     /// Re-runs the pipeline over this note's file. The note stays until the new one is ready,
     /// then moves to the bin and the fresh one inherits its inbound links.
     /// </summary>

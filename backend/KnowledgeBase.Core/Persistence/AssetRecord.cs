@@ -16,6 +16,15 @@ public sealed class AssetRecord
 
     public required DateTime UploadedAtUtc { get; init; }
 
+    // EXIF, best-effort - null for a screenshot, a PNG, or a photo a messenger recompressed
+    // and stripped. Filled in by the pipeline after upload, not at upload time (Confirm never
+    // reads the bytes).
+    public DateTime? CapturedAtUtc { get; set; }
+
+    public double? Latitude { get; set; }
+
+    public double? Longitude { get; set; }
+
     // Takes the pieces rather than an IFormFile: the AI pipeline will be storing files nobody
     // uploaded, and an entity has no business knowing about HTTP.
     public static AssetRecord For(

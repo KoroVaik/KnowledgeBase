@@ -14,4 +14,8 @@ public enum JobKind
     // Re-run the closest-confirmed-tag suggestion over every unconfirmed tag, not just ones
     // invented in the same run as a source note. Produces no note; AssetId and Payload unused.
     GroupTags,
+
+    // Find a parent for every confirmed tag that has none yet and no pending suggestion.
+    // Produces no note; AssetId and Payload unused.
+    SuggestTagParents,
 }

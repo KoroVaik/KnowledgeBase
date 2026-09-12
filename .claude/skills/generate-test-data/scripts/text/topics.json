@@ -1,0 +1,48 @@
+[
+  { "cluster": "python", "file": "python-async-await.txt", "topic": "a personal study note about Python's async/await and asyncio, covering the event loop, common pitfalls like blocking calls, and asyncio.gather" },
+  { "cluster": "python", "file": "python-fastapi-notes.txt", "topic": "a personal note about learning the FastAPI web framework: routing, Pydantic request models, dependency injection with Depends, and auto-generated docs" },
+  { "cluster": "python", "file": "python-testing-pytest.txt", "topic": "a personal note with pytest tips: fixtures, parametrize, monkeypatch, mocking external calls, and coverage reports" },
+  { "cluster": "python", "file": "python-type-hints.txt", "topic": "a personal note evaluating Python type hints and mypy on an existing project, including bugs mypy caught and pain points with third-party libraries" },
+  { "cluster": "python", "file": "python-packaging-poetry.txt", "topic": "a personal note about switching a Python project from requirements.txt to Poetry for dependency and package management" },
+  { "cluster": "python", "file": "python-list-comprehensions.txt", "topic": "a personal note collecting idiomatic Python one-liners: list/dict/set comprehensions, generator expressions, and when they hurt readability" },
+
+  { "cluster": "cooking", "file": "recipe-pasta-carbonara.txt", "topic": "a personal recipe note for classic pasta carbonara, with notes on common mistakes like scrambling the eggs" },
+  { "cluster": "cooking", "file": "recipe-sourdough-bread.txt", "topic": "a personal note documenting a sourdough starter and bread baking attempts, timings and what went wrong" },
+  { "cluster": "cooking", "file": "recipe-thai-green-curry.txt", "topic": "a personal recipe note for Thai green curry from scratch, including the curry paste and ingredient substitutions" },
+  { "cluster": "cooking", "file": "kitchen-knife-skills.txt", "topic": "a personal note on practicing basic kitchen knife skills: grip, julienne, dicing an onion safely" },
+  { "cluster": "cooking", "file": "recipe-homemade-pizza.txt", "topic": "a personal note about making homemade pizza dough and getting a home oven hot enough for a good crust" },
+  { "cluster": "cooking", "file": "fermentation-basics.txt", "topic": "a personal note on learning basic fermentation at home: sauerkraut and kimchi, salt ratios and troubleshooting mold" },
+
+  { "cluster": "travel", "file": "trip-lisbon-itinerary.txt", "topic": "a personal travel itinerary note for a long weekend in Lisbon, Portugal, with neighborhoods, food, and transport tips" },
+  { "cluster": "travel", "file": "trip-japan-packing-list.txt", "topic": "a personal packing list and prep note for a two-week trip to Japan, including a JR pass and etiquette reminders" },
+  { "cluster": "travel", "file": "trip-iceland-road-trip.txt", "topic": "a personal note planning a road trip around Iceland's Ring Road, weather concerns and must-see stops" },
+  { "cluster": "travel", "file": "budget-travel-tips.txt", "topic": "a personal note collecting general budget travel tips learned from several trips: flights, accommodation, avoiding tourist traps" },
+  { "cluster": "travel", "file": "trip-georgia-tbilisi-notes.txt", "topic": "a personal travel note about visiting Tbilisi, Georgia, focused on the food, wine region day trips, and the old town" },
+  { "cluster": "travel", "file": "travel-photography-basics.txt", "topic": "a personal note on improving travel photography with just a phone camera: composition, light, and editing basics" },
+
+  { "cluster": "books", "file": "book-notes-atomic-habits.txt", "topic": "personal reading notes on the book Atomic Habits by James Clear, with the key ideas that actually stuck" },
+  { "cluster": "books", "file": "book-notes-dune.txt", "topic": "personal reading notes on the science fiction novel Dune by Frank Herbert, covering the world of Arrakis, politics, and themes" },
+  { "cluster": "books", "file": "book-notes-thinking-fast-and-slow.txt", "topic": "personal reading notes on Thinking, Fast and Slow by Daniel Kahneman, covering System 1 and System 2 thinking" },
+  { "cluster": "books", "file": "reading-list-2026.txt", "topic": "a personal reading list note for the year with a few books queued up and why each one was picked" },
+  { "cluster": "books", "file": "book-notes-project-hail-mary.txt", "topic": "personal reading notes on the science fiction novel Project Hail Mary by Andy Weir" },
+  { "cluster": "books", "file": "book-club-discussion-notes.txt", "topic": "personal notes from a book club discussion, general reflections on how the group picks and debates books" },
+
+  { "cluster": "fitness", "file": "home-workout-no-equipment.txt", "topic": "a personal note on a bodyweight home workout routine with no equipment, done a few times a week" },
+  { "cluster": "fitness", "file": "running-half-marathon-plan.txt", "topic": "a personal training log note for a half marathon training plan, weekly mileage and how the body is holding up" },
+  { "cluster": "fitness", "file": "strength-training-basics.txt", "topic": "a personal note on starting strength training basics: squat, deadlift, bench press form and a simple progression" },
+  { "cluster": "fitness", "file": "stretching-mobility-routine.txt", "topic": "a personal note on a daily stretching and mobility routine to deal with a desk job and stiffness" },
+  { "cluster": "fitness", "file": "workout-nutrition-notes.txt", "topic": "a personal note on adjusting diet and protein intake to match a new workout routine" },
+
+  { "cluster": "gardening", "file": "balcony-vegetable-garden.txt", "topic": "a personal note on starting a small vegetable garden on an apartment balcony, containers and sunlight constraints" },
+  { "cluster": "gardening", "file": "tomato-growing-notes.txt", "topic": "a personal gardening note tracking tomato plants through a season, pests and watering lessons learned" },
+  { "cluster": "gardening", "file": "composting-basics.txt", "topic": "a personal note on setting up a basic home compost bin, what to put in it and common mistakes" },
+  { "cluster": "gardening", "file": "houseplant-care-notes.txt", "topic": "a personal note tracking houseplant care routines, watering schedules and a couple of plants that keep dying" },
+  { "cluster": "gardening", "file": "seasonal-planting-calendar.txt", "topic": "a personal note working out a seasonal planting calendar for a small home garden" },
+
+  { "cluster": "movies", "file": "movie-notes-dune-part-two.txt", "topic": "personal notes after watching the movie Dune Part Two, comparing it to the source novel" },
+  { "cluster": "movies", "file": "movie-notes-blade-runner-2049.txt", "topic": "personal notes on the movie Blade Runner 2049, its visuals and themes" },
+  { "cluster": "movies", "file": "sci-fi-movie-watchlist.txt", "topic": "a personal watchlist note of science fiction movies to watch, with a short reason for each pick" },
+  { "cluster": "movies", "file": "movie-notes-interstellar.txt", "topic": "personal notes on the movie Interstellar, the science behind it and the emotional core of the story" },
+  { "cluster": "movies", "file": "movie-notes-arrival.txt", "topic": "personal notes on the movie Arrival and its ideas about language and time" },
+  { "cluster": "movies", "file": "sci-fi-book-vs-movie-dune.txt", "topic": "a personal note comparing the Dune novel to its movie adaptations, what changed and what was kept" }
+]
