@@ -1,0 +1,13 @@
+Hey there, me! So, it's been a while since I last wrote a little note for myself. Today, I want to dive into some pytest tips that have really been helping me out. It's like a treasure trove of knowledge I'm starting to collect, and I'm excited to share a few gems from the world of testing.
+
+First up, fixtures! Fixtures are like magic wands in pytest. They're pieces of code that get run before each test, kind of like a setup. This means you don't have to repeat the same setup for every test, saving time and making your tests more maintainable. Just remember, fixtures can be functions or classes, and you can even use @pytest.fixture to mark them as reusable. It's like saying "Hey, you can use me for all your tests!"
+
+Next, parametrize is like the Swiss Army knife of tests. It allows you to run a single test multiple times with different inputs. So, if you have a function that takes a parameter and you want to test it with various values, parametrize makes that a breeze. It's like having a test that can do many jobs, each with a different input.
+
+Then there's monkeypatch. This is a super cool tool that lets you modify the behavior of functions and classes during tests. It's like being able to change the weather for your tests, making it easier to test edge cases or different scenarios. It's especially useful when you need to test a function that makes external calls, like API requests. monkeypatch lets you simulate those calls or even mock the response.
+
+Mocking external calls is a game-changer, especially when dealing with APIs or other services that your tests depend on. It lets you test your functions in isolation, focusing on their functionality rather than the network or other dependencies. You can create mock responses or even set up mock behaviors for your mocks, making it easier to see what your code does when it gets different inputs.
+
+Lastly, coverage reports. These are like a health check for your tests. They show you which parts of your code are being tested and which are not. If you're not covering some parts, it's a sign that you might be missing some tests or that you need to think harder about what your tests should be doing. Running a coverage report is like having a doctor check your code, giving you a clear picture of where you stand.
+
+So, that's it from me today! I hope these tips make your pytest journey smoother and more enjoyable. Remember, the more you practice, the better you get, and that's what pytest is all about. Keep coding, keep testing, and keep learning!

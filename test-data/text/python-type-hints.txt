@@ -1,0 +1,7 @@
+Today, I revisited our project and decided to give type hints a try with Python, specifically using the mypy static type checker. The project has been growing and I've been seeing more and more bugs cropping up, so I thought adding type hints could help catch some of these issues before they became major headaches.
+
+The first thing I noticed was the improvement in consistency. Before, we had a mix of function signatures that were quite inconsistent. With type hints, we're now using a more uniform approach, which makes the code easier to understand and maintain. My colleague Alex, who has been a fan of mypy, caught a couple of bugs. For instance, he found a case where a function was being passed the wrong type of object; mypy would have thrown an error if the function had a type hint.
+
+I've also noticed some pain points, especially when it comes to third-party libraries. Some libraries don't provide type hints for their functions, which makes it tricky to use them with mypy. This is a bit frustrating because it means you end up with a lot of type annotations that just repeat what the library does. It's also a bit of a pain to maintain these annotations as the library evolves, since they'll likely change.
+
+Despite these challenges, the positives seem to outweigh the negatives. I think mypy is a valuable tool for catching bugs and maintaining consistency. It's definitely worth the effort to keep these annotations up to date, even if it's a bit of a hassle. Overall, I'm looking forward to seeing how this project evolves with mypy's help.
