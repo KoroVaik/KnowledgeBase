@@ -2,13 +2,11 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { fetchNotes } from '../../api/notes'
 import { notesText } from '../../format'
 import {
-  acceptTagParentSuggestion,
   addTagParent as addTagParentApi,
   confirmTag as confirmTagApi,
   deleteTag,
   fetchTags,
   mergeTag,
-  rejectTagParentSuggestion,
   removeTagParent as removeTagParentApi,
   suggestTagHierarchy,
   suggestTagMerges,
@@ -128,38 +126,25 @@ export function useTagsSection() {
     void change(tag.id, () => mergeTag(tag.id, into.id))
   }
 
-  function confirm(tag: Tag) {
-    void change(tag.id, () => confirmTagApi(tag.id))
-  }
-
-  // Confirms the tag and accepts one of its AI parent suggestions in one action - the merged
-  // "90% AI, one approval" flow instead of confirming now and finding the same tag again later
-  // in "To place".
-  function confirmWithParent(tag: Tag, parent: Tag) {
+  // "To review" row's submit: confirms the tag, then applies whatever the row staged locally for
+  // each of its own suggested parents (see useTagReviewRow.ts) - one request per decided
+  // candidate, none of it sent before this point.
+  function submitReview(tag: Tag, actions: Array<() => Promise<void>>) {
     void change(tag.id, async () => {
       await confirmTagApi(tag.id)
-      await acceptTagParentSuggestion(tag.id, parent.id)
+      for (const action of actions) {
+        await action()
+      }
     })
   }
 
-  // The Flip control's commit for an unconfirmed tag's own suggested parent: same outcome as
-  // confirmWithParent, but the model had parent/child backwards. acceptTagParentSuggestion always
-  // honours the direction the suggestion row was stored in regardless of argument order, so a
-  // reversed link needs the plain addParent + a reject to clear the original guess.
-  function confirmWithParentFlipped(tag: Tag, candidate: Tag) {
+  // "To place" row's submit (TagPlacementSuggestions/useTagPlacementRow.ts) - same idea, no
+  // confirm step since the tag is confirmed already.
+  function submitPlacement(tag: Tag, actions: Array<() => Promise<void>>) {
     void change(tag.id, async () => {
-      await confirmTagApi(tag.id)
-      await addTagParentApi(candidate.id, tag.id)
-      await rejectTagParentSuggestion(tag.id, candidate.id)
-    })
-  }
-
-  // Same idea for a confirmed tag's placement suggestion (TagPlacementSuggestions) - no confirm
-  // needed there, just the reversed link plus dismissing the original guess.
-  function flipSuggestion(newChildId: string, newParentId: string) {
-    void change(`${newChildId}:${newParentId}`, async () => {
-      await addTagParentApi(newChildId, newParentId)
-      await rejectTagParentSuggestion(newChildId, newParentId)
+      for (const action of actions) {
+        await action()
+      }
     })
   }
 
@@ -233,14 +218,6 @@ export function useTagsSection() {
     void change(childId, () => removeTagParentApi(childId, parentId))
   }
 
-  function acceptSuggestion(childId: string, parentId: string) {
-    void change(`${childId}:${parentId}`, () => acceptTagParentSuggestion(childId, parentId))
-  }
-
-  function rejectSuggestion(childId: string, parentId: string) {
-    void change(`${childId}:${parentId}`, () => rejectTagParentSuggestion(childId, parentId))
-  }
-
   return {
     state,
     busy,
@@ -249,17 +226,13 @@ export function useTagsSection() {
     notice,
     remove,
     merge,
-    confirm,
-    confirmWithParent,
-    confirmWithParentFlipped,
-    flipSuggestion,
+    submitReview,
+    submitPlacement,
     synthesiseTagNote,
     suggestForReview,
     buildIndex,
     addParent,
     removeParent,
-    acceptSuggestion,
-    rejectSuggestion,
   }
 }
 

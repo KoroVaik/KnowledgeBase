@@ -7,8 +7,7 @@ import { TagPicker } from '../TagPicker/TagPicker'
 import { TagHierarchyTree } from '../TagHierarchyTree/TagHierarchyTree'
 import { TagHierarchyGraph } from '../TagHierarchyGraph/TagHierarchyGraph'
 import { TagPlacementSuggestions } from '../TagPlacementSuggestions/TagPlacementSuggestions'
-import { TagSuggestionChip } from '../TagPlacementSuggestions/TagSuggestionChip'
-import { TagSuggestionGraph } from '../TagSuggestionGraph/TagSuggestionGraph'
+import { TagReviewRow } from './TagReviewRow'
 import { useCollapsibleSection } from '../../hooks/useCollapsibleSection'
 import './TagsSection.css'
 
@@ -40,23 +39,18 @@ export function TagsSection() {
     notice,
     remove,
     merge,
-    confirm,
-    confirmWithParent,
-    confirmWithParentFlipped,
-    flipSuggestion,
+    submitReview,
+    submitPlacement,
     synthesiseTagNote,
     suggestForReview,
     buildIndex,
     addParent,
     removeParent,
-    acceptSuggestion,
-    rejectSuggestion,
   } = useTagsSection()
   const { collapsed, toggle } = useCollapsibleSection('tags')
   const { collapsed: reviewCollapsed, toggle: toggleReview } = useCollapsibleSection('tags:review')
   const { collapsed: hierarchyCollapsed, toggle: toggleHierarchy } = useCollapsibleSection('tags:hierarchy')
   const [hierarchyView, setHierarchyView] = useState<'tree' | 'graph'>('tree')
-  const [reviewView, setReviewView] = useState<'list' | 'graph'>('list')
 
   if (state.status === 'loading') {
     return null
@@ -84,103 +78,26 @@ export function TagsSection() {
   // review row via TagParentOptions; including it here too would show the same guess twice.
   const toPlace = confirmed.filter((tag) => tag.hasPendingPlacementSuggestion)
 
+  // Confirmed tags only now - an unconfirmed tag's row is TagReviewRow below, which needs its
+  // own per-row decision state (a plain render function like this one can't hold hooks).
   function row(tag: Tag) {
-    const suggestion = tags.find((other) => other.id === tag.suggestedMergeIntoId)
-
-    const parentCandidates = tag.confirmed
-      ? []
-      : tag.pendingParentSuggestions.flatMap((pending) => {
-          const parent = tagsById.get(pending.parentId)
-          return parent === undefined ? [] : [{ parent, confidence: pending.confidence }]
-        })
-
-    const showGraph = reviewView === 'graph' && parentCandidates.length > 0
-
-    const mergeControl = (
-      <TagPicker
-        source={tag}
-        suggestion={suggestion}
-        ariaLabel={`Merge ${tag.name} into another tag`}
-        disabled={busy !== null}
-        onPick={(into) => merge(tag, into)}
-        chip
-      />
-    )
+    const suggestion = tag.suggestedMergeIntoId !== null ? tagsById.get(tag.suggestedMergeIntoId) : undefined
 
     return (
       <li key={tag.id} className="tags-row">
-        {!showGraph && (
-          <span
-            className={
-              tag.confirmed ? 'tag-chip chip-compact' : 'tag-chip tag-chip-unconfirmed chip-compact chip-review'
-            }
-          >
-            {tag.name}
-          </span>
-        )}
-
-        {parentCandidates.length > 0 &&
-          (() => {
-            const candidates = parentCandidates.map(({ parent, confidence }) => ({
-              id: parent.id,
-              name: parent.name,
-              confidence,
-              confirmed: parent.confirmed,
-            }))
-            const onAcceptParent = (parentId: string) => {
-              const candidate = parentCandidates.find(({ parent }) => parent.id === parentId)
-              if (candidate !== undefined) {
-                confirmWithParent(tag, candidate.parent)
-              }
-            }
-            const onRejectParent = (parentId: string) => rejectSuggestion(tag.id, parentId)
-
-            if (reviewView !== 'graph') {
-              return (
-                <TagSuggestionChip
-                  label="Parent"
-                  direction="parent"
-                  candidates={candidates}
-                  disabled={busy !== null}
-                  onAccept={onAcceptParent}
-                  onReject={onRejectParent}
-                />
-              )
-            }
-
-            // Flip only offered with exactly one candidate - with more, swapping the center
-            // would leave the other candidates' edges pointing at a center that just changed.
-            const sole = parentCandidates.length === 1 ? parentCandidates[0] : null
-
-            return (
-              <TagSuggestionGraph
-                centerName={tag.name}
-                centerConfirmed={tag.confirmed}
-                parents={candidates}
-                childCandidates={[]}
-                disabled={busy !== null}
-                onAcceptParent={onAcceptParent}
-                onRejectParent={onRejectParent}
-                onFlipAcceptParent={sole !== null ? () => confirmWithParentFlipped(tag, sole.parent) : undefined}
-              />
-            )
-          })()}
+        <span className="tag-chip chip-compact">{tag.name}</span>
 
         <span className="tags-count">{notesText(tag.noteCount)}</span>
 
         <span className="tags-actions">
-          {mergeControl}
-
-          {!tag.confirmed && (
-            <button
-              type="button"
-              className="btn btn-xs"
-              onClick={() => confirm(tag)}
-              disabled={busy !== null}
-            >
-              Confirm
-            </button>
-          )}
+          <TagPicker
+            source={tag}
+            suggestion={suggestion}
+            ariaLabel={`Merge ${tag.name} into another tag`}
+            disabled={busy !== null}
+            onPick={(into) => merge(tag, into)}
+            chip
+          />
 
           {tag.noteCount >= MIN_NOTES && (
             <button
@@ -268,44 +185,30 @@ export function TagsSection() {
                   To review
                   <span className="section-count">{toReview.length + toPlace.length}</span>
                 </button>
-
-                {!reviewCollapsed && (
-                  <div className="tags-view-tabs" role="tablist" aria-label="Review view">
-                    <button
-                      type="button"
-                      role="tab"
-                      aria-selected={reviewView === 'list'}
-                      className={reviewView === 'list' ? 'tags-view-tab tags-view-tab-active' : 'tags-view-tab'}
-                      onClick={() => setReviewView('list')}
-                    >
-                      List
-                    </button>
-                    <button
-                      type="button"
-                      role="tab"
-                      aria-selected={reviewView === 'graph'}
-                      className={reviewView === 'graph' ? 'tags-view-tab tags-view-tab-active' : 'tags-view-tab'}
-                      onClick={() => setReviewView('graph')}
-                    >
-                      Graph
-                    </button>
-                  </div>
-                )}
               </h3>
               {!reviewCollapsed && (
                 <>
                   {(toReview.length > 0 || toPlace.length > 0) && (
                     <ul className="tags-list">
-                      {toReview.map(row)}
+                      {toReview.map((tag) => (
+                        <TagReviewRow
+                          key={tag.id}
+                          tag={tag}
+                          tagsById={tagsById}
+                          disabled={busy !== null}
+                          queued={queued}
+                          onMerge={merge}
+                          onSynthesise={synthesiseTagNote}
+                          onDelete={remove}
+                          onSubmit={submitReview}
+                        />
+                      ))}
                       <TagPlacementSuggestions
                         tags={toPlace}
                         tagsById={tagsById}
-                        view={reviewView}
                         disabled={busy !== null}
-                        onAccept={acceptSuggestion}
-                        onReject={rejectSuggestion}
-                        onFlip={flipSuggestion}
                         onMerge={merge}
+                        onSubmit={submitPlacement}
                       />
                     </ul>
                   )}

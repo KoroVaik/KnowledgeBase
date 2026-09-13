@@ -52,6 +52,57 @@
   gap: 4px;
 }
 
+.tag-suggestion-accept,
+.tag-suggestion-reject {
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: 1.5px solid transparent;
+  border-radius: 50%;
+  line-height: 1;
+  font-size: 10px;
+  cursor: pointer;
+  background: var(--surface-hover);
+}
+
+.tag-suggestion-accept {
+  color: var(--ok);
+}
+
+.tag-suggestion-reject {
+  color: var(--danger);
+}
+
+/* Staged locally (MiniGraphCandidate.decision, see useSuggestionDecisions.ts) - not sent yet, the
+   row stays on screen until its own Confirm/Apply button is clicked, so the chosen button's circle
+   picks up a tinted fill plus a grey border to read as "settled". Still clickable - picking the
+   other button changes the decision, re-clicking this one clears it. */
+.tag-suggestion-accept[aria-pressed='true'] {
+  background: var(--ok-bg);
+  border-color: var(--text-muted);
+}
+
+.tag-suggestion-reject[aria-pressed='true'] {
+  background: var(--danger-bg);
+  border-color: var(--text-muted);
+}
+
+/* The button not picked dims once its sibling is - same :has() trick as .tags-row:has(.tag-mini-
+   graph) in TagsSection.css. */
+.tag-mini-slot:has(.tag-suggestion-accept[aria-pressed='true']) .tag-suggestion-reject {
+  opacity: 0.4;
+}
+
+.tag-mini-slot:has(.tag-suggestion-reject[aria-pressed='true']) .tag-suggestion-accept {
+  opacity: 0.4;
+}
+
+.tag-suggestion-accept:disabled,
+.tag-suggestion-reject:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
 /* No border/background at rest - it sits right on the connecting line, and its two arrows
    straddle the line (the gap between them is where the line stays visible) rather than a single
    badge covering it. Hover/focus brings back the oval badge the first version always showed, as
@@ -109,5 +160,13 @@
   color: var(--warn);
   background: var(--warn-bg);
   border-color: var(--warn);
+}
+
+/* Not a real tag - same muted/dashed cue as an unresolved wiki-link (renderNoteBody.css), so it
+   reads as "nothing in the DB", not just another candidate. */
+.tag-mini-pill-placeholder {
+  color: var(--text-muted);
+  border-style: dashed;
+  font-style: italic;
 }
 

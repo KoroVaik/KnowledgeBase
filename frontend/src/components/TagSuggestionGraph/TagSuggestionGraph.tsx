@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import type { SuggestionDecision } from './suggestionDecisions'
 import './TagSuggestionGraph.css'
 
 export interface MiniGraphCandidate {
@@ -6,6 +7,14 @@ export interface MiniGraphCandidate {
   name: string
   confidence: string
   confirmed: boolean
+  // Not a real tag - stands in for a parent tier with no AI suggestion, so a "to review" row
+  // always has something to draw instead of falling back to a flat chip. Not clickable: no
+  // accept/reject, no confidence badge.
+  placeholder?: boolean
+  // Staged locally by the caller (useSuggestionDecisions) - not sent yet. Drives aria-pressed on
+  // the accept/reject buttons below, which is what the decided-state styling (.tag-suggestion-
+  // accept/reject[aria-pressed="true"] in TagSuggestionGraph.css) keys off.
+  decision?: SuggestionDecision
 }
 
 const NAME_CHAR_W = 7
@@ -162,13 +171,14 @@ function computeLayout(
 }
 
 /** Mini node-link view of one tag's pending suggestions: the tag in the centre, parent
- *  candidates above, child candidates below - the compact alternative to the flat chip rows
- *  (`TagSuggestionChip`), same data and callbacks, just laid out as a small graph. No
- *  pan/zoom/dagre - the shape is always at most a couple of candidates per side, so a fixed
- *  three-tier layout is enough. Parent and child candidates render identically (a plain label
- *  flanked by reject on the left, accept on the right) - an unconfirmed tag accepting its own
- *  suggested parent happens to also confirm the tag (see `confirmWithParent`), but that is a
- *  side effect of what "accept" wires to, not a different look.
+ *  candidates above, child candidates below. No pan/zoom/dagre - the shape is always at most a
+ *  couple of candidates per side, so a fixed three-tier layout is enough. Parent and child
+ *  candidates render identically (a plain label flanked by reject on the left, accept on the
+ *  right) - an unconfirmed tag accepting its own suggested parent happens to also confirm the
+ *  tag (see `confirmWithParent`), but that is a side effect of what "accept" wires to, not a
+ *  different look. A parent slot with no real suggestion gets a `placeholder` candidate instead
+ *  (see TagsSection.tsx `row`) - same node shape, but inert (no accept/reject, no confidence
+ *  badge, muted/dashed styling).
  *
  *  Nodes are plain HTML, absolutely positioned at the computed coordinates rather than sized
  *  `<foreignObject>` boxes - a first version forced every chip into a pre-measured box and both
@@ -274,36 +284,48 @@ export function TagSuggestionGraph({
         {layout.parentSlots.map((slot) => (
           <div key={slot.candidate.id} className="tag-mini-node" style={{ left: slot.x, top: parentY }}>
             <div className="tag-mini-slot">
-              <button
-                type="button"
-                className="tag-suggestion-reject"
-                aria-label={`Reject ${slot.candidate.name}`}
-                disabled={disabled}
-                onClick={() => onRejectParent(slot.candidate.id)}
-              >
-                ×
-              </button>
+              {!slot.candidate.placeholder && (
+                <button
+                  type="button"
+                  className="tag-suggestion-reject"
+                  aria-label={`Reject ${slot.candidate.name}`}
+                  aria-pressed={slot.candidate.decision === 'reject'}
+                  disabled={disabled}
+                  onClick={() => onRejectParent(slot.candidate.id)}
+                >
+                  ×
+                </button>
+              )}
               <span
                 className={
-                  slot.candidate.confirmed ? 'tag-mini-pill tag-mini-pill-confirmed' : 'tag-mini-pill tag-mini-pill-unconfirmed'
+                  slot.candidate.placeholder
+                    ? 'tag-mini-pill tag-mini-pill-placeholder'
+                    : slot.candidate.confirmed
+                      ? 'tag-mini-pill tag-mini-pill-confirmed'
+                      : 'tag-mini-pill tag-mini-pill-unconfirmed'
                 }
               >
                 {slot.candidate.name}
-                <span className="tag-confidence">{slot.candidate.confidence.toLowerCase()}</span>
+                {!slot.candidate.placeholder && (
+                  <span className="tag-confidence">{slot.candidate.confidence.toLowerCase()}</span>
+                )}
               </span>
-              <button
-                type="button"
-                className="tag-suggestion-accept"
-                aria-label={`Accept ${slot.candidate.name}`}
-                disabled={disabled}
-                onClick={() =>
-                  flipParentActive && onFlipAcceptParent !== undefined
-                    ? onFlipAcceptParent(slot.candidate.id)
-                    : onAcceptParent(slot.candidate.id)
-                }
-              >
-                ✓
-              </button>
+              {!slot.candidate.placeholder && (
+                <button
+                  type="button"
+                  className="tag-suggestion-accept"
+                  aria-label={`Accept ${slot.candidate.name}`}
+                  aria-pressed={slot.candidate.decision === 'accept' || slot.candidate.decision === 'flip-accept'}
+                  disabled={disabled}
+                  onClick={() =>
+                    flipParentActive && onFlipAcceptParent !== undefined
+                      ? onFlipAcceptParent(slot.candidate.id)
+                      : onAcceptParent(slot.candidate.id)
+                  }
+                >
+                  ✓
+                </button>
+              )}
             </div>
           </div>
         ))}
@@ -315,6 +337,7 @@ export function TagSuggestionGraph({
                 type="button"
                 className="tag-suggestion-reject"
                 aria-label={`Reject ${slot.candidate.name}`}
+                aria-pressed={slot.candidate.decision === 'reject'}
                 disabled={disabled}
                 onClick={() => onRejectChild?.(slot.candidate.id)}
               >
@@ -332,6 +355,7 @@ export function TagSuggestionGraph({
                 type="button"
                 className="tag-suggestion-accept"
                 aria-label={`Accept ${slot.candidate.name}`}
+                aria-pressed={slot.candidate.decision === 'accept' || slot.candidate.decision === 'flip-accept'}
                 disabled={disabled}
                 onClick={() =>
                   flipChildActive && onFlipAcceptChild !== undefined
