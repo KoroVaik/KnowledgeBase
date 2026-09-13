@@ -11,11 +11,14 @@ namespace KnowledgeBase.Api.Controllers.Tags.Contracts;
 /// <c>GET /api/tags/{id}/parent-suggestions</c> only for these. <c>PendingParentSuggestions</c>
 /// carries this tag's own side of that (candidate parents for it, as the child), so the review
 /// row can offer "confirm as a child of X" without a separate fetch.
+/// <c>PossiblyCombined</c> flags an unconfirmed tag whose name looks like several tags in one
+/// (three or more words, or a separator) - reviewed last, never filtered out.
 /// </summary>
 public sealed record TagResponse(
     string Id,
     string Name,
     bool Confirmed,
+    bool PossiblyCombined,
     int NoteCount,
     string? SuggestedMergeIntoId,
     string? SuggestedMergeConfidence,

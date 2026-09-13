@@ -39,6 +39,7 @@ export function TagReviewRow({
       <TagSuggestionGraph
         centerName={tag.name}
         centerConfirmed={false}
+        centerPossiblyCombined={tag.possiblyCombined}
         parents={candidates}
         childCandidates={[]}
         disabled={disabled}

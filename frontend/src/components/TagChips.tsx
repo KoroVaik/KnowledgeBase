@@ -17,8 +17,17 @@ export function TagChips({ tags }: { tags: NoteTag[] }) {
           title={tag.confirmed ? undefined : 'Suggested by the pipeline, not yet confirmed'}
         >
           {tag.name}
+          {tag.possiblyCombined && <PossiblyCombinedMark />}
         </span>
       ))}
+    </span>
+  )
+}
+
+export function PossiblyCombinedMark() {
+  return (
+    <span className="tag-chip-combined" title="Possibly several tags in one" aria-label="Possibly several tags in one">
+      ⚠︎
     </span>
   )
 }

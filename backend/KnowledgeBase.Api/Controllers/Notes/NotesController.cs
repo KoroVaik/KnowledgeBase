@@ -1,4 +1,5 @@
 using KnowledgeBase.Api.Controllers.Notes.Contracts;
+using KnowledgeBase.Api.Controllers.Tags;
 using KnowledgeBase.Core.Notes;
 using KnowledgeBase.Core.Persistence;
 using KnowledgeBase.Core.Pipeline;
@@ -492,7 +493,10 @@ public sealed class NotesController(
             .ToDictionary(
                 group => group.Key,
                 group => (IReadOnlyList<NoteTagResponse>)group
-                    .Select(row => new NoteTagResponse(row.Name, row.Confirmed))
+                    .Select(row => new NoteTagResponse(
+                        row.Name,
+                        row.Confirmed,
+                        TagNameShape.PossiblyCombined(row.Name, row.Confirmed)))
                     .ToList());
     }
 }

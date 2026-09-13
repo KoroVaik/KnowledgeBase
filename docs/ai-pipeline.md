@@ -113,6 +113,16 @@ before any `NoteLink` is created. "Ask again, more firmly" is not a production f
   something down — skip that tag slot instead. Confusing to see sitting in the confirmed
   list next to real topic tags; a code-side filter cannot fix this one since the model
   is asked for meaning, not matched against a list.
+- **A phrase returned as one tag is flagged, not filtered.** The model sometimes ignores "one
+  or two words" and returns something like "Futuristic Car and Aircraft in Hangar". A hard
+  word cap or a "tag equals title" drop was rejected (chat 2026-09-13): both lose legitimate
+  tags ("New York City", a title that happens to be a good tag). Instead the API computes
+  `possiblyCombined` from the name at read time (`TagNameShape`: unconfirmed and a
+  `, / & + ;` separator, a connector word — and/or/with/vs/in/on — or 5+ words; tokens with no
+  letter such as "(2)" do not count) — no column, so tags already in the DB get it too. A
+  plain "3+ words" rule was tried first and flagged normal tags like "Home Fermentation Tips". "To review"
+  sorts these last and the chip shows a ⚠ mark; confirming clears it. String shape is
+  acceptable here (unlike merge similarity) because a false positive costs one click.
 - A synthesis / index is not asked for tags (`NoteDraft.Schema(withTags: false)`): an L2
   gets its group tag, the index none.
 
@@ -242,6 +252,16 @@ mid-string (`done_reason: "length"`). Fixed:
       Options: tighten the prompt ("only tags that genuinely describe the content; fewer is
       better"), drop `maxItems` to 3, or a relevance re-check. Prompt-tuning loop, needs a
       few sample files.
+- [ ] **Possibly-combined tag flag — run pending.** Build + lint pass. Not yet seen live:
+      the ⚠ mark on the "Futuristic Car and Aircraft in Hangar" review row and note chips, that
+      row sorting last, the mark gone after confirm.
+- [ ] **Note-title suffix leaks into tag names.** Seen live: a tag "Person Portrait (2)" — the
+      " (2)" is what `NoteWriter.UniqueTitle` appends to a duplicate *note title*; the model
+      apparently copied it into a tag. Strip such a suffix in `AttachProposedTags`, or stop it
+      reaching the prompt.
+- [ ] **"Split" action for a possibly-combined tag.** The flag only says something is off;
+      the fix today is delete or confirm. Next: the model proposes the parts ("Futuristic",
+      "Car", "Aircraft", "Hangar"), the user picks, the note gets those instead of the phrase.
 - [ ] **No failure signal for a synthesis.** A `BuildSynthesis` job that ends `Failed`/
       `Skipped` publishes nothing — the Tags section shows "Queued" until a reload. Needs a
       job-state read (like `GET /api/assets` has) or an SSE event carrying the outcome.

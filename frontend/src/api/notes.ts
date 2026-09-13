@@ -9,6 +9,8 @@ export interface NoteTag {
   name: string
   /** The user has vouched for it. A pipeline-invented tag is `false` until reviewed. */
   confirmed: boolean
+  /** Unconfirmed and shaped like several tags in one. */
+  possiblyCombined: boolean
 }
 
 /** Mirrors NoteSummaryResponse in backend Controllers/Notes. */

@@ -28,6 +28,11 @@
   border-color: currentColor;
 }
 
+.tag-chip-combined {
+  margin-left: 5px;
+  font-size: 11px;
+}
+
 /* Tags section only - the dashed cue above is the shared "unresolved wiki-link" look
    TagChips.tsx relies on elsewhere, so this is an additional class (chained for
    specificity), not an edit to the base .tag-chip-unconfirmed. */

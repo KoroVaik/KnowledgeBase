@@ -1,0 +1,7 @@
+project_doc_fallback_filenames = ["CLAUDE.md"]
+
+[mcp_servers.Neon]
+url = "https://mcp.neon.tech/mcp"
+
+[mcp_servers.Neon.http_headers]
+Authorization = "Bearer napi_v04ss1unifyqd9045ys7rc3bniqkikrkez5v4f7z4ex5aweunycf7sfn33rh2m75"

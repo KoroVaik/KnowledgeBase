@@ -14,6 +14,8 @@ export interface Tag {
   name: string
   /** The user has vouched for it. A pipeline-invented tag is `false` until reviewed. */
   confirmed: boolean
+  /** Unconfirmed and shaped like several tags in one - reviewed last, flagged on the chip. */
+  possiblyCombined: boolean
   /** Live Source notes carrying it. A synthesis needs at least two. */
   noteCount: number
   /** For an invented tag: the tag (confirmed, or itself still unconfirmed) the model judged

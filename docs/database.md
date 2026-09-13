@@ -165,6 +165,10 @@ UTC as local time. Fixed with a value converter in the model; **not needed in Po
       running and locking the output). **Run pending**: the migration-free `GroupTags`
       job end to end (needs ≥1 confirmed + ≥1 unconfirmed tag), the search endpoint's
       ranking with a real 100+-tag vocabulary, `TagPicker` in the browser.
+- [ ] **Re-verify deleted tags later.** `DELETE /api/tags/{id}` removes the row outright (an
+      unconfirmed tag in "To review" even without a confirm prompt), so a wrongly declined tag
+      is gone for good. Owner wants a way to revisit declined tags; the shape is undecided
+      (soft delete with a "Declined" list, a decline count like placement suggestions, …).
 - [ ] **Stale synthesis / index badge.** An L2 goes stale when its tag's note set changes
       (new upload, merge into it, delete); L3 when any L2 changes. `SynthesisSources`
       already records the inputs — compare against the tag's current notes and show

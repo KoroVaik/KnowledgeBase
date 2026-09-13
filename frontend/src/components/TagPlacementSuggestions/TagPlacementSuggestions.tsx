@@ -1,23 +1,28 @@
-import type { Tag } from '../../api/tags'
-import { useTagPlacementSuggestions } from './useTagPlacementSuggestions'
+import type { Tag, TagParentSuggestions } from '../../api/tags'
 import { TagPlacementRow } from './TagPlacementRow'
+
+export interface Placement {
+  tag: Tag
+  suggestions: TagParentSuggestions
+}
 
 /** Rows for confirmed tags with a pending AI placement guess - `<li>`s meant to sit inside the
  *  same `.tags-list` as the "To review" rows, not a block of its own: same tag chip, merge
  *  control and accept/reject shape as an unconfirmed tag's own suggestion row in
  *  `TagsSection.tsx` (`TagSuggestionGraph`, shared by both so the two cannot drift apart again),
  *  just sourced from a fetch instead of riding along on the tag itself (a confirmed tag can gain
- *  several parents over time, see "Tag hierarchy" in docs/database.md). A row here always has at
- *  least one suggestion (see the early `return null` below), so it never needs the placeholder
- *  node `TagsSection.tsx`'s own rows fall back to. */
+ *  several parents over time, see "Tag hierarchy" in docs/database.md). `TagsSection` passes only
+ *  placements with at least one suggestion left, so a row never needs a placeholder node. */
 export function TagPlacementSuggestions({
-  tags,
+  placements,
+  error,
   tagsById,
   disabled,
   onMerge,
   onSubmit,
 }: {
-  tags: Tag[]
+  placements: Placement[]
+  error: string | null
   // Confirmed status per candidate is not part of the suggestion payload itself (see
   // TagSuggestionResponse) - the pool a placement is drawn from was widened to include
   // not-yet-reviewed tags too, so a candidate here can be either. TagsSection already has every
@@ -27,9 +32,6 @@ export function TagPlacementSuggestions({
   onMerge: (tag: Tag, into: Tag) => void
   onSubmit: (tag: Tag, actions: Array<() => Promise<void>>) => void
 }) {
-  const taggedIds = tags.map((tag) => tag.id)
-  const { byId, error } = useTagPlacementSuggestions(taggedIds)
-
   return (
     <>
       {error !== null && (
@@ -40,25 +42,17 @@ export function TagPlacementSuggestions({
         </li>
       )}
 
-      {tags.map((tag) => {
-        const suggestions = byId.get(tag.id)
-
-        if (!suggestions || (suggestions.suggestedParents.length === 0 && suggestions.suggestedChildren.length === 0)) {
-          return null
-        }
-
-        return (
-          <TagPlacementRow
-            key={tag.id}
-            tag={tag}
-            suggestions={suggestions}
-            tagsById={tagsById}
-            disabled={disabled}
-            onMerge={onMerge}
-            onSubmit={onSubmit}
-          />
-        )
-      })}
+      {placements.map(({ tag, suggestions }) => (
+        <TagPlacementRow
+          key={tag.id}
+          tag={tag}
+          suggestions={suggestions}
+          tagsById={tagsById}
+          disabled={disabled}
+          onMerge={onMerge}
+          onSubmit={onSubmit}
+        />
+      ))}
     </>
   )
 }

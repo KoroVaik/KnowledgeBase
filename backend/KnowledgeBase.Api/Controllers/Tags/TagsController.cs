@@ -86,6 +86,7 @@ public sealed class TagsController(KnowledgeBaseDbContext database, IChangeNotif
                 row.Tag.Id,
                 row.Tag.Name,
                 row.Tag.Confirmed,
+                TagNameShape.PossiblyCombined(row.Tag.Name, row.Tag.Confirmed),
                 counts.GetValueOrDefault(row.Tag.Id),
                 row.Tag.SuggestedMergeIntoId,
                 row.Tag.SuggestedMergeConfidence?.ToString(),
@@ -152,7 +153,7 @@ public sealed class TagsController(KnowledgeBaseDbContext database, IChangeNotif
         return CreatedAtAction(
             nameof(List),
             new TagResponse(
-                tag.Id, tag.Name, tag.Confirmed, 0, null, null, Array.Empty<string>(), false, Array.Empty<TagParentSuggestionRef>()));
+                tag.Id, tag.Name, tag.Confirmed, false, 0, null, null, Array.Empty<string>(), false, Array.Empty<TagParentSuggestionRef>()));
     }
 
     /// <summary>Marks a tag as vouched for by the user. Its merge suggestion is dropped.</summary>

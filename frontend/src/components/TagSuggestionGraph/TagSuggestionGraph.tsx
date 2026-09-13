@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { PossiblyCombinedMark } from '../TagChips'
 import type { SuggestionDecision } from './suggestionDecisions'
 import './TagSuggestionGraph.css'
 
@@ -26,6 +27,7 @@ const PILL_PAD_X = 24
 // it can no longer clip text or push a button's hit area outside its own element.
 const CONF_ALLOWANCE = 8
 const CENTER_PAD_X = 22
+const COMBINED_MARK_W = 16
 const MIN_PILL_W = 64
 const PILL_H = 30
 const CENTER_H = 26
@@ -62,8 +64,8 @@ interface Layout {
   childFlip: FlipSpot | null
 }
 
-function centerPillWidth(name: string): number {
-  return Math.max(MIN_PILL_W, CENTER_PAD_X + name.length * NAME_CHAR_W)
+function centerPillWidth(name: string, possiblyCombined: boolean): number {
+  return Math.max(MIN_PILL_W, CENTER_PAD_X + name.length * NAME_CHAR_W + (possiblyCombined ? COMBINED_MARK_W : 0))
 }
 
 function candidatePillWidth(candidate: MiniGraphCandidate): number {
@@ -115,10 +117,11 @@ function tierSpan(candidates: MiniGraphCandidate[]): number {
 
 function computeLayout(
   centerName: string,
+  centerPossiblyCombined: boolean,
   parents: MiniGraphCandidate[],
   childCandidates: MiniGraphCandidate[],
 ): Layout {
-  const centerWidth = centerPillWidth(centerName)
+  const centerWidth = centerPillWidth(centerName, centerPossiblyCombined)
 
   // Lay each tier out around its own x = 0 first to measure how wide it wants to be, then
   // re-anchor every tier to one shared centreX - keeps the canvas only as wide as the widest
@@ -188,6 +191,7 @@ function computeLayout(
 export function TagSuggestionGraph({
   centerName,
   centerConfirmed,
+  centerPossiblyCombined = false,
   parents,
   childCandidates,
   onAcceptParent,
@@ -200,6 +204,7 @@ export function TagSuggestionGraph({
 }: {
   centerName: string
   centerConfirmed: boolean
+  centerPossiblyCombined?: boolean
   parents: MiniGraphCandidate[]
   childCandidates: MiniGraphCandidate[]
   onAcceptParent: (id: string) => void
@@ -222,7 +227,7 @@ export function TagSuggestionGraph({
     return null
   }
 
-  const layout = computeLayout(centerName, parents, childCandidates)
+  const layout = computeLayout(centerName, centerPossiblyCombined, parents, childCandidates)
 
   const flipParentActive = parentFlipped && parents.length === 1
   const flipChildActive = childFlipped && childCandidates.length === 1
@@ -279,6 +284,7 @@ export function TagSuggestionGraph({
           style={{ left: layout.centerX, top: centerY }}
         >
           {centerName}
+          {centerPossiblyCombined && <PossiblyCombinedMark />}
         </div>
 
         {layout.parentSlots.map((slot) => (

@@ -7,6 +7,8 @@ import { TagPicker } from '../TagPicker/TagPicker'
 import { TagHierarchyTree } from '../TagHierarchyTree/TagHierarchyTree'
 import { TagHierarchyGraph } from '../TagHierarchyGraph/TagHierarchyGraph'
 import { TagPlacementSuggestions } from '../TagPlacementSuggestions/TagPlacementSuggestions'
+import type { Placement } from '../TagPlacementSuggestions/TagPlacementSuggestions'
+import { useTagPlacementSuggestions } from '../TagPlacementSuggestions/useTagPlacementSuggestions'
 import { TagReviewRow } from './TagReviewRow'
 import { useCollapsibleSection } from '../../hooks/useCollapsibleSection'
 import './TagsSection.css'
@@ -51,6 +53,11 @@ export function TagsSection() {
   const { collapsed: reviewCollapsed, toggle: toggleReview } = useCollapsibleSection('tags:review')
   const { collapsed: hierarchyCollapsed, toggle: toggleHierarchy } = useCollapsibleSection('tags:hierarchy')
   const [hierarchyView, setHierarchyView] = useState<'tree' | 'graph'>('tree')
+  const placementIds =
+    state.status === 'ready'
+      ? state.tags.filter((tag) => tag.confirmed && tag.hasPendingPlacementSuggestion).map((tag) => tag.id)
+      : []
+  const { byId: placementSuggestions, error: placementError } = useTagPlacementSuggestions(placementIds)
 
   if (state.status === 'loading') {
     return null
@@ -72,11 +79,34 @@ export function TagsSection() {
   const toReview = tags
     .filter((tag) => !tag.confirmed)
     .slice()
-    .sort((a, b) => reviewRank(a, tagsById) - reviewRank(b, tagsById) || b.noteCount - a.noteCount)
+    .sort(
+      (a, b) =>
+        Number(a.possiblyCombined) - Number(b.possiblyCombined) ||
+        reviewRank(a, tagsById) - reviewRank(b, tagsById) ||
+        b.noteCount - a.noteCount,
+    )
   const confirmed = tags.filter((tag) => tag.confirmed)
   // Confirmed only - an unconfirmed tag's own pending suggestion already shows inline in its
   // review row via TagParentOptions; including it here too would show the same guess twice.
-  const toPlace = confirmed.filter((tag) => tag.hasPendingPlacementSuggestion)
+  // Unconfirmed children dropped for the same reason: that child's own review row already offers
+  // this exact parent, so the confirmed side would repeat it.
+  const toPlace = confirmed
+    .filter((tag) => tag.hasPendingPlacementSuggestion)
+    .flatMap((tag): Placement[] => {
+      const fetched = placementSuggestions.get(tag.id)
+      if (fetched === undefined) {
+        return []
+      }
+
+      const suggestions = {
+        ...fetched,
+        suggestedChildren: fetched.suggestedChildren.filter((child) => tagsById.get(child.id)?.confirmed === true),
+      }
+
+      return suggestions.suggestedParents.length === 0 && suggestions.suggestedChildren.length === 0
+        ? []
+        : [{ tag, suggestions }]
+    })
 
   // Confirmed tags only now - an unconfirmed tag's row is TagReviewRow below, which needs its
   // own per-row decision state (a plain render function like this one can't hold hooks).
@@ -204,7 +234,8 @@ export function TagsSection() {
                         />
                       ))}
                       <TagPlacementSuggestions
-                        tags={toPlace}
+                        placements={toPlace}
+                        error={placementError}
                         tagsById={tagsById}
                         disabled={busy !== null}
                         onMerge={merge}
