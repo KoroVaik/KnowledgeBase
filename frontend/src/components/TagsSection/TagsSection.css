@@ -8,8 +8,22 @@
    inside the Notes card, the same depth cue as the file panel. */
 .tags-head-actions {
   display: flex;
+  align-items: stretch;
   gap: 8px;
   margin: 10px 0;
+}
+
+.tags-suggest-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  line-height: 1.2;
+}
+
+.tags-last-run {
+  font-size: 11px;
+  line-height: 1.1;
+  color: var(--text-muted);
 }
 
 /* A subsection (To review, To place, Confirmed, Hierarchy) is a small card in the same

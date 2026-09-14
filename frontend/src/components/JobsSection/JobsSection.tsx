@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { formatDateTime } from '../../format'
 import { useJobsSection } from './useJobsSection'
 import type { ActiveJob } from '../../api/jobs'
@@ -58,6 +59,7 @@ function JobRow({ job }: { job: ActiveJob }) {
       <div className="job-head">
         <span className="job-kind">
           {KIND_LABELS[job.kind] ?? job.kind}
+          <JobKindHint jobId={job.id} description={job.kindDescription} />
           {job.assetFileName !== null && ` — ${job.assetFileName}`}
         </span>
         <span className={running ? 'job-status job-status-running' : 'job-status job-status-pending'}>
@@ -72,5 +74,31 @@ function JobRow({ job }: { job: ActiveJob }) {
       {/* Set when a previous attempt failed and the worker handed the job back to the queue. */}
       {job.error !== null && <div className="job-error">Last attempt failed: {job.error}</div>}
     </li>
+  )
+}
+
+function JobKindHint({ jobId, description }: { jobId: string; description: string }) {
+  const [open, setOpen] = useState(false)
+  const tooltipId = `job-hint-${jobId}`
+
+  return (
+    <span className="job-hint">
+      {/* Explicit open state on click: a tap on mobile Safari never focuses a button, so the
+          hover/focus CSS alone would leave touch screens without the tooltip. */}
+      <button
+        type="button"
+        className="job-hint-icon"
+        aria-label="What this job does"
+        aria-describedby={tooltipId}
+        aria-expanded={open}
+        onClick={() => setOpen((value) => !value)}
+        onBlur={() => setOpen(false)}
+      >
+        i
+      </button>
+      <span id={tooltipId} role="tooltip" className={open ? 'job-hint-tooltip job-hint-tooltip-open' : 'job-hint-tooltip'}>
+        {description}
+      </span>
+    </span>
   )
 }

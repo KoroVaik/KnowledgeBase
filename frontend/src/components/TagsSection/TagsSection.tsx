@@ -10,6 +10,7 @@ import { TagPlacementSuggestions } from '../TagPlacementSuggestions/TagPlacement
 import type { Placement } from '../TagPlacementSuggestions/TagPlacementSuggestions'
 import { useTagPlacementSuggestions } from '../TagPlacementSuggestions/useTagPlacementSuggestions'
 import { TagReviewRow } from './TagReviewRow'
+import { LastRunHint } from './LastRunHint'
 import { useCollapsibleSection } from '../../hooks/useCollapsibleSection'
 import './TagsSection.css'
 
@@ -86,6 +87,7 @@ export function TagsSection() {
         b.noteCount - a.noteCount,
     )
   const confirmed = tags.filter((tag) => tag.confirmed)
+  const suggestionsQueued = queued.includes('suggest-merges') || queued.includes('suggest-hierarchy')
   // Confirmed only - an unconfirmed tag's own pending suggestion already shows inline in its
   // review row via TagParentOptions; including it here too would show the same guess twice.
   // Unconfirmed children dropped for the same reason: that child's own review row already offers
@@ -163,14 +165,19 @@ export function TagsSection() {
           <div className="tags-head-actions">
             <button
               type="button"
-              className="btn btn-sm"
+              className="btn btn-sm tags-suggest-btn"
               onClick={suggestForReview}
-              disabled={busy !== null || tags.length < 2}
+              disabled={busy !== null || tags.length < 2 || suggestionsQueued}
               title="Re-check unreviewed tags for duplicates, and find a parent for any tag that has none yet"
             >
-              {queued.includes('suggest-merges') || queued.includes('suggest-hierarchy')
-                ? 'Suggestions queued'
-                : 'Suggest for review'}
+              {suggestionsQueued ? (
+                'Suggestions queued'
+              ) : (
+                <>
+                  Suggest for review
+                  <LastRunHint completedAtUtc={state.lastSuggestRunUtc} />
+                </>
+              )}
             </button>
 
             <button

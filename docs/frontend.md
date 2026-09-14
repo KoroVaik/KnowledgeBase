@@ -313,6 +313,10 @@ earns its place there since there is no AI guess to shortcut.
 - One list, status as a badge (`Queued`/`Running`), not two separate blocks — see chat decision
   2026-09-12, kept out of a Decisions-worthy debate: job count is small (single-user), so a
   badge reads fine without the extra grouping markup.
+- **Kind description from the backend**, shown as a custom tooltip behind an "i" icon next to
+  the label (hover, keyboard focus, or tap — mobile Safari does not focus a tapped button, so
+  tap toggles explicit state). Not the native `title`: it waits ~1 s and never shows on touch.
+  Labels themselves still live in `KIND_LABELS`.
 
 ### Note body is untrusted-shape Markdown
 
@@ -355,6 +359,13 @@ marketing `h1` and fills the row.
       pending** — a queued job appearing (upload, `suggest-merges`, `suggest-hierarchy`), the
       `Running` badge while the worker has it, the row disappearing once `Done`/`Failed`, the
       retry case (`Error` shown on a re-queued `Pending` row), phone width.
+- [ ] **Job kind info tooltip** (`kindDescription`, `JobKindHint`): build + lint pass,
+      browser run pending — hover, Tab focus, tap on phone width, tooltip not clipped at the
+      card edge.
+- [ ] **"last run … ago" under *Suggest for review*** (`LastRunHint`,
+      `GET /api/jobs/last-completed`): build + lint pass, browser run pending — "never run" on an
+      empty history, the hint hiding while queued and updating once the worker finishes, the
+      minute tick, both themes, phone width.
 - [ ] Bulk upload: drop several files, per-row progress popup, a `warning` file (text
       over 12 000 bytes) with "Upload anyway", a `blocked` file (empty and over 25 MB)
       with `Dismiss`, "Upload all anyway", "Dismiss all", ESC during upload (ignored) and

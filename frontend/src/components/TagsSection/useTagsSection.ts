@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { fetchLastCompleted } from '../../api/jobs'
 import { fetchNotes } from '../../api/notes'
 import { notesText } from '../../format'
 import {
@@ -16,9 +17,11 @@ import {
 import type { Tag } from '../../api/tags'
 import { useResourceChanges } from '../../hooks/useResourceChanges'
 
+const SUGGEST_REVIEW_KINDS = ['GroupTags', 'SuggestTagParents']
+
 export type TagsState =
   | { status: 'loading' }
-  | { status: 'ready'; tags: Tag[]; synthesisCount: number }
+  | { status: 'ready'; tags: Tag[]; synthesisCount: number; lastSuggestRunUtc: string | null }
   | { status: 'error'; message: string }
 
 /** State and every action behind TagsSection: load/reload, confirm, merge, delete, the review
@@ -52,8 +55,8 @@ export function useTagsSection() {
     const previous = stateRef.current
     const finishedLabels = queuedRef.current
 
-    void Promise.all([fetchTags(), fetchNotes('Synthesis')])
-      .then(([tags, syntheses]) => {
+    void Promise.all([fetchTags(), fetchNotes('Synthesis'), fetchLastCompleted(SUGGEST_REVIEW_KINDS)])
+      .then(([tags, syntheses, lastSuggestRunUtc]) => {
         if (reloadId !== latestReload.current) {
           return
         }
@@ -64,7 +67,7 @@ export function useTagsSection() {
           noticeTimer.current = window.setTimeout(() => setNotice(null), 6000)
         }
 
-        setState({ status: 'ready', tags, synthesisCount: syntheses.length })
+        setState({ status: 'ready', tags, synthesisCount: syntheses.length, lastSuggestRunUtc })
         setQueued([])
       })
       .catch((err: unknown) => {

@@ -124,6 +124,15 @@ worker resets a failed-but-not-final attempt back to `Pending` and leaves `Error
 `PipelineWorker.TickAsync`), so a queued job can already carry its last failure. UI:
 [`frontend.md`](frontend.md) *Jobs section*.
 
+`KindDescription` — one sentence on what the kind does, for the UI's info tooltip. Lives in
+code (`JobKindDescriptions`, a switch over `JobKind` with no default arm), **not** a lookup
+table: `JobKind` is stored as a string so a new kind needs no migration, and a table of
+descriptions would bring that migration back (decision 2026-09-13).
+
+`GET /api/jobs/last-completed?kind=…` — latest `CompletedAtUtc` over `Done`/`Skipped` jobs of the
+given kinds (`Failed` excluded), null if none. No new column: aggregation jobs insert a fresh row
+per run, so the table already is the run history. Feeds the "last run" hint on *Suggest for review*.
+
 ### Password in plaintext — deferred on purpose
 
 During local dev the password sits as a plain default (`Password`) in

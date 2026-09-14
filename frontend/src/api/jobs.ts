@@ -4,6 +4,7 @@ import { apiFetch, readErrorMessage } from './http'
 export interface ActiveJob {
   id: string
   kind: string
+  kindDescription: string
   status: 'Pending' | 'Running'
   /** Set only for a BuildSourceNote job - the other kinds carry no asset. */
   assetId: string | null
@@ -25,4 +26,17 @@ export async function fetchActiveJobs(): Promise<ActiveJob[]> {
   }
 
   return (await response.json()) as ActiveJob[]
+}
+
+/** When a Done/Skipped job of any of these kinds last finished, or null if none has. */
+export async function fetchLastCompleted(kinds: string[]): Promise<string | null> {
+  const query = new URLSearchParams(kinds.map((kind) => ['kind', kind]))
+  const response = await apiFetch(`/api/jobs/last-completed?${query}`)
+
+  if (!response.ok) {
+    throw new Error(await readErrorMessage(response, 'Could not load the last run'))
+  }
+
+  const body = (await response.json()) as { completedAtUtc: string | null }
+  return body.completedAtUtc
 }

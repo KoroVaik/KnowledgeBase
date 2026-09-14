@@ -57,6 +57,14 @@ development on this project — mostly from *reading* other people's code at wor
 **Explain before you change code**: first *why this matters in practice*, then wait for a
 "yes", then edit files.
 
+- **Keep replies short by default.** Answer only what was asked; add details when the
+  owner requests them.
+- **Do not frame this project academically.** It is for personal full-stack learning and
+  daily use, not coursework, a portfolio, or a deadline-driven demonstration.
+- **Avoid stubs when a complete, clean solution is reasonably within reach.** Offer the
+  full option explicitly before expanding the agreed scope; use a temporary workaround
+  only when the complete solution is genuinely too large or risky.
+
 **Proposing a CSS/styling fix**: describe what will look or behave differently, not the
 CSS itself. "Card перестане вилазити за правий край на вузьких екранах" is right;
 "додам `overflow: hidden` і `flex-wrap: wrap`" is not — CSS property names and selectors
@@ -80,6 +88,14 @@ those.
   Something noticed in passing → an Open item, not the current commit.
 - **Verify, do not assume.** Before saying "works", actually build, run, call the
   endpoint. Show the command and the real output.
+- **Ask before testing behaviour.** Builds and lint are part of implementation; before
+  starting servers, calling endpoints, or running browser checks, say what will be checked
+  and wait for permission. The same applies to browser-based diagnosis.
+- **Browser checks belong to the dedicated testing agent** when there is more than one
+  check. The main session may make one quick check, or test directly when the owner asks.
+  Do not give a general subagent browser access without the owner's permission.
+- **Do not assume the UI is good enough.** If its appearance or usability is uncertain,
+  ask the owner what feels wrong instead of silently accepting it or changing it to taste.
 - **Do not invent repo state.** Before claiming anything about configs, CI or
   dependencies, look at the files. (The project description has drifted from reality
   before: the linter turned out to be oxlint, not typescript-eslint; the CI workflow did
@@ -94,6 +110,9 @@ those.
 - **Never search the whole disk.** No `find /` or similar unscoped searches — always
   scope to a specific directory (the repo, a subfolder). An unscoped search is very
   expensive and can hang.
+- **Uncommitted changes do not shape the design.** If a file you need to touch already has
+  uncommitted changes, mention it — but still put the code where it belongs. Never pick a
+  different file, endpoint, or approach just to keep the diff separate.
 - **Do not commit or push without being asked.**
 - **Do not create git branches without being asked.** Work on the current branch; if that
   seems wrong, say so and wait.
