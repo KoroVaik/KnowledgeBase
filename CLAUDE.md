@@ -88,9 +88,11 @@ those.
   Something noticed in passing → an Open item, not the current commit.
 - **Verify, do not assume.** Before saying "works", actually build, run, call the
   endpoint. Show the command and the real output.
-- **Ask before testing behaviour.** Builds and lint are part of implementation; before
-  starting servers, calling endpoints, or running browser checks, say what will be checked
-  and wait for permission. The same applies to browser-based diagnosis.
+- **Browser access is prohibited unless the owner explicitly asks to test or view the UI.**
+  Do not open, inspect, navigate, log into, or control a browser based on a vague acknowledgement
+  or an inferred need. Builds and lint are part of implementation; before starting servers,
+  calling endpoints, or running any browser check, say what will be checked and wait for permission.
+  The same applies to browser-based diagnosis.
 - **Browser checks belong to the dedicated testing agent** when there is more than one
   check. The main session may make one quick check, or test directly when the owner asks.
   Do not give a general subagent browser access without the owner's permission.

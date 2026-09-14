@@ -162,6 +162,43 @@
   flex-shrink: 0;
 }
 
+.tags-review-decisions {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+}
+
+.suggested-merge {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+}
+
+.suggested-merge-label {
+  font-size: 11px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.suggested-merge-option {
+  font-family: inherit;
+  line-height: normal;
+  cursor: pointer;
+}
+
+.suggested-merge-option:hover:not(:disabled) {
+  color: var(--text-h);
+  background: var(--surface-hover);
+}
+
+.suggested-merge-option:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
 /* Same --warn as the unconfirmed tag chip/pill elsewhere in Tags - the name in the button label
    is the tag this row is about to confirm, so it gets the same "still unconfirmed" colour cue. */
 .tags-row-submit-name {

@@ -48,15 +48,34 @@ export function TagReviewRow({
         onFlipAcceptParent={onFlipAcceptParent}
       />
 
-      <button
-        type="button"
-        className={allDecided ? 'btn btn-xs btn-primary tags-row-submit' : 'btn btn-xs tags-row-submit'}
-        onClick={submit}
-        disabled={disabled || !allDecided}
-      >
-        Submit new tag &quot;<span className="tags-row-submit-name">{tag.name}</span>&quot;{' '}
-        {hasAccepted ? 'with parent(s)' : 'without parent'}
-      </button>
+      <div className="tags-review-decisions">
+        <button
+          type="button"
+          className={allDecided ? 'btn btn-xs btn-primary tags-row-submit' : 'btn btn-xs tags-row-submit'}
+          onClick={submit}
+          disabled={disabled || !allDecided}
+        >
+          Submit new tag &quot;<span className="tags-row-submit-name">{tag.name}</span>&quot;{' '}
+          {hasAccepted ? 'with parent(s)' : 'without parent'}
+        </button>
+
+        {suggestion !== undefined && (
+          <div className="suggested-merge">
+            <span className="suggested-merge-label">Suggested merge to:</span>
+            <button
+              type="button"
+              className="tag-chip chip-compact suggested-merge-option"
+              onClick={() => onMerge(tag, suggestion)}
+              disabled={disabled}
+            >
+              {suggestion.name}
+              {tag.suggestedMergeConfidence !== null && (
+                <span className="tag-confidence">{tag.suggestedMergeConfidence}</span>
+              )}
+            </button>
+          </div>
+        )}
+      </div>
 
       <span className="tags-count">{notesText(tag.noteCount)}</span>
 
