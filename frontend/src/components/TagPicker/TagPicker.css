@@ -2,13 +2,9 @@
    Fixed px, not em: the input and the panel below sit in different font-size contexts, so
    matching em values (e.g. 11em/14em) would not actually come out to the same pixel width -
    that mismatch was the dropdown looking wider than its own input. */
-.tag-picker input {
+.tag-picker-input {
   width: 200px;
   cursor: text;
-}
-
-.tag-picker {
-  position: relative;
 }
 
 /* The collapsed `chip` variant reuses .tag-action-chip/.tag-action-chip-merge (TagsSection.css),
@@ -26,6 +22,25 @@
   opacity: 0.5;
 }
 
+.tag-action-chip.tag-picker-chip-icon {
+  box-sizing: border-box;
+  display: inline-flex;
+  justify-content: center;
+  width: 26px;
+  min-width: 26px;
+  min-height: 0;
+  padding: 2px 0;
+  border-radius: 6px;
+  font-size: 12px;
+  line-height: normal;
+}
+
+.tag-picker-chip-icon .tag-picker-chevron {
+  padding: 0;
+  font-size: 13px;
+  line-height: 1;
+}
+
 .tag-picker-chevron {
   padding: 0 8px 0 2px;
   color: var(--text-muted);
@@ -33,17 +48,12 @@
 }
 
 .tag-picker-panel {
-  position: absolute;
-  z-index: 1;
-  top: calc(100% + 4px);
-  left: 0;
   box-sizing: border-box;
   width: 200px;
-  padding: 4px;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  background: var(--bg);
-  box-shadow: 0 4px 12px rgb(0 0 0 / 0.2);
+}
+
+.tag-picker-panel > .tag-picker-input {
+  width: 100%;
 }
 
 /* line-height: 1.45 (unitless, not "normal") - a percentage line-height on :root resolves

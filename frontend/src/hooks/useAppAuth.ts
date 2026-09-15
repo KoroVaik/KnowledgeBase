@@ -3,11 +3,12 @@ import { fetchCurrentUser, logout } from '../api/auth'
 import type { CurrentUser } from '../api/auth'
 import { fetchFeatures } from '../api/features'
 import type { FeatureFlags } from '../api/features'
+import { reconnectNow } from '../api/realtime'
 import { useConnectionStatus } from './useConnectionStatus'
 
 export type AuthState =
   | { status: 'checking' }
-  | { status: 'anonymous' }
+  | { status: 'anonymous'; message?: string }
   | { status: 'authenticated'; user: CurrentUser }
   | { status: 'unreachable'; message: string }
 
@@ -26,7 +27,8 @@ export function useAppAuth() {
     maxUploadBytes: 0,
   })
 
-  const connection = useConnectionStatus()
+  const { status: connection, reconnectAt, observedAt } = useConnectionStatus()
+  const reconnectInSeconds = useReconnectCountdown(reconnectAt, observedAt)
 
   useEffect(() => {
     let cancelled = false
@@ -86,6 +88,30 @@ export function useAppAuth() {
     seenOnline.current = true
   }, [connection])
 
+  // EventSource does not reveal an HTTP status. A single ordinary request tells a lost
+  // session from a dropped stream without treating a live API as offline.
+  useEffect(() => {
+    if (connection !== 'offline' || auth.status !== 'authenticated') {
+      return
+    }
+
+    let cancelled = false
+
+    void fetchCurrentUser()
+      .then((user) => {
+        if (!cancelled && user === null) {
+          setAuth({ status: 'anonymous', message: 'Your session has expired. Please sign in again.' })
+        }
+      })
+      .catch(() => {
+        // The stream retry already communicates that the API cannot currently be reached.
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [auth.status, connection])
+
   // "checking" is set here, not in the effect: the click is what triggers the re-check.
   function retry() {
     setAuth({ status: 'checking' })
@@ -108,16 +134,42 @@ export function useAppAuth() {
     setUploadCount((count) => count + 1)
   }
 
+  function reconnect() {
+    reconnectNow()
+  }
+
   return {
     auth,
     features,
     connection,
+    reconnectInSeconds,
     uploadCount,
     retry,
+    reconnect,
     handleSignOut,
     markSignedIn,
     bumpUploadCount,
   }
+}
+
+function useReconnectCountdown(reconnectAt: number | null, observedAt: number): number | null {
+  const [now, setNow] = useState(0)
+
+  useEffect(() => {
+    if (reconnectAt === null) {
+      return
+    }
+
+    const timer = window.setInterval(() => setNow(Date.now()), 250)
+
+    return () => window.clearInterval(timer)
+  }, [reconnectAt])
+
+  if (reconnectAt === null || !Number.isFinite(observedAt)) {
+    return null
+  }
+
+  return Math.max(0, Math.ceil((reconnectAt - Math.max(now, observedAt)) / 1_000))
 }
 
 function messageOf(error: unknown): string {

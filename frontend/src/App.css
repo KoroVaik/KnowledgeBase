@@ -209,12 +209,42 @@
 }
 
 .connection-banner {
-  margin: 16px 0 0;
-  padding: 12px 16px;
-  border-radius: 8px;
+  position: fixed;
+  z-index: 10;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  margin: 0;
+  padding: 7px 16px;
   color: var(--danger);
-  background: var(--danger-bg);
-  border: 1px solid var(--danger-border);
+  background: var(--surface-2);
+  border-top: 1px solid var(--danger-border);
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 4px 12px;
+}
+
+.connection-banner-text {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.25;
+}
+
+.connection-retry-countdown {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.connection-banner .btn-sm {
+  padding: 4px 8px;
+  font-size: 12px;
+}
+
+.auth-message {
+  margin-top: 16px;
+  color: var(--danger);
 }
 
 .retry {

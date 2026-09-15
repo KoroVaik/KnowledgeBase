@@ -143,6 +143,42 @@
   margin-left: auto;
 }
 
+.tag-actions-menu-toggle {
+  min-width: 36px;
+  min-height: 32px;
+  padding: 2px 7px 6px;
+  font-size: 19px;
+  line-height: 1;
+}
+
+.tag-actions-menu-item {
+  width: 100%;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: 4px;
+  text-align: left;
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.45;
+  cursor: pointer;
+  color: var(--text);
+  background: transparent;
+}
+
+.tag-actions-menu-item:hover:not(:disabled) {
+  color: var(--text-h);
+  background: var(--surface-hover);
+}
+
+.tag-actions-menu-item:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.tag-actions-menu-delete {
+  color: var(--danger);
+}
+
 .tags-row:last-child {
   border-bottom: 0;
 }

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { createTag, fetchTags } from '../../api/tags'
 import type { Tag } from '../../api/tags'
 
@@ -26,7 +26,6 @@ export function useTagPicker({ source, suggestion, excludeIds, onPick }: UseTagP
   const [results, setResults] = useState<Tag[]>([])
   const [creating, setCreating] = useState(false)
   const [createError, setCreateError] = useState<string | null>(null)
-  const containerRef = useRef<HTMLDivElement>(null)
 
   const term = text.trim()
   // A stable dependency: excludeIds is a fresh array on every render (callers often pass a
@@ -73,17 +72,6 @@ export function useTagPicker({ source, suggestion, excludeIds, onPick }: UseTagP
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- excludeKey is the stable stand-in for excludeIds, see above
   }, [term, source?.id, source?.name, suggestion?.id, excludeKey, open])
 
-  useEffect(() => {
-    function onClickOutside(event: MouseEvent) {
-      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
-        setOpen(false)
-      }
-    }
-
-    document.addEventListener('mousedown', onClickOutside)
-    return () => document.removeEventListener('mousedown', onClickOutside)
-  }, [])
-
   function pick(tag: Tag) {
     onPick(tag)
     setText('')
@@ -103,18 +91,10 @@ export function useTagPicker({ source, suggestion, excludeIds, onPick }: UseTagP
     }
   }
 
-  function focus() {
-    setOpen(true)
-  }
-
   function updateText(value: string) {
     setText(value)
     setCreateError(null)
     setOpen(true)
-  }
-
-  function closeOnEscape() {
-    setOpen(false)
   }
 
   return {
@@ -125,12 +105,10 @@ export function useTagPicker({ source, suggestion, excludeIds, onPick }: UseTagP
     results,
     creating,
     createError,
-    containerRef,
     term,
     pick,
     addNew,
-    focus,
+    setOpen,
     updateText,
-    closeOnEscape,
   }
 }

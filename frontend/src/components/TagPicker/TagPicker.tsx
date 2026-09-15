@@ -1,5 +1,6 @@
 import { useTagPicker } from './useTagPicker'
 import type { Tag } from '../../api/tags'
+import { Dropdown } from '../Dropdown/Dropdown'
 import './TagPicker.css'
 
 /** A searchable tag picker. Closed input opens two ranked sections: the pipeline's semantic
@@ -15,8 +16,7 @@ import './TagPicker.css'
  *  same shape as `TagMergeOptions`'s always-expanded merge chip, so the two "Merge into" looks
  *  do not clash next to each other. Clicking it opens the same floating dropdown (input +
  *  suggestion/spelling/search panel) the plain picker always shows; picking a tag, Escape or a
- *  click outside all set `open` back to false, which collapses it back to the chip (same state
- *  the dropdown already tracks, no separate expanded flag needed). */
+ *  click outside collapse it back to the chip. */
 export function TagPicker({
   source,
   suggestion,
@@ -27,6 +27,7 @@ export function TagPicker({
   ariaLabel,
   chip = false,
   chipLabel = 'Merge into',
+  chipIconOnly = false,
 }: {
   source?: Tag
   suggestion?: Tag
@@ -38,112 +39,145 @@ export function TagPicker({
   ariaLabel: string
   chip?: boolean
   chipLabel?: string
+  chipIconOnly?: boolean
 }) {
   const {
     text,
-    open,
     spelling,
     spellingIsFallback,
     results,
     creating,
     createError,
-    containerRef,
     term,
     pick,
     addNew,
-    focus,
+    setOpen,
     updateText,
-    closeOnEscape,
   } = useTagPicker({ source, suggestion, excludeIds, onPick })
 
-  if (chip && !open) {
+  const options = (
+    <>
+      {term.length === 0 ? (
+        suggestion === undefined && spelling.length === 0 ? (
+          <p className="tag-picker-empty">No suggestions — start typing to search.</p>
+        ) : (
+          <>
+            {suggestion !== undefined && (
+              <>
+                <p className="tag-picker-heading">Suggested</p>
+                <ul className="tag-picker-results tag-picker-suggested">
+                  <li>
+                    <button type="button" onClick={() => pick(suggestion)}>
+                      {suggestion.name}
+                    </button>
+                  </li>
+                </ul>
+              </>
+            )}
+
+            {spelling.length > 0 && (
+              <>
+                <p className="tag-picker-heading">{source && !spellingIsFallback ? 'Similar spelling' : 'Tags'}</p>
+                <ul className="tag-picker-results">
+                  {spelling.map((tag) => (
+                    <li key={tag.id}>
+                      <button type="button" onClick={() => pick(tag)}>
+                        {tag.name}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </>
+            )}
+          </>
+        )
+      ) : results.length > 0 ? (
+        <ul className="tag-picker-results">
+          {results.map((tag) => (
+            <li key={tag.id}>
+              <button type="button" onClick={() => pick(tag)}>
+                {tag.name}
+              </button>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <button type="button" className="tag-picker-add" disabled={creating} onClick={() => void addNew()}>
+          {creating ? 'Adding…' : `Add new tag “${term}”`}
+        </button>
+      )}
+
+      {createError !== null && <p className="tag-picker-error">{createError}</p>}
+    </>
+  )
+
+  if (chip) {
     return (
-      <button
-        type="button"
-        className="tag-action-chip tag-action-chip-merge tag-picker-chip"
-        disabled={disabled}
-        onClick={focus}
+      <Dropdown
+        className="tag-picker tag-picker-chip-anchor"
+        panelClassName="tag-picker-panel"
+        align="start"
+        onOpenChange={setOpen}
+        trigger={({ isOpen, toggle }) => (
+          <button
+            type="button"
+            className={chipIconOnly ? 'tag-action-chip tag-action-chip-merge tag-picker-chip tag-picker-chip-icon' : 'tag-action-chip tag-action-chip-merge tag-picker-chip'}
+            aria-label={ariaLabel}
+            aria-expanded={isOpen}
+            disabled={disabled}
+            onClick={toggle}
+          >
+            {!chipIconOnly && <span className="tag-action-label">{chipLabel}</span>}
+            <span className="tag-picker-chevron" aria-hidden="true">▾</span>
+          </button>
+        )}
       >
-        <span className="tag-action-label">{chipLabel}</span>
-        <span className="tag-picker-chevron" aria-hidden="true">▾</span>
-      </button>
+        {() => (
+          <>
+            <input
+              type="text"
+              className="field field-xs tag-picker-input"
+              value={text}
+              placeholder={placeholder}
+              disabled={disabled}
+              aria-label={ariaLabel}
+              autoFocus
+              onChange={(event) => updateText(event.target.value)}
+            />
+            {options}
+          </>
+        )}
+      </Dropdown>
     )
   }
 
   return (
-    <div className="tag-picker" ref={containerRef}>
-      <input
-        type="text"
-        className="field field-xs"
-        value={text}
-        placeholder={placeholder}
-        disabled={disabled}
-        aria-label={ariaLabel}
-        autoFocus={chip}
-        onFocus={focus}
-        onChange={(event) => updateText(event.target.value)}
-        onKeyDown={(event) => {
-          if (event.key === 'Escape') {
-            closeOnEscape()
-          }
-        }}
-      />
-
-      {open && (
-        <div className="tag-picker-panel">
-          {term.length === 0 ? (
-            suggestion === undefined && spelling.length === 0 ? (
-              <p className="tag-picker-empty">No suggestions — start typing to search.</p>
-            ) : (
-              <>
-                {suggestion !== undefined && (
-                  <>
-                    <p className="tag-picker-heading">Suggested</p>
-                    <ul className="tag-picker-results tag-picker-suggested">
-                      <li>
-                        <button type="button" onClick={() => pick(suggestion)}>
-                          {suggestion.name}
-                        </button>
-                      </li>
-                    </ul>
-                  </>
-                )}
-
-                {spelling.length > 0 && (
-                  <>
-                    <p className="tag-picker-heading">{source && !spellingIsFallback ? 'Similar spelling' : 'Tags'}</p>
-                    <ul className="tag-picker-results">
-                      {spelling.map((tag) => (
-                        <li key={tag.id}>
-                          <button type="button" onClick={() => pick(tag)}>
-                            {tag.name}
-                          </button>
-                        </li>
-                      ))}
-                    </ul>
-                  </>
-                )}
-              </>
-            )
-          ) : results.length > 0 ? (
-            <ul className="tag-picker-results">
-              {results.map((tag) => (
-                <li key={tag.id}>
-                  <button type="button" onClick={() => pick(tag)}>
-                    {tag.name}
-                  </button>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <button type="button" className="tag-picker-add" disabled={creating} onClick={() => void addNew()}>
-              {creating ? 'Adding…' : `Add new tag “${term}”`}
-            </button>
-          )}
-
-          {createError !== null && <p className="tag-picker-error">{createError}</p>}
-        </div>
+    <Dropdown
+      className="tag-picker"
+      panelClassName="tag-picker-panel"
+      align="start"
+      onOpenChange={setOpen}
+      trigger={({ open: openDropdown }) => (
+        <input
+          type="text"
+          className="field field-xs tag-picker-input"
+          value={text}
+          placeholder={placeholder}
+          disabled={disabled}
+          aria-label={ariaLabel}
+          onFocus={openDropdown}
+          onChange={(event) => {
+            updateText(event.target.value)
+            openDropdown()
+          }}
+        />
       )}
-    </div>
+    >
+      {() => (
+        <>
+          {options}
+        </>
+      )}
+    </Dropdown>
   )
 }

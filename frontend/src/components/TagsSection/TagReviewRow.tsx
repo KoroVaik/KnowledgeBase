@@ -1,10 +1,9 @@
 import type { Tag } from '../../api/tags'
 import { notesText } from '../../format'
 import { TagSuggestionGraph } from '../TagSuggestionGraph/TagSuggestionGraph'
+import { TagActionsMenu } from './TagActionsMenu'
 import { TagPicker } from '../TagPicker/TagPicker'
 import { useTagReviewRow } from './useTagReviewRow'
-
-const MIN_NOTES = 2
 
 /** One unconfirmed tag in "To review": the mini-graph plus its own submit button, right of the
  *  graph so it reads as "what happens to this row" rather than a page-wide action (see
@@ -73,31 +72,41 @@ export function TagReviewRow({
                 <span className="tag-confidence">{tag.suggestedMergeConfidence}</span>
               )}
             </button>
+
+            <TagPicker
+              source={tag}
+              suggestion={suggestion}
+              ariaLabel={`Merge ${tag.name} into another tag`}
+              disabled={disabled}
+              onPick={(into) => onMerge(tag, into)}
+              chip
+              chipIconOnly
+            />
           </div>
+        )}
+
+        {suggestion === undefined && (
+          <TagPicker
+            source={tag}
+            disabled={disabled}
+            ariaLabel={`Merge ${tag.name} into another tag`}
+            onPick={(into) => onMerge(tag, into)}
+            chip
+            chipIconOnly
+          />
         )}
       </div>
 
       <span className="tags-count">{notesText(tag.noteCount)}</span>
 
       <span className="tags-actions">
-        <TagPicker
-          source={tag}
-          suggestion={suggestion}
-          ariaLabel={`Merge ${tag.name} into another tag`}
+        <TagActionsMenu
           disabled={disabled}
-          onPick={(into) => onMerge(tag, into)}
-          chip
+          queued={queued.includes(tag.name)}
+          canSynthesise={tag.noteCount >= 2}
+          onSynthesise={() => onSynthesise(tag)}
+          onDelete={() => onDelete(tag)}
         />
-
-        {tag.noteCount >= MIN_NOTES && (
-          <button type="button" className="btn btn-xs" onClick={() => onSynthesise(tag)} disabled={disabled}>
-            {queued.includes(tag.name) ? 'Queued' : 'Synthesise'}
-          </button>
-        )}
-
-        <button type="button" className="btn btn-xs" onClick={() => onDelete(tag)} disabled={disabled}>
-          Delete
-        </button>
       </span>
     </li>
   )

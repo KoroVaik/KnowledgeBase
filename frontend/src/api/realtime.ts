@@ -11,7 +11,12 @@ export type ChangeListener = (change: ResourceChange | null) => void
 /** `paused` = deliberately closed (nobody listening / tab hidden / idle). `offline` = no answer. */
 export type ConnectionStatus = 'online' | 'offline' | 'paused'
 
-export type ConnectionListener = (status: ConnectionStatus) => void
+export interface ConnectionState {
+  status: ConnectionStatus
+  reconnectAt: number | null
+}
+
+export type ConnectionListener = (state: ConnectionState) => void
 
 /** Long enough to sit out an Alt-Tab without tearing the stream down. */
 const HIDDEN_GRACE_MS = 30_000
@@ -19,7 +24,7 @@ const HIDDEN_GRACE_MS = 30_000
 /** A tab left on screen but untouched stops holding a connection. */
 const IDLE_LIMIT_MS = 15 * 60_000
 
-/** The browser retries a drop itself, but gives up for good on an HTTP error. */
+/** Every retry is scheduled here, so the UI can show its exact time. */
 const REOPEN_MIN_MS = 2_000
 const REOPEN_MAX_MS = 60_000
 
@@ -32,6 +37,7 @@ const listeners = new Map<string, Set<ChangeListener>>()
 const connectionListeners = new Set<ConnectionListener>()
 
 let status: ConnectionStatus = 'paused'
+let reconnectAt: number | null = null
 
 let source: EventSource | null = null
 let hasConnected = false
@@ -63,29 +69,29 @@ export function subscribeToChanges(resource: string, listener: ChangeListener): 
   }
 }
 
-/** Calls the listener at once with the current status. */
+/** Calls the listener at once with the current stream state. */
 export function subscribeToConnection(listener: ConnectionListener): () => void {
   connectionListeners.add(listener)
-  listener(status)
+  listener({ status, reconnectAt })
 
   return () => {
     connectionListeners.delete(listener)
   }
 }
 
-function setStatus(next: ConnectionStatus) {
-  if (next === status) {
+function setConnection(nextStatus: ConnectionStatus, nextReconnectAt = reconnectAt) {
+  if (nextStatus === status && nextReconnectAt === reconnectAt) {
     return
   }
 
-  status = next
-  connectionListeners.forEach((listener) => listener(next))
+  status = nextStatus
+  reconnectAt = nextReconnectAt
+  connectionListeners.forEach((listener) => listener({ status, reconnectAt }))
 }
 
 /** Open/close to match: someone listening, tab visible, user not idle. */
 function sync() {
-  const wanted =
-    listeners.size > 0 && document.visibilityState === 'visible' && !hasGoneIdle()
+  const wanted = isWanted()
 
   if (wanted && source === null && reopenTimer === undefined) {
     open()
@@ -96,24 +102,31 @@ function sync() {
 }
 
 function open() {
-  source = new EventSource('/api/events')
+  const nextSource = new EventSource('/api/events')
+  source = nextSource
+  setConnection(status, null)
 
   // A slow reconnect (Render cold start) should raise the banner; a quick one should not.
   // The first connection is exempt - the page shows its own "loading" then.
   clearTimer(connectingTimer)
   connectingTimer = hasConnected
     ? window.setTimeout(() => {
-        if (source?.readyState === EventSource.CONNECTING) {
-          setStatus('offline')
+        if (source === nextSource && nextSource.readyState === EventSource.CONNECTING) {
+          connectingTimer = undefined
+          reopenLater(nextSource)
         }
       }, RECONNECT_GRACE_MS)
     : undefined
 
-  source.onopen = () => {
+  nextSource.onopen = () => {
+    if (source !== nextSource) {
+      return
+    }
+
     clearTimer(connectingTimer)
     connectingTimer = undefined
     reopenDelayMs = REOPEN_MIN_MS
-    setStatus('online')
+    setConnection('online', null)
 
     // Not on the first connection: a component loads its own data on mount.
     if (hasConnected) {
@@ -123,7 +136,11 @@ function open() {
     hasConnected = true
   }
 
-  source.onmessage = (event: MessageEvent<string>) => {
+  nextSource.onmessage = (event: MessageEvent<string>) => {
+    if (source !== nextSource) {
+      return
+    }
+
     try {
       dispatch(JSON.parse(event.data) as ResourceChange)
     } catch {
@@ -131,54 +148,81 @@ function open() {
     }
   }
 
-  source.onerror = () => {
+  nextSource.onerror = () => {
+    if (source !== nextSource) {
+      return
+    }
+
     clearTimer(connectingTimer)
     connectingTimer = undefined
-
-    // CONNECTING = browser retrying; the page is just as cut off as on a hard fail.
-    setStatus('offline')
-
-    // CLOSED = browser will not retry (HTTP error: 502 on API restart, dead session).
-    if (source?.readyState === EventSource.CLOSED) {
-      reopenLater()
-    }
+    reopenLater(nextSource)
   }
 }
 
 function close() {
-  source?.close()
+  const currentSource = source
   source = null
+  currentSource?.close()
   clearTimer(connectingTimer)
   connectingTimer = undefined
   clearTimer(reopenTimer)
   reopenTimer = undefined
   reopenDelayMs = REOPEN_MIN_MS
-  setStatus('paused')
+  setConnection('paused', null)
 }
 
-// A returning tab should not sit out the rest of a backoff already in flight - the reason
-// for that delay (repeated failures with nobody watching) no longer applies.
+// A returning tab should not sit out a retry scheduled while it was in the background.
 function retryNow() {
   clearTimer(reopenTimer)
   reopenTimer = undefined
   reopenDelayMs = REOPEN_MIN_MS
+  setConnection(status, null)
+
+  if (status === 'offline') {
+    const currentSource = source
+    source = null
+    currentSource?.close()
+    clearTimer(connectingTimer)
+    connectingTimer = undefined
+  }
+
   sync()
 }
 
-function reopenLater() {
-  source?.close()
-  source = null
+/** Cancels the scheduled wait and immediately opens a fresh stream. */
+export function reconnectNow() {
+  if (status === 'offline') {
+    retryNow()
+  }
+}
 
-  if (listeners.size === 0 || reopenTimer !== undefined) {
+function reopenLater(failedSource: EventSource) {
+  if (source === failedSource) {
+    source = null
+  }
+
+  failedSource.close()
+
+  if (!isWanted()) {
+    sync()
     return
   }
 
+  if (reopenTimer !== undefined) {
+    return
+  }
+
+  const delayMs = reopenDelayMs
+  const nextReconnectAt = Date.now() + delayMs
+
   reopenTimer = window.setTimeout(() => {
     reopenTimer = undefined
+    setConnection(status, null)
     sync()
-  }, reopenDelayMs)
+  }, delayMs)
 
   reopenDelayMs = Math.min(reopenDelayMs * 2, REOPEN_MAX_MS)
+  setConnection('offline', nextReconnectAt)
 }
 
 function dispatch(change: ResourceChange | null) {
@@ -224,9 +268,15 @@ function markActive() {
   clearTimer(idleTimer)
   idleTimer = window.setTimeout(sync, IDLE_LIMIT_MS)
 
-  if (source === null) {
+  if (status === 'offline' && reopenTimer !== undefined) {
+    retryNow()
+  } else if (source === null) {
     sync()
   }
+}
+
+function isWanted(): boolean {
+  return listeners.size > 0 && document.visibilityState === 'visible' && !hasGoneIdle()
 }
 
 function hasGoneIdle(): boolean {

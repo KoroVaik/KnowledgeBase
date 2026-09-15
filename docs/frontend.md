@@ -296,6 +296,15 @@ no search box, no click-to-open. A tag with no suggestion falls back to `TagPick
 is nothing to make explicit yet. Confirmed tags always keep `TagPicker`; a search box still
 earns its place there since there is no AI guess to shortcut.
 
+### Shared dropdown
+
+`components/Dropdown` owns the common trigger, outside-click / Escape closing and the
+open/close transition for floating menus. The panel stays mounted until its reverse
+transition finishes, so every consumer expands from and collapses back into its trigger
+rather than appearing or disappearing abruptly. `TagPicker` and the tag `⋯` actions menu
+are its first consumers; callers supply only their trigger and panel content, plus the
+alignment edge.
+
 ### Jobs section — worker status
 
 `JobsSection` lists jobs the pipeline has queued or is running, via `GET /api/jobs`

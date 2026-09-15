@@ -8,8 +8,18 @@ import { useAppAuth } from './hooks/useAppAuth'
 import './App.css'
 
 function App() {
-  const { auth, features, connection, uploadCount, retry, handleSignOut, markSignedIn, bumpUploadCount } =
-    useAppAuth()
+  const {
+    auth,
+    features,
+    connection,
+    reconnectInSeconds,
+    uploadCount,
+    retry,
+    reconnect,
+    handleSignOut,
+    markSignedIn,
+    bumpUploadCount,
+  } = useAppAuth()
 
   return (
     <main className="app">
@@ -23,10 +33,20 @@ function App() {
       </header>
 
       {connection === 'offline' && (
-        // role="status", not "alert": not a response to a user action.
-        <p className="connection-banner" role="status">
-          No connection to the server — reconnecting. What you see may be out of date.
-        </p>
+        <div className="connection-banner">
+          {/* Not an alert: this is not a response to a user action. */}
+          <p className="connection-banner-text" role="status">
+            Live updates are temporarily unavailable — reconnecting.
+          </p>
+          {reconnectInSeconds !== null && (
+            <span className="connection-retry-countdown" aria-live="off">
+              Next attempt in {reconnectInSeconds} s.
+            </span>
+          )}
+          <button type="button" className="btn btn-sm" onClick={reconnect}>
+            Reconnect now
+          </button>
+        </div>
       )}
 
       {auth.status === 'checking' && <p className="subtitle">Checking the session…</p>}
@@ -42,6 +62,7 @@ function App() {
 
       {auth.status === 'anonymous' && (
         <>
+          {auth.message && <p className="auth-message" role="status">{auth.message}</p>}
           <p className="subtitle">Sign in to upload documents.</p>
           <LoginForm onSignedIn={markSignedIn} googleSignInEnabled={features.googleSignInEnabled} />
         </>
