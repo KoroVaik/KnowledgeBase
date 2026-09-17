@@ -62,14 +62,19 @@ export async function fetchDownloadUrl(storedFileName: string): Promise<string> 
   return ((await response.json()) as AssetLink).url
 }
 
+/** 'transfer' reports bucket-PUT progress; 'finalize' fires once, when only the confirm
+ *  round-trip (a HEAD to the bucket + a Postgres write, constant cost) is still pending. */
+export type UploadPhase = 'transfer' | 'finalize'
+
 // Three steps: only the API may sign, only the bucket takes bytes, only the API writes the
 // row that makes them visible. Nothing shows in the listing until confirm succeeds.
 export async function uploadAsset(
   file: File,
-  onProgress?: (fraction: number) => void,
+  onProgress?: (phase: UploadPhase, fraction: number) => void,
 ): Promise<UploadedAsset> {
   const link = await requestUploadLink(file)
-  await putToBucket(link, file, onProgress)
+  await putToBucket(link, file, (fraction) => onProgress?.('transfer', fraction))
+  onProgress?.('finalize', 0)
 
   return confirmUpload(link, file)
 }

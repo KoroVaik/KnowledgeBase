@@ -31,6 +31,13 @@ One iteration, one scope — no drive-by cleanup. If something unrelated surface
 as a candidate Open item for step 5 instead of doing it now. No stubs or half-finished
 paths: if the scope needs to grow to avoid a hack, say so and confirm before widening it.
 
+Prefer generic, shared solutions over copy-paste: when the same logic is needed in more
+than one place, reuse an existing helper/component or extract one, instead of duplicating
+the code — duplication is what makes later changes expensive. Don't hack around the
+design (a workaround that "just works" in one spot) when the clean, generic fix is
+comparable effort. This doesn't license refactoring the whole codebase: generalize only
+what this change actually touches, and park anything wider as an Open item.
+
 Comments only where a decision is non-obvious (one or two lines) — see AGENTS.md's
 Comment policy. `///` XML-doc on API controllers/actions is the one exception, keep those.
 
@@ -44,8 +51,13 @@ cd frontend && npm run build && npm run lint
 ```
 
 ```bash
-dotnet build backend/KnowledgeBase.sln
+dotnet build backend/KnowledgeBase.sln --artifacts-path .dotnet-artifacts
 ```
+
+Always use `--artifacts-path`: a locally running Api/Worker locks its own
+`bin` DLLs, and a plain `dotnet build` then fails on file-copy errors that
+look like broken code. Building into `.dotnet-artifacts/` avoids that
+entirely (the folder is gitignored).
 
 Fix what they surface before moving on.
 

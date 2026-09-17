@@ -337,11 +337,20 @@ separate generic review page. Each shows its source photo, candidate rank and ra
 reviewer can expand the immutable model evidence and accept, reject, or correct it to a canonical
 record. The section is empty until a worker writes candidates.
 
+Each subsection ends with a collapsible **Known …** subsection instead of a bare list of every
+record: *Known Persons* shows each person's confirmed reference faces (click for the full photo,
+Revoke undoes the review decision's side effect), *Known Locations* shows each location's
+confirmed observation photos, *Known Events* shows each event's title, date, location and photo
+thumbnails. Records without confirmed evidence appear nowhere outside the "Correct to…" pickers
+and the event form — that bare list was removed as noise (chat decision 2026-09-17). The
+location reference photos come from the same `LocationResponse` (`referencePhotos`, asset id +
+name + confirmed date), so a rolling API restart defaults them to an empty list like the
+statuses.
+
 Locations add a **Refresh location suggestions** action. It requests a new scene-analysis pass for
-canonical photos that still have no confirmed location; the list shows each location's number of
-confirmed photo references. The API client supplies zero-valued analysis statuses when an older or
-transitional backend response lacks a newly added status field, so a rolling API restart does not
-crash the card before the next refresh.
+canonical photos that still have no confirmed location; the API client supplies zero-valued analysis
+statuses when an older or transitional backend response lacks a newly added status field, so a
+rolling API restart does not crash the card before the next refresh.
 
 Events contains **Refresh scene observations**, not a fourth top-level archive section. It shows
 each active, unreviewed VLM observation with photo name, kind, optional context names, cautious
@@ -396,6 +405,11 @@ marketing `h1` and fills the row.
 
 ### Pending browser verification
 
+- [ ] **Single-choice dropdowns on the shared `Dropdown`** (new `components/Select`): all
+      remaining native `<select>` elements in `PhotoAnalysisSection` were converted — build +
+      lint pass, browser run pending — trigger shows the chosen value (placeholder when none,
+      the placeholder doubles as the clearing row), every list opens and picks correctly, the
+      event-form row keeps its flexible width.
 - [ ] **Jobs section** (`GET /api/jobs`, `JobsSection`): build + lint pass, **browser run
       pending** — a queued job appearing (upload, `suggest-merges`, `suggest-hierarchy`), the
       `Running` badge while the worker has it, the row disappearing once `Done`/`Failed`, the

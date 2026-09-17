@@ -127,7 +127,17 @@ function StatusCell({ item, onUploadNow, onDismiss }: StatusCellProps) {
     }
 
     case 'done':
-      return <span className="queue-ok">Uploaded</span>
+      return (
+        <>
+          <progress
+            className="upload-progress upload-progress-done"
+            max={1}
+            value={1}
+            aria-label={`Uploaded ${item.file.name}`}
+          />
+          <span className="queue-ok">Uploaded</span>
+        </>
+      )
 
     case 'failed':
       return (

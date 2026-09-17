@@ -16,6 +16,8 @@ internal static class JobKindDescriptions
             "Detects faces in one image and suggests matching people from confirmed reference faces.",
         JobKind.FingerprintAsset =>
             "Calculates an exact file fingerprint so duplicate images can share one face analysis.",
+        JobKind.RescoreFaces =>
+            "Re-ranks people suggestions for faces nobody has reviewed yet, using the latest confirmed reference faces.",
         JobKind.AnalyzeScenes =>
             "Generates a CLIP scene vector and proposes the most similar reviewed locations.",
         JobKind.AnalyzeSceneObservations =>

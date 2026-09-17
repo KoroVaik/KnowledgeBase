@@ -129,6 +129,33 @@ instructions: [`../infra/worker/README.md`](../infra/worker/README.md).
 (its own proxy). On native Linux Docker it points at the real host IP and Ollama on
 `127.0.0.1` would refuse it.
 
+### Deploying a new build (decided, not built yet)
+
+Today it is manual: `run-worker.ps1` rebuilds and restarts. The plan is a **self-hosted
+GitHub Actions runner** on the PC, installed as a Windows service — the GitHub equivalent
+of a private Azure DevOps build agent. It dials out to GitHub and asks for work, so there
+is no inbound port, no tunnel and no extra daemon; the job runs the real `docker compose`,
+so a changed env var or a new service ships too, not only a newer image; deploy logs land
+in the Actions tab next to CI.
+
+The price is that GitHub executes repo code on the PC under the owner's account. That is
+acceptable **only while the repo is private** — on a public one any outside pull request
+would run here.
+
+Two alternatives were weighed and dropped:
+
+- **GHCR image + Watchtower polling.** Watchtower knows nothing about GitHub; it watches a
+  registry and restarts the container when a newer image appears. The narrowest possible
+  grant ("pull a newer image", nothing else) and it needs no inbound access at all — which
+  was its whole point, and that point is moot now that Tailscale is already here. It is
+  also blind to anything outside the image: compose and env changes pass it by.
+- **The same, plus a push trigger** — the Actions runner joins the tailnet and calls
+  Watchtower's HTTP API, so the deploy starts the second the image is pushed. Nothing is
+  exposed publicly, but it costs an extra daemon, an ephemeral-node auth key in repo
+  secrets and a tailnet ACL scoped to that port. A pushed trigger is also one-shot: missed
+  while the PC sleeps unless slow polling stays on as a fallback
+  (`--http-api-periodic-polls`).
+
 ## CI
 
 - `.github/workflows/frontend-ci.yml`: `npm ci`, lint, build.
@@ -163,6 +190,9 @@ in Docker, API, worker (as needed), frontend.
 - [ ] **CD**: `push to main → build + lint + test → green → curl the Render Deploy Hook`.
       Not Render auto-deploy — it would ship a broken build, it knows nothing about
       tests. Deploy Hook URL in repo secrets.
+- [ ] **CD for the worker**: `push to main` → the new image is live on the home PC without
+      a manual `run-worker.ps1`. Mechanism decided (self-hosted runner — see "Worker → home
+      PC"), not built. Order still applies: API (migrations) first, worker second.
 - [ ] Separate pipeline for the frontend on Cloudflare Pages, if it stops being served
       from ASP.NET.
 - [ ] If the frontend and API ever move to different addresses — allowed origins from

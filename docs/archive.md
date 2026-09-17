@@ -304,3 +304,18 @@ not just compiled.
   separate from `IAssetStorage`, `HeadObject` before signing, size check in `confirm`,
   `409` on repeat `confirm`. Verified with `curl` and by click in the browser locally.
 - CI: `frontend-ci.yml` and `backend-ci.yml`, both green.
+- Photo analysis: bare person/location/event lists replaced with collapsible "Known
+  Persons / Locations / Events" subsections (`LocationResponse` now carries
+  `referencePhotos`); owner-verified in the browser, incl. full-photo (uncropped)
+  thumbnails for locations and events.
+- Face re-score: confirming a person now queues `RescoreFaces`, which re-ranks unreviewed faces
+  against the current references without re-detecting them, and writes a row only for the people
+  whose score moved by 3% or more. The review picker lists every ranked person with a coloured
+  match percent. Verified in the browser: a confirmation ran the job in ~1 s, the same face went
+  from 13% to 17% on two reference faces instead of one, and picking a person from the list stored
+  a `Corrected` decision.
+- Duplicate face detections: a requeued `AnalyzeFaces` re-detected the same photo and produced a second
+  review card per face (three photos affected). The handler now skips a photo that already has stored
+  faces; verified by requeuing a finished job, which came back `Skipped` with no new occurrence. The
+  existing duplicates were retired by superseding their candidates, not deleted.
+

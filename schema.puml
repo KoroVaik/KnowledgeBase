@@ -1,0 +1,164 @@
+@startuml schema
+' Generation-related entities and their direct links.
+' Scope: the AI generation pipeline (docs/ai-pipeline.md) - upload -> ProcessingJob ->
+' Note -> NoteLink/NoteTag -> Tag (+ hierarchy and merge suggestions).
+' Photo-archive analysis entities (docs/photo-archive.md) are deliberately out of scope.
+' Kept in sync with the code by the `sync-schema` skill (.agents/skills/sync-schema).
+' All entities live in one namespace; the inner groups are domain areas, not folders.
+hide empty members
+skinparam classAttributeIconSize 0
+
+package "KnowledgeBase.Core.Persistence" {
+
+  package "Jobs & assets" {
+    class AssetRecord {
+      Id : string
+      StoredFileName : string
+      OriginalFileName : string
+      ContentType : string
+      SizeBytes : long
+      UploadedAtUtc : DateTime
+      ContentSha256 : string?
+      CapturedAtUtc : DateTime?
+      Latitude : double?
+      Longitude : double?
+    }
+
+    class ProcessingJob {
+      Id : string
+      Kind : JobKind
+      AssetId : string?
+      Payload : string?
+      CreatedAtUtc : DateTime
+      Status : ProcessingStatus
+      Attempts : int
+      StartedAtUtc : DateTime?
+      CompletedAtUtc : DateTime?
+      Error : string?
+    }
+
+    enum JobKind {
+      BuildSourceNote
+      AnalyzeFaces
+      FingerprintAsset
+      AnalyzeScenes
+      AnalyzeSceneObservations
+      AnalyzeEventCandidates
+      BuildSynthesis
+      GroupTags
+      SuggestTagParents
+    }
+
+    enum ProcessingStatus {
+      Pending
+      Running
+      Done
+      Failed
+      Skipped
+    }
+  }
+
+  package "Notes" {
+    class Note {
+      Id : string
+      Kind : NoteKind
+      Title : string
+      Body : string
+      SourceAssetId : string?
+      SourceFileName : string?
+      SynthesisGroup : string?
+      CreatedAtUtc : DateTime
+      UpdatedAtUtc : DateTime
+      DeletedAtUtc : DateTime?
+    }
+
+    class NoteLink {
+      Id : string
+      SourceNoteId : string
+      TargetTitle : string
+      TargetNoteId : string?
+    }
+
+    class NoteTag {
+      NoteId : string
+      TagId : string
+      Ordinal : int
+    }
+
+    class SynthesisSource {
+      SynthesisNoteId : string
+      InputNoteId : string
+    }
+
+    enum NoteKind {
+      Source
+      Synthesis
+      Index
+    }
+  }
+
+  package "Tags" {
+    class Tag {
+      Id : string
+      Name : string
+      Confirmed : bool
+      SuggestedMergeIntoId : string?
+      SuggestedMergeConfidence : SuggestionConfidence?
+    }
+
+    class TagParent {
+      ChildId : string
+      ParentId : string
+    }
+
+    class TagParentSuggestion {
+      ChildId : string
+      ParentId : string
+      Dismissed : bool
+      DeclineCount : int
+      Confidence : SuggestionConfidence
+    }
+
+    enum SuggestionConfidence {
+      Low
+      Medium
+      High
+    }
+  }
+}
+
+' --- queue: a job points at the file it processes (null for aggregation jobs)
+ProcessingJob "1" --> "0..1" AssetRecord : AssetId
+ProcessingJob --> JobKind : Kind
+ProcessingJob --> ProcessingStatus : Status
+
+' --- note: one note per source file (null for Synthesis/Index notes)
+Note "0..1" --> "0..1" AssetRecord : SourceAssetId
+Note --> NoteKind : Kind
+
+' --- links: owned by the source note; target resolved later by title
+Note "1" *-- "0..*" NoteLink : SourceNoteId
+NoteLink "0..*" --> "0..1" Note : TargetNoteId
+
+' --- tags: owned by the note; Ordinal 0 is the primary tag
+Note "1" *-- "0..*" NoteTag : NoteId
+NoteTag "0..*" --> "1" Tag : TagId
+
+' --- synthesis provenance: which notes were merged into which synthesis note
+SynthesisSource "0..*" --> "0..1" Note : SynthesisNoteId
+SynthesisSource "0..*" --> "0..1" Note : InputNoteId
+
+' --- tag hierarchy: a DAG, not a tree - a tag may have several parents
+TagParent "0..*" --> "1" Tag : ChildId
+TagParent "0..*" --> "1" Tag : ParentId
+
+' --- merge suggestion: the model's closest-match offer, self-referencing
+Tag --> Tag : SuggestedMergeIntoId
+Tag --> "0..1" SuggestionConfidence : SuggestedMergeConfidence
+
+' --- parent suggestion: an AI-proposed TagParent, not yet a real link
+TagParentSuggestion "0..*" --> "1" Tag : ChildId
+TagParentSuggestion "0..*" --> "1" Tag : ParentId
+TagParentSuggestion --> SuggestionConfidence : Confidence
+
+@enduml

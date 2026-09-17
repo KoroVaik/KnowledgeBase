@@ -7,3 +7,6 @@ infra/worker/worker.env
 
 # Output of .claude/skills/generate-test-data.
 /test-data/
+
+# dotnet build outputs redirected away from bin/obj (running Api/Worker lock those).
+.dotnet-artifacts/

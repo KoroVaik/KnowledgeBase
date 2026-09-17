@@ -28,6 +28,7 @@ type Action =
   | { type: 'added'; items: QueuedItem[] }
   | { type: 'started'; id: string }
   | { type: 'progress'; id: string; fraction: number }
+  | { type: 'creep'; id: string }
   | { type: 'succeeded'; id: string }
   | { type: 'failed'; id: string; message: string }
   | { type: 'dismissed'; ids: string[] }
@@ -46,6 +47,19 @@ function reduce(items: QueuedItem[], action: Action): QueuedItem[] {
           ? { ...item, state: { status: 'uploading', progress: action.fraction } }
           : item,
       )
+    case 'creep':
+      // The confirm round-trip has no progress events of its own; creeping just under 100%
+      // is honest, while a bar parked at 100% reads as "finished" while the row still waits.
+      return items.map((item) => {
+        if (item.id !== action.id || item.state.status !== 'uploading') {
+          return item
+        }
+
+        const { progress } = item.state
+        const next = progress === null ? 0.9 : Math.min(0.99, progress + 0.015)
+
+        return { ...item, state: { status: 'uploading', progress: next } }
+      })
     case 'succeeded':
       return patch(items, action.id, { status: 'done' })
     case 'failed':
@@ -64,6 +78,33 @@ function patch(items: QueuedItem[], id: string, state: ItemState): QueuedItem[] 
 export function useUploadQueue(limits: UploadLimits, onUploaded: () => void) {
   const [items, dispatch] = useReducer(reduce, [])
 
+  // Finalize-phase creep timers per row; any terminal state (success, failure, dismiss)
+  // stops one, so a settled row never keeps ticking.
+  const creepTimers = useRef(new Map<string, number>())
+
+  const stopCreep = useCallback((id: string) => {
+    const timer = creepTimers.current.get(id)
+    if (timer !== undefined) {
+      window.clearInterval(timer)
+      creepTimers.current.delete(id)
+    }
+  }, [])
+
+  const startCreep = useCallback((id: string) => {
+    stopCreep(id)
+    creepTimers.current.set(id, window.setInterval(() => dispatch({ type: 'creep', id }), 300))
+  }, [stopCreep])
+
+  useEffect(() => {
+    const timers = creepTimers.current
+    return () => {
+      for (const timer of timers.values()) {
+        window.clearInterval(timer)
+      }
+      timers.clear()
+    }
+  }, [])
+
   // In a ref so the callbacks below stay stable - rebuilding them mid-upload would be a bug.
   const onUploadedRef = useRef(onUploaded)
   useEffect(() => {
@@ -72,22 +113,33 @@ export function useUploadQueue(limits: UploadLimits, onUploaded: () => void) {
 
   // Every file at once, no pool (single-user, tens of files). Launched here, not from an
   // effect: StrictMode runs effects twice in dev and would upload each file a second time.
-  const uploadNow = useCallback((targets: QueuedItem[]) => {
-    for (const target of targets) {
-      dispatch({ type: 'started', id: target.id })
+  const uploadNow = useCallback(
+    (targets: QueuedItem[]) => {
+      for (const target of targets) {
+        dispatch({ type: 'started', id: target.id })
 
-      void uploadAsset(target.file, (fraction) => {
-        dispatch({ type: 'progress', id: target.id, fraction })
-      })
-        .then(() => {
-          dispatch({ type: 'succeeded', id: target.id })
-          onUploadedRef.current()
+        void uploadAsset(target.file, (phase, fraction) => {
+          if (phase === 'transfer') {
+            // The last 10% of the bar belongs to the confirm round-trip, which has no
+            // progress events - the creep fills it once the bytes are in the bucket.
+            dispatch({ type: 'progress', id: target.id, fraction: fraction * 0.9 })
+          } else {
+            startCreep(target.id)
+          }
         })
-        .catch((error: unknown) => {
-          dispatch({ type: 'failed', id: target.id, message: messageOf(error) })
-        })
-    }
-  }, [])
+          .then(() => {
+            stopCreep(target.id)
+            dispatch({ type: 'succeeded', id: target.id })
+            onUploadedRef.current()
+          })
+          .catch((error: unknown) => {
+            stopCreep(target.id)
+            dispatch({ type: 'failed', id: target.id, message: messageOf(error) })
+          })
+      }
+    },
+    [startCreep, stopCreep],
+  )
 
   const { maxUploadBytes, maxSourceChars } = limits
 
@@ -101,11 +153,21 @@ export function useUploadQueue(limits: UploadLimits, onUploaded: () => void) {
     [maxUploadBytes, maxSourceChars, uploadNow],
   )
 
-  const dismiss = useCallback((ids: string[]) => {
-    dispatch({ type: 'dismissed', ids })
-  }, [])
+  const dismiss = useCallback(
+    (ids: string[]) => {
+      for (const id of ids) {
+        stopCreep(id)
+      }
+      dispatch({ type: 'dismissed', ids })
+    },
+    [stopCreep],
+  )
 
   const reset = useCallback(() => {
+    for (const timer of creepTimers.current.values()) {
+      window.clearInterval(timer)
+    }
+    creepTimers.current.clear()
     dispatch({ type: 'cleared' })
   }, [])
 

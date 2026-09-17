@@ -35,6 +35,31 @@ When a location suggestion is refreshed, only unreviewed candidates for that ass
 superseded. They remain in the audit trail; the review screen shows the newer run instead. A
 reviewed decision is never superseded or changed by a later analysis.
 
+### Face detection runs once per photo, whatever the queue does
+
+A worker that stops mid-job leaves the row in `Running`, and the next start requeues it. Detection has
+no memory of its own, so a second execution stored every face of that photo again and put it up for
+review twice - three photos in the local archive ended up with duplicate faces this way. `AnalyzeFaces`
+now skips an asset that already has stored face occurrences; refreshing a photo's identities is
+`RescoreFaces`' job, which re-ranks what is already detected instead of detecting again.
+
+### Face candidates cover every plausible person, and a re-score rewrites only what moved
+
+A face proposes every person whose best confirmed reference reaches 0.25, capped at twenty, plus its
+own top guess even when that falls below the floor - dropping the top guess would take the face out of
+review altogether. The picker beside a review item shows each of those scores, so a reviewer can pick
+the third-best person without losing what the model thought of them.
+
+`Rank` records where a candidate stood when it was computed, not the current order: one face's rows can
+come from several re-scores, so the live ranking is derived from the scores.
+
+A re-score writes a new row only for the people whose score moved by at least 0.03, and retires only the
+rows it replaced plus the people who dropped out of range. The comparison is against the stored score
+rather than the previous calculation, so a drift of one percent at a time still eventually crosses the
+threshold. Rewriting a face's whole candidate set whenever anything changed was the earlier behaviour;
+past a handful of people it turned every confirmation into a full rewrite of every open face, because a
+one-per-mille move at the bottom of the list counted as a change.
+
 ### The system improves from references before it retrains models
 
 Confirming a face adds a validated example to that person's reference set; confirming a
@@ -108,7 +133,8 @@ and a wrong suggestion can be rejected without losing the original model result.
 
 The first implementation uses local FaceONNX models: its embedded YOLOv5 face detector returns
 a bounding box and five landmarks, and its ResNet27 embedder produces a 512-value vector. Every
-image upload queues `AnalyzeFaces` independently from `BuildSourceNote`. The worker stores the
+image upload queues `FingerprintAsset` alongside `BuildSourceNote`; the fingerprint job then queues
+`AnalyzeFaces` and `AnalyzeScenes` for the canonical asset of the duplicate group. The worker stores the
 face occurrence and top-five cosine-similarity candidates per detected face. With no confirmed
 reference faces, it creates an explicit unknown candidate so the reviewer can create a person and
 correct the candidate to them. Accepting or correcting a face candidate creates a
@@ -177,6 +203,18 @@ usable.
 
 ## Open
 
+- [ ] **The job queue has no lease.** A claim is a plain status write, and a starting worker requeues
+      everything left in `Running` - including a job another worker is still executing. Harmless with one
+      worker, wrong with two (the local worker and the container one already exist side by side, against
+      different databases). A lease with an expiry would replace both the claim and the stuck-job reset.
+- [ ] **The picker's two grey notes are unverified.** `no reference faces` and `not ranked` were never
+      seen on screen: in the test archive every person already had a reference face, and the picker
+      only appears for low-confidence candidates, so the green end of the score colour scale was not
+      observed either. Re-check once a person without confirmed faces exists.
+- [ ] **Compute `ContentSha256` while the upload streams to storage.** Hashing is cheap and needs no
+      AI, but it goes through the FIFO job queue, so a new photo waits behind slow AI jobs before its
+      analysis can even be queued. Hashing in the upload stream would leave `FingerprintAsset` needed
+      only for the existing archive.
 - [ ] **Phase 2 — face-quality calibration.** Validate the detector confidence and similarity
       behaviour on a small manually labelled archive subset before introducing acceptance
       thresholds or any automatic decision.

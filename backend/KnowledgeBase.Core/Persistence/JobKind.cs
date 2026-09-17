@@ -13,6 +13,10 @@ public enum JobKind
     // Calculates an exact byte fingerprint before face analysis chooses one duplicate representative.
     FingerprintAsset,
 
+    // Re-score stored faces against the confirmed reference set after it changed. Detects nothing
+    // and reads no file; AssetId and Payload unused.
+    RescoreFaces,
+
     // Generate a CLIP scene vector and propose reviewed location candidates.
     AnalyzeScenes,
 

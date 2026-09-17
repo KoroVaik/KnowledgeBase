@@ -2,6 +2,7 @@ using KnowledgeBase.Api.Controllers.PhotoAnalysis.Contracts;
 using KnowledgeBase.Core.Persistence;
 using KnowledgeBase.Core.Pipeline;
 using KnowledgeBase.Core.Pipeline.EventClustering;
+using KnowledgeBase.Core.Pipeline.FaceAnalysis;
 using KnowledgeBase.Core.RealTime;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -30,10 +31,51 @@ public sealed class PhotoAnalysisController(KnowledgeBaseDbContext database, ICh
             .GroupBy(asset => asset.ContentSha256 ?? asset.Id)
             .Select(group => group.OrderBy(asset => asset.UploadedAtUtc).ThenBy(asset => asset.Id).First().Id)
             .ToHashSet();
-        var pendingCandidates = (await database.PhotoAnalysisCandidates
-            .Where(candidate => candidate.SupersededAtUtc == null && !database.PhotoAnalysisReviewDecisions.Any(decision => decision.CandidateId == candidate.Id))
-            .OrderBy(candidate => candidate.CreatedAtUtc).ThenBy(candidate => candidate.Rank)
-            .ToListAsync(cancellationToken)).Where(candidate => canonicalAssetIds.Contains(candidate.SubjectAssetId)).ToList();
+        // The worker stores one ranked guess per possible target - per detected face, and per photo for
+        // locations - but the reviewer decides about the face or the photo, not about each guess in turn.
+        // Only the best open guess per subject is offered here; the rest stay in the database as evidence.
+        // A face's guesses can come from several re-scores, so "best" means the highest score, not the
+        // newest run, and the stored Rank is history rather than the current order. A subject is done once
+        // its decision still stands: a confirmed reference face or location observation, or a rejection.
+        // Revoking a confirmation removes that reference, so the subject reappears with its reopened candidate.
+        var confirmedFaceOccurrenceIds = (await database.PersonReferenceFaces
+            .Select(reference => reference.FaceOccurrenceId).ToListAsync(cancellationToken)).ToHashSet();
+        var confirmedLocationAssetIds = (await database.LocationObservations
+            .Select(observation => observation.AssetId).ToListAsync(cancellationToken)).ToHashSet();
+        var rejectedSubjects = (await (
+            from candidate in database.PhotoAnalysisCandidates
+            join decision in database.PhotoAnalysisReviewDecisions on candidate.Id equals decision.CandidateId
+            where decision.Kind == PhotoAnalysisDecisionKind.Rejected || decision.Kind == PhotoAnalysisDecisionKind.Merged
+            select new { candidate.Kind, candidate.SubjectAssetId, candidate.SubjectFaceOccurrenceId }).ToListAsync(cancellationToken))
+            .Select(candidate => ReviewSubjectKey(candidate.Kind, candidate.SubjectAssetId, candidate.SubjectFaceOccurrenceId))
+            .ToHashSet();
+        var pendingSubjects = (await database.PhotoAnalysisCandidates
+            .Where(candidate => candidate.SupersededAtUtc == null
+                && !database.PhotoAnalysisReviewDecisions.Any(decision => decision.CandidateId == candidate.Id))
+            .ToListAsync(cancellationToken))
+            .Where(candidate => canonicalAssetIds.Contains(candidate.SubjectAssetId)
+                && (candidate.SubjectFaceOccurrenceId is null || !confirmedFaceOccurrenceIds.Contains(candidate.SubjectFaceOccurrenceId))
+                && (candidate.Kind != PhotoAnalysisCandidateKind.Location || !confirmedLocationAssetIds.Contains(candidate.SubjectAssetId))
+                && !rejectedSubjects.Contains(ReviewSubjectKey(candidate.Kind, candidate.SubjectAssetId, candidate.SubjectFaceOccurrenceId)))
+            .GroupBy(candidate => ReviewSubjectKey(candidate.Kind, candidate.SubjectAssetId, candidate.SubjectFaceOccurrenceId))
+            .Select(group =>
+            {
+                var best = group.OrderByDescending(candidate => candidate.Score).ThenByDescending(candidate => candidate.CreatedAtUtc).First();
+                // The weaker guesses are not separate review items, but they carry this subject's score for
+                // every other target - which is what the "choose existing" picker shows.
+                var matches = group
+                    .Where(candidate => candidate.ProposedTargetId is not null)
+                    .GroupBy(candidate => candidate.ProposedTargetId!)
+                    .Select(targetGroup => targetGroup.OrderByDescending(candidate => candidate.CreatedAtUtc).First())
+                    .OrderByDescending(candidate => candidate.Score)
+                    .Select(candidate => new PhotoAnalysisCandidateMatchResponse(candidate.ProposedTargetId!, candidate.Score))
+                    .ToList();
+                // Ordered by when the subject first came up for review, not by its newest row: a re-score
+                // must not shuffle the queue the reviewer is working through.
+                return (Best: best, Matches: matches, FirstSeenAtUtc: group.Min(candidate => candidate.CreatedAtUtc));
+            })
+            .OrderBy(subject => subject.FirstSeenAtUtc).ThenByDescending(subject => subject.Best.Score).ToList();
+        var pendingCandidates = pendingSubjects.Select(subject => subject.Best).ToList();
         var faceOccurrenceIds = pendingCandidates
             .Where(candidate => candidate.SubjectFaceOccurrenceId is not null)
             .Select(candidate => candidate.SubjectFaceOccurrenceId!)
@@ -67,36 +109,64 @@ public sealed class PhotoAnalysisController(KnowledgeBaseDbContext database, ICh
             job => job.Kind == JobKind.AnalyzeEventCandidates
                 && (job.Status == ProcessingStatus.Pending || job.Status == ProcessingStatus.Running), cancellationToken);
 
+        var referenceFaces = await database.PersonReferenceFaces.ToListAsync(cancellationToken);
+        var referenceFaceOccurrences = (await database.FaceOccurrences
+            .Where(occurrence => referenceFaces.Select(reference => reference.FaceOccurrenceId).Contains(occurrence.Id))
+            .ToListAsync(cancellationToken)).ToDictionary(occurrence => occurrence.Id);
+        var referenceFacesByPerson = referenceFaces
+            .Where(reference => referenceFaceOccurrences.TryGetValue(reference.FaceOccurrenceId, out var occurrence) && candidateAssets.ContainsKey(occurrence.AssetId))
+            .OrderByDescending(reference => reference.ConfirmedAtUtc)
+            .GroupBy(reference => reference.PersonId)
+            .ToDictionary(group => group.Key, group => group.ToList());
+
         var personCounts = eventPeople.GroupBy(link => link.PersonId).ToDictionary(group => group.Key, group => group.Count());
         var locationCounts = events.Where(@event => @event.LocationId is not null).GroupBy(@event => @event.LocationId!).ToDictionary(group => group.Key, group => group.Count());
-        var locationPhotoCounts = (await database.LocationObservations.ToListAsync(cancellationToken))
+        var locationObservations = await database.LocationObservations.ToListAsync(cancellationToken);
+        var locationPhotoCounts = locationObservations
             .GroupBy(observation => observation.LocationId).ToDictionary(group => group.Key, group => group.Count());
+        var referencePhotosByLocation = locationObservations
+            .Where(observation => candidateAssets.ContainsKey(observation.AssetId))
+            .OrderByDescending(observation => observation.ConfirmedAtUtc)
+            .GroupBy(observation => observation.LocationId)
+            .ToDictionary(group => group.Key, group => group.Select(observation =>
+                new LocationReferencePhotoResponse(observation.AssetId, candidateAssets[observation.AssetId].OriginalFileName, observation.ConfirmedAtUtc)).ToList());
         var locationsById = locations.ToDictionary(location => location.Id);
 
         return Ok(new PhotoAnalysisResponse(
-            people.Select(person => new PersonResponse(person.Id, person.Name, personCounts.GetValueOrDefault(person.Id))).ToList(),
-            locations.Select(location => new LocationResponse(location.Id, location.Name, location.Kind.ToString(), locationCounts.GetValueOrDefault(location.Id), locationPhotoCounts.GetValueOrDefault(location.Id))).ToList(),
+            people.Select(person => new PersonResponse(
+                person.Id, person.Name, personCounts.GetValueOrDefault(person.Id),
+                referenceFacesByPerson.GetValueOrDefault(person.Id, [])
+                    .Select(reference =>
+                    {
+                        var occurrence = referenceFaceOccurrences[reference.FaceOccurrenceId];
+                        return new PersonReferenceFaceResponse(
+                            reference.FaceOccurrenceId, occurrence.AssetId, candidateAssets[occurrence.AssetId].OriginalFileName,
+                            new FaceBoundsResponse(occurrence.X, occurrence.Y, occurrence.Width, occurrence.Height),
+                            reference.ConfirmedAtUtc);
+                    }).ToList())).ToList(),
+            locations.Select(location => new LocationResponse(location.Id, location.Name, location.Kind.ToString(), locationCounts.GetValueOrDefault(location.Id), locationPhotoCounts.GetValueOrDefault(location.Id), referencePhotosByLocation.GetValueOrDefault(location.Id, []))).ToList(),
             events.Select(@event => new ArchiveEventResponse(
                 @event.Id, @event.Title, @event.OccurredOn, @event.LocationId,
                 @event.LocationId is { } locationId ? locationsById.GetValueOrDefault(locationId)?.Name : null,
                 eventPeople.Where(link => link.EventId == @event.Id).Select(link => link.PersonId).ToList(),
                 eventPhotos.Where(link => link.EventId == @event.Id).Select(link => link.AssetId).ToList())).ToList(),
-            pendingCandidates.Select(candidate => new PhotoAnalysisCandidateResponse(
-                candidate.Id,
-                candidate.Kind.ToString(),
-                candidate.SubjectAssetId,
-                candidateAssets.GetValueOrDefault(candidate.SubjectAssetId)?.OriginalFileName ?? "Deleted photo",
-                candidate.SubjectFaceOccurrenceId,
-                candidate.ProposedTargetId,
-                CandidateTargetName(candidate, people, locations, events),
-                candidate.ProposedLabel,
-                candidate.Rank,
-                candidate.Score,
-                candidate.SignalsJson,
-                candidate.RunId,
-                candidate.SubjectFaceOccurrenceId is { } faceOccurrenceId
+            pendingSubjects.Select(subject => new PhotoAnalysisCandidateResponse(
+                subject.Best.Id,
+                subject.Best.Kind.ToString(),
+                subject.Best.SubjectAssetId,
+                candidateAssets.GetValueOrDefault(subject.Best.SubjectAssetId)?.OriginalFileName ?? "Deleted photo",
+                subject.Best.SubjectFaceOccurrenceId,
+                subject.Best.ProposedTargetId,
+                CandidateTargetName(subject.Best, people, locations, events),
+                subject.Best.ProposedLabel,
+                subject.Best.Rank,
+                subject.Best.Score,
+                subject.Best.SignalsJson,
+                subject.Best.RunId,
+                subject.Best.SubjectFaceOccurrenceId is { } faceOccurrenceId
                     ? faceBoundsByOccurrenceId.GetValueOrDefault(faceOccurrenceId)
-                    : null)).ToList(),
+                    : null,
+                subject.Matches)).ToList(),
             pendingSceneObservations.Select(observation => new SceneObservationResponse(
                 observation.Id, observation.AssetId,
                 candidateAssets.GetValueOrDefault(observation.AssetId)?.OriginalFileName ?? "Deleted photo",
@@ -128,7 +198,25 @@ public sealed class PhotoAnalysisController(KnowledgeBaseDbContext database, ICh
         database.People.Add(person);
         await database.SaveChangesAsync(cancellationToken);
         notifier.Publish(new ChangeEvent(ChangeResources.PhotoAnalysis, ChangeActions.Updated));
-        return Created(string.Empty, new PersonResponse(person.Id, person.Name, 0));
+        return Created(string.Empty, new PersonResponse(person.Id, person.Name, 0, []));
+    }
+
+    /// <summary>Undoes an accepted/corrected face candidate by removing the reference face it created and
+    /// re-opening the same proposal for review - the original decision stays untouched, so the audit trail
+    /// of what was decided (and now revoked) is preserved.</summary>
+    [HttpDelete("people/{personId}/reference-faces/{faceOccurrenceId}")]
+    public async Task<ActionResult> RevokeReferenceFace(string personId, string faceOccurrenceId, CancellationToken cancellationToken)
+    {
+        var reference = await database.PersonReferenceFaces.SingleOrDefaultAsync(
+            item => item.PersonId == personId && item.FaceOccurrenceId == faceOccurrenceId, cancellationToken);
+        if (reference is null) return NotFound();
+
+        database.PersonReferenceFaces.Remove(reference);
+        await ReopenReviewedCandidate(reference.SourceDecisionId, cancellationToken);
+        await FaceRescoreQueue.EnqueueAsync(database, cancellationToken);
+        await database.SaveChangesAsync(cancellationToken);
+        notifier.Publish(new ChangeEvent(ChangeResources.PhotoAnalysis, ChangeActions.Updated));
+        return NoContent();
     }
 
     [HttpPost("locations")]
@@ -144,7 +232,23 @@ public sealed class PhotoAnalysisController(KnowledgeBaseDbContext database, ICh
         database.Locations.Add(location);
         await database.SaveChangesAsync(cancellationToken);
         notifier.Publish(new ChangeEvent(ChangeResources.PhotoAnalysis, ChangeActions.Updated));
-        return Created(string.Empty, new LocationResponse(location.Id, location.Name, location.Kind.ToString(), 0, 0));
+        return Created(string.Empty, new LocationResponse(location.Id, location.Name, location.Kind.ToString(), 0, 0, []));
+    }
+
+    /// <summary>Undoes an accepted/corrected location candidate by removing the observation it created and
+    /// re-opening the same proposal for review; the original decision stays in the audit trail.</summary>
+    [HttpDelete("locations/{locationId}/reference-photos/{assetId}")]
+    public async Task<ActionResult> RevokeLocationPhoto(string locationId, string assetId, CancellationToken cancellationToken)
+    {
+        var observation = await database.LocationObservations.SingleOrDefaultAsync(
+            item => item.LocationId == locationId && item.AssetId == assetId, cancellationToken);
+        if (observation is null) return NotFound();
+
+        database.LocationObservations.Remove(observation);
+        await ReopenReviewedCandidate(observation.SourceDecisionId, cancellationToken);
+        await database.SaveChangesAsync(cancellationToken);
+        notifier.Publish(new ChangeEvent(ChangeResources.PhotoAnalysis, ChangeActions.Updated));
+        return NoContent();
     }
 
     [HttpPost("events")]
@@ -165,6 +269,22 @@ public sealed class PhotoAnalysisController(KnowledgeBaseDbContext database, ICh
         await database.SaveChangesAsync(cancellationToken);
         notifier.Publish(new ChangeEvent(ChangeResources.PhotoAnalysis, ChangeActions.Updated));
         return Created(string.Empty, new ArchiveEventResponse(@event.Id, @event.Title, @event.OccurredOn, @event.LocationId, null, personIds, assetIds));
+    }
+
+    /// <summary>Detaches one photo from a curated event. Unlike a person or location reference, an event photo
+    /// carries no link back to a candidate (an event is assembled by hand, or from a whole cluster at once),
+    /// so nothing is re-opened for review.</summary>
+    [HttpDelete("events/{eventId}/photos/{assetId}")]
+    public async Task<ActionResult> DetachEventPhoto(string eventId, string assetId, CancellationToken cancellationToken)
+    {
+        var photo = await database.ArchiveEventPhotos.SingleOrDefaultAsync(
+            item => item.EventId == eventId && item.AssetId == assetId, cancellationToken);
+        if (photo is null) return NotFound();
+
+        database.ArchiveEventPhotos.Remove(photo);
+        await database.SaveChangesAsync(cancellationToken);
+        notifier.Publish(new ChangeEvent(ChangeResources.PhotoAnalysis, ChangeActions.Updated));
+        return NoContent();
     }
 
     /// <summary>Queues face analysis for existing images, first fingerprinting them to skip exact duplicate bytes.</summary>
@@ -273,7 +393,8 @@ public sealed class PhotoAnalysisController(KnowledgeBaseDbContext database, ICh
         return Accepted(new EventAnalysisBatchResponse(fingerprintsQueued, eventAnalysisQueued));
     }
 
-    /// <summary>Records the user's final review of one model candidate without changing the original model evidence.</summary>
+    /// <summary>Records the user's final review of one model candidate without changing the original model evidence.
+    /// The subject is settled by that one answer, so its other pending proposals are superseded rather than left in review.</summary>
     [HttpPost("candidates/{candidateId}/decisions")]
     public async Task<ActionResult<PhotoAnalysisReviewDecisionResponse>> CreateReviewDecision(string candidateId, [FromBody] CreatePhotoAnalysisReviewDecisionRequest request, CancellationToken cancellationToken)
     {
@@ -319,6 +440,7 @@ public sealed class PhotoAnalysisController(KnowledgeBaseDbContext database, ICh
                 PersonId = chosenTargetId!, FaceOccurrenceId = candidate.SubjectFaceOccurrenceId,
                 SourceDecisionId = decision.Id, ConfirmedAtUtc = decision.DecidedAtUtc
             });
+            await FaceRescoreQueue.EnqueueAsync(database, cancellationToken);
         }
         if (candidate.Kind == PhotoAnalysisCandidateKind.Location
             && visualEmbedding is not null)
@@ -329,6 +451,7 @@ public sealed class PhotoAnalysisController(KnowledgeBaseDbContext database, ICh
                 VisualEmbeddingId = visualEmbedding.Id, SourceDecisionId = decision.Id, ConfirmedAtUtc = decision.DecidedAtUtc
             });
         }
+        await SupersedeSiblingCandidates(candidate, decision.DecidedAtUtc, cancellationToken);
         await database.SaveChangesAsync(cancellationToken);
         notifier.Publish(new ChangeEvent(ChangeResources.PhotoAnalysis, ChangeActions.Updated));
         return Created(string.Empty, new PhotoAnalysisReviewDecisionResponse(decision.Id, decision.CandidateId, decision.Kind.ToString(), decision.ChosenTargetId, decision.Note, decision.DecidedAtUtc));
@@ -406,6 +529,46 @@ public sealed class PhotoAnalysisController(KnowledgeBaseDbContext database, ICh
         await database.SaveChangesAsync(cancellationToken);
         notifier.Publish(new ChangeEvent(ChangeResources.PhotoAnalysis, ChangeActions.Updated));
         return Created(string.Empty, null);
+    }
+
+    /// <summary>Copies the candidate behind a decision into a fresh unreviewed one, so the same proposal returns
+    /// to the review queue. A candidate can only ever carry one decision, so re-deciding needs a new row.</summary>
+    // What one review decision covers: a single detected face, or a single photo for a location or event
+    // proposal. The lower-ranked alternatives share that subject, so they are the same decision, not a new one.
+    private static string ReviewSubjectKey(PhotoAnalysisCandidateKind kind, string subjectAssetId, string? subjectFaceOccurrenceId) =>
+        $"{kind}:{subjectFaceOccurrenceId ?? subjectAssetId}";
+
+    // The reviewer answers about a face or a photo, not about each of its five ranked proposals:
+    // one decision closes the rest, which stay in the audit trail as superseded. A proposal that
+    // already carries its own decision is never touched.
+    private async Task SupersedeSiblingCandidates(PhotoAnalysisCandidate decided, DateTime supersededAtUtc, CancellationToken cancellationToken)
+    {
+        var faceOccurrenceId = decided.SubjectFaceOccurrenceId;
+        var siblings = faceOccurrenceId is not null
+            ? database.PhotoAnalysisCandidates.Where(item => item.SubjectFaceOccurrenceId == faceOccurrenceId)
+            : database.PhotoAnalysisCandidates.Where(item => item.Kind == decided.Kind && item.SubjectAssetId == decided.SubjectAssetId && item.RunId == decided.RunId);
+
+        foreach (var sibling in await siblings
+            .Where(item => item.Id != decided.Id && item.SupersededAtUtc == null
+                && !database.PhotoAnalysisReviewDecisions.Any(decision => decision.CandidateId == item.Id))
+            .ToListAsync(cancellationToken))
+        {
+            sibling.SupersededAtUtc = supersededAtUtc;
+        }
+    }
+
+    private async Task ReopenReviewedCandidate(string decisionId, CancellationToken cancellationToken)
+    {
+        var decision = await database.PhotoAnalysisReviewDecisions.SingleAsync(item => item.Id == decisionId, cancellationToken);
+        var original = await database.PhotoAnalysisCandidates.SingleAsync(item => item.Id == decision.CandidateId, cancellationToken);
+        database.PhotoAnalysisCandidates.Add(new PhotoAnalysisCandidate
+        {
+            Id = Guid.NewGuid().ToString("N"), RunId = original.RunId, Kind = original.Kind,
+            SubjectAssetId = original.SubjectAssetId, SubjectFaceOccurrenceId = original.SubjectFaceOccurrenceId,
+            ProposedTargetId = original.ProposedTargetId, ProposedLabel = original.ProposedLabel,
+            Rank = original.Rank, Score = original.Score, SignalsJson = original.SignalsJson,
+            CreatedAtUtc = DateTime.UtcNow
+        });
     }
 
     private async Task<bool> TargetExists(PhotoAnalysisCandidateKind kind, string targetId, CancellationToken cancellationToken) => kind switch

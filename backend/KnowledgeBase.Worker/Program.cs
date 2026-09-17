@@ -43,6 +43,7 @@ builder.Services.AddSingleton<IFaceAnalyzer, FaceOnnxFaceAnalyzer>();
 builder.Services.AddSingleton<ISceneEmbedder, ClipSceneEmbedder>();
 builder.Services.AddScoped<IPipelineHandler, FaceAnalysisHandler>();
 builder.Services.AddScoped<IPipelineHandler, AssetFingerprintHandler>();
+builder.Services.AddScoped<IPipelineHandler, FaceRescoreHandler>();
 builder.Services.AddScoped<IPipelineHandler, SceneAnalysisHandler>();
 builder.Services.AddScoped<IPipelineHandler, SceneObservationHandler>();
 builder.Services.AddScoped<IPipelineHandler, EventCandidateHandler>();

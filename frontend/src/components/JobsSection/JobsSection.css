@@ -27,60 +27,6 @@
   overflow-wrap: anywhere;
 }
 
-.job-hint {
-  position: relative;
-  display: inline-block;
-  margin-inline: 6px 2px;
-  vertical-align: 1px;
-}
-
-.job-hint-icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 16px;
-  height: 16px;
-  padding: 0;
-  font: italic 600 11px/1 var(--sans);
-  color: var(--text-muted);
-  background: transparent;
-  border: 1px solid currentColor;
-  border-radius: 50%;
-  cursor: help;
-}
-
-.job-hint-icon:hover,
-.job-hint-icon:focus-visible,
-.job-hint-icon[aria-expanded='true'] {
-  color: var(--accent);
-}
-
-.job-hint-tooltip {
-  position: absolute;
-  top: calc(100% + 6px);
-  left: -8px;
-  z-index: 10;
-  width: max-content;
-  max-width: min(280px, 70vw);
-  padding: 6px 10px;
-  font: 13px/145% var(--sans);
-  color: var(--text-h);
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  box-shadow: var(--shadow);
-  visibility: hidden;
-  opacity: 0;
-  transition: opacity 0.12s;
-}
-
-.job-hint:hover .job-hint-tooltip,
-.job-hint-icon:focus-visible + .job-hint-tooltip,
-.job-hint-tooltip-open {
-  visibility: visible;
-  opacity: 1;
-}
-
 .job-meta {
   margin-top: 2px;
   font-size: 14px;

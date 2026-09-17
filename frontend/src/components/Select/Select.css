@@ -1,0 +1,58 @@
+.select-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+}
+
+.select-trigger .select-placeholder {
+  color: var(--text-muted);
+}
+
+.select-caret {
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+.select-panel {
+  min-width: 160px;
+}
+
+.select-options {
+  display: grid;
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.select-option {
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: 6px 8px;
+  font-size: 12px;
+  color: var(--text);
+  text-align: left;
+  background: none;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.select-option:hover,
+.select-option:focus-visible {
+  background: var(--surface-2);
+}
+
+.select-option-clear {
+  color: var(--text-muted);
+}
+
+.select-empty {
+  padding: 6px 8px;
+  font-size: 11px;
+  color: var(--text-muted);
+}

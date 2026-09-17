@@ -61,6 +61,11 @@ cleanup or refactoring (AGENTS.md's "one iteration, one scope" applies even more
 for new work). If the real fix needs a wider change than expected, say so and confirm
 before widening it, rather than layering a workaround to stay small.
 
+Fix it once, in the generic place: if the same bug lives in duplicated logic, fix it by
+reusing or extracting a shared helper/component rather than patching each copy — that
+keeps the same bug from resurfacing in the copy you didn't touch. Don't layer a workaround
+(костиль) that silences the symptom in one spot when the clean fix is comparable effort.
+
 Comment only where the fix itself is non-obvious (e.g. why this was broken, if a future
 reader would otherwise "fix" it back) — see AGENTS.md's Comment policy.
 
@@ -71,8 +76,12 @@ cd frontend && npm run build && npm run lint
 ```
 
 ```bash
-dotnet build backend/KnowledgeBase.sln
+dotnet build backend/KnowledgeBase.sln --artifacts-path .dotnet-artifacts
 ```
+
+Always use `--artifacts-path`: a locally running Api/Worker locks its own
+`bin` DLLs, and a plain `dotnet build` then fails on file-copy errors that
+look like broken code (folder is gitignored).
 
 Fix what they surface before moving on.
 

@@ -24,6 +24,15 @@
   background: var(--text-h);
 }
 
+/* A settled row keeps its full bar, in the ok colour, so "Uploaded" reads at a glance. */
+.upload-progress-done::-webkit-progress-value {
+  background: var(--ok);
+}
+
+.upload-progress-done::-moz-progress-bar {
+  background: var(--ok);
+}
+
 /* The dialog sits in the browser's top layer, so it is positioned against the viewport and
    owes nothing to the layout it is nested in. Only its own size needs saying. */
 .queue-dialog {

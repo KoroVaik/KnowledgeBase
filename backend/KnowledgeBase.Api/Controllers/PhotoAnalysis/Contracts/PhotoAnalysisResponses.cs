@@ -12,8 +12,10 @@ public sealed record PhotoAnalysisResponse(
     ObservationAnalysisStatusResponse ObservationAnalysisStatus,
     EventAnalysisStatusResponse EventAnalysisStatus);
 
-public sealed record PersonResponse(string Id, string Name, int EventCount);
-public sealed record LocationResponse(string Id, string Name, string Kind, int EventCount, int ConfirmedPhotoCount);
+public sealed record PersonResponse(string Id, string Name, int EventCount, IReadOnlyList<PersonReferenceFaceResponse> ReferenceFaces);
+public sealed record PersonReferenceFaceResponse(string Id, string AssetId, string AssetName, FaceBoundsResponse FaceBounds, DateTime ConfirmedAtUtc);
+public sealed record LocationReferencePhotoResponse(string AssetId, string AssetName, DateTime ConfirmedAtUtc);
+public sealed record LocationResponse(string Id, string Name, string Kind, int EventCount, int ConfirmedPhotoCount, IReadOnlyList<LocationReferencePhotoResponse> ReferencePhotos);
 public sealed record ArchiveEventResponse(
     string Id,
     string Title,
@@ -36,7 +38,11 @@ public sealed record PhotoAnalysisCandidateResponse(
     double Score,
     string SignalsJson,
     string RunId,
-    FaceBoundsResponse? FaceBounds);
+    FaceBoundsResponse? FaceBounds,
+    IReadOnlyList<PhotoAnalysisCandidateMatchResponse> Matches);
+
+/// <summary>What this subject scored against one target in the same run, for every ranked target - not only the best one.</summary>
+public sealed record PhotoAnalysisCandidateMatchResponse(string TargetId, double Score);
 
 public sealed record FaceBoundsResponse(int X, int Y, int Width, int Height);
 

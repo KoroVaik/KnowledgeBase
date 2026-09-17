@@ -32,6 +32,12 @@ public sealed class FaceAnalysisHandler(KnowledgeBaseDbContext database, IAssetC
                 throw new SkippableContentException("This image is an exact duplicate of an earlier archive asset.");
         }
 
+        // A job left Running by a stopped worker is requeued on the next start, and detection has no
+        // memory of its own: running it twice would store every face of this photo a second time and
+        // put it up for review twice. Re-ranking against new references is RescoreFaces' job.
+        if (await database.FaceOccurrences.AnyAsync(occurrence => occurrence.AssetId == asset.Id, cancellationToken))
+            throw new SkippableContentException("This image already has face occurrences from an earlier analysis run.");
+
         var faces = await analyzer.AnalyzeAsync(await reader.ReadBytesAsync(asset.StoredFileName, cancellationToken), cancellationToken);
         var now = DateTime.UtcNow;
         var run = new PhotoAnalysisRun
@@ -45,7 +51,7 @@ public sealed class FaceAnalysisHandler(KnowledgeBaseDbContext database, IAssetC
             from reference in database.PersonReferenceFaces
             join occurrence in database.FaceOccurrences on reference.FaceOccurrenceId equals occurrence.Id
             join person in database.People on reference.PersonId equals person.Id
-            select new { PersonId = person.Id, person.Name, FaceOccurrenceId = occurrence.Id, occurrence.Embedding }).ToListAsync(cancellationToken);
+            select new PersonReferenceEmbedding(person.Id, person.Name, occurrence.Id, occurrence.Embedding)).ToListAsync(cancellationToken);
 
         foreach (var face in faces)
         {
@@ -57,41 +63,9 @@ public sealed class FaceAnalysisHandler(KnowledgeBaseDbContext database, IAssetC
                 Embedding = face.Embedding, CreatedAtUtc = now
             };
             database.FaceOccurrences.Add(occurrence);
-
-            var ranked = references
-                .GroupBy(reference => new { reference.PersonId, reference.Name })
-                .Select(group => new { group.Key.PersonId, group.Key.Name, Best = group.OrderByDescending(reference => CosineSimilarity(face.Embedding, reference.Embedding)).First() })
-                .Select(item => new { item.PersonId, item.Name, Score = CosineSimilarity(face.Embedding, item.Best.Embedding), item.Best.FaceOccurrenceId })
-                .OrderByDescending(item => item.Score).Take(5).ToList();
-
-            if (ranked.Count == 0)
-            {
-                database.PhotoAnalysisCandidates.Add(CreateCandidate(occurrence, 1, 0, null, "Unknown face — add a person, then correct this candidate.", JsonSerializer.Serialize(new { detectionScore = face.DetectionScore, referenceCount = 0 })));
-                continue;
-            }
-
-            for (var index = 0; index < ranked.Count; index++)
-            {
-                var candidate = ranked[index];
-                database.PhotoAnalysisCandidates.Add(CreateCandidate(occurrence, index + 1, candidate.Score, candidate.PersonId, candidate.Name, JsonSerializer.Serialize(new { metric = "cosine", referenceFaceId = candidate.FaceOccurrenceId, detectionScore = face.DetectionScore, referenceCount = references.Count(reference => reference.PersonId == candidate.PersonId) })));
-            }
+            database.PhotoAnalysisCandidates.AddRange(FaceCandidateRanking.For(run.Id, occurrence, references, now));
         }
 
         return null;
-    }
-
-    private static PhotoAnalysisCandidate CreateCandidate(FaceOccurrence occurrence, int rank, double score, string? personId, string label, string signalsJson) => new()
-    {
-        Id = Guid.NewGuid().ToString("N"), RunId = occurrence.RunId, Kind = PhotoAnalysisCandidateKind.Person,
-        SubjectAssetId = occurrence.AssetId, SubjectFaceOccurrenceId = occurrence.Id, ProposedTargetId = personId,
-        ProposedLabel = label, Rank = rank, Score = score, SignalsJson = signalsJson, CreatedAtUtc = occurrence.CreatedAtUtc
-    };
-
-    private static double CosineSimilarity(float[] left, float[] right)
-    {
-        if (left.Length != right.Length) throw new InvalidOperationException("Face embeddings from different models cannot be compared.");
-        double dot = 0, leftLength = 0, rightLength = 0;
-        for (var index = 0; index < left.Length; index++) { dot += left[index] * right[index]; leftLength += left[index] * left[index]; rightLength += right[index] * right[index]; }
-        return leftLength == 0 || rightLength == 0 ? 0 : dot / Math.Sqrt(leftLength * rightLength);
     }
 }

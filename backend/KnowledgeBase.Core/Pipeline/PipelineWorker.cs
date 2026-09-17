@@ -112,7 +112,7 @@ public sealed class PipelineWorker(
 
             var changeEvent = note is not null
                 ? new ChangeEvent(ChangeResources.Notes, ChangeActions.Created, note.Id)
-                : job.Kind is JobKind.AnalyzeFaces or JobKind.FingerprintAsset or JobKind.AnalyzeScenes or JobKind.AnalyzeSceneObservations or JobKind.AnalyzeEventCandidates
+                : job.Kind is JobKind.AnalyzeFaces or JobKind.RescoreFaces or JobKind.FingerprintAsset or JobKind.AnalyzeScenes or JobKind.AnalyzeSceneObservations or JobKind.AnalyzeEventCandidates
                     ? new ChangeEvent(ChangeResources.PhotoAnalysis, ChangeActions.Updated)
                     : new ChangeEvent(ChangeResources.Notes, ChangeActions.Updated);
 
@@ -133,7 +133,7 @@ public sealed class PipelineWorker(
             // Otherwise a job with nothing to do (e.g. no tag left to place) leaves the UI
             // waiting forever - it only ever hears about the Done path below.
             services.GetRequiredService<IChangeNotifier>()
-                .Publish(job.Kind is JobKind.AnalyzeFaces or JobKind.FingerprintAsset or JobKind.AnalyzeScenes or JobKind.AnalyzeSceneObservations or JobKind.AnalyzeEventCandidates
+                .Publish(job.Kind is JobKind.AnalyzeFaces or JobKind.RescoreFaces or JobKind.FingerprintAsset or JobKind.AnalyzeScenes or JobKind.AnalyzeSceneObservations or JobKind.AnalyzeEventCandidates
                     ? new ChangeEvent(ChangeResources.PhotoAnalysis, ChangeActions.Updated)
                     : new ChangeEvent(ChangeResources.Notes, ChangeActions.Updated));
         }
@@ -157,7 +157,7 @@ public sealed class PipelineWorker(
             if (giveUp)
             {
                 services.GetRequiredService<IChangeNotifier>()
-                    .Publish(job.Kind is JobKind.AnalyzeFaces or JobKind.FingerprintAsset or JobKind.AnalyzeScenes or JobKind.AnalyzeSceneObservations or JobKind.AnalyzeEventCandidates
+                    .Publish(job.Kind is JobKind.AnalyzeFaces or JobKind.RescoreFaces or JobKind.FingerprintAsset or JobKind.AnalyzeScenes or JobKind.AnalyzeSceneObservations or JobKind.AnalyzeEventCandidates
                         ? new ChangeEvent(ChangeResources.PhotoAnalysis, ChangeActions.Updated)
                         : new ChangeEvent(ChangeResources.Notes, ChangeActions.Updated));
             }
@@ -181,12 +181,14 @@ public sealed class PipelineWorker(
             // FOR UPDATE SKIP LOCKED: a second worker steps over this row; the lock holds until
             // the Running flip commits. Raw SQL - EF has no expression for it - and materialised
             // as-is so EF adds no composing subquery.
+            // Fingerprints first: they take milliseconds and no model, and every photo job behind
+            // them waits on the hash, so FIFO alone would park a new upload behind a slow AI run.
             var claimed = await database.ProcessingJobs
                 .FromSqlRaw(
                     """
                     SELECT * FROM "ProcessingJobs"
                     WHERE "Status" = 'Pending'
-                    ORDER BY "CreatedAtUtc"
+                    ORDER BY "Kind" = 'FingerprintAsset' DESC, "CreatedAtUtc"
                     LIMIT 1
                     FOR UPDATE SKIP LOCKED
                     """)
