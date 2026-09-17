@@ -32,6 +32,8 @@ and job status together.
 - `GroupTags` → `TagGroupingHandler` (batch tag-merge suggestions; no `AssetId`, no
   payload — see *Tag grouping pass* below).
 - A new kind = a new handler class + a `JobKind` value. Nothing in the worker changes.
+- `AnalyzeFaces` is the first non-Ollama image handler. It bypasses the Ollama availability check;
+  its model provenance and candidates go to the photo-archive tables, not to a note.
 - Shared post-processing (the tag filter, link filter, dangling + inherited links) is
   `NoteWriter.CommitAsync`, used by both note-writing handlers.
 - **`HandleAsync` returns `Note?`**, not `Note` — `GroupTags` changes `Tag` rows directly
@@ -235,12 +237,10 @@ mid-string (`done_reason: "length"`). Fixed:
       phone photo, through `SourceNoteHandler`) landing correctly in `Assets.CapturedAtUtc`/
       `Latitude`/`Longitude` and showing up in the browser — a real photo's EXIF layout can
       differ from a hand-built one.
-- [ ] **Month-based history / synthesis.** The point of capturing EXIF dates: group Source
-      notes by `CapturedAtUtc` month (photos) the way `SynthesisHandler` already groups by
-      tag, and produce a narrative note per month. Needs a grouping axis beyond
-      `(Kind, SynthesisGroup)` by tag name — either a synthetic "group label" of
-      `yyyy-MM` or a genuinely new job kind. Not started; video support (Open above) would
-      feed the same grouping once it exists.
+- [ ] **Photo archive foundation before month-based synthesis.** Do not add a monthly
+      narrative over raw Source notes: people, locations and events need their own reviewed,
+      versioned archive records first. The phased plan is in [`photo-archive.md`](photo-archive.md);
+      narrative generation is its deliberately deferred phase 6.
 - [ ] **`GroupTags` unverified against a real vocabulary.** Written but never run against
       Ollama: whether one prompt with a large tag list still gets good matches (same
       "model pads/ignores instructions" risk as the item below), and what the right

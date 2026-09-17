@@ -22,6 +22,68 @@ namespace KnowledgeBase.Core.Persistence.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
+            modelBuilder.Entity("KnowledgeBase.Core.Persistence.ArchiveEvent", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("LocationId")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<DateOnly?>("OccurredOn")
+                        .HasColumnType("date");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("LocationId");
+
+                    b.ToTable("ArchiveEvents");
+                });
+
+            modelBuilder.Entity("KnowledgeBase.Core.Persistence.ArchiveEventPerson", b =>
+                {
+                    b.Property<string>("EventId")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("PersonId")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.HasKey("EventId", "PersonId");
+
+                    b.HasIndex("PersonId");
+
+                    b.ToTable("ArchiveEventPeople");
+                });
+
+            modelBuilder.Entity("KnowledgeBase.Core.Persistence.ArchiveEventPhoto", b =>
+                {
+                    b.Property<string>("EventId")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("AssetId")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.HasKey("EventId", "AssetId");
+
+                    b.HasIndex("AssetId");
+
+                    b.ToTable("ArchiveEventPhotos");
+                });
+
             modelBuilder.Entity("KnowledgeBase.Core.Persistence.AssetRecord", b =>
                 {
                     b.Property<string>("Id")
@@ -30,6 +92,10 @@ namespace KnowledgeBase.Core.Persistence.Migrations
 
                     b.Property<DateTime?>("CapturedAtUtc")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ContentSha256")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
 
                     b.Property<string>("ContentType")
                         .IsRequired()
@@ -60,10 +126,285 @@ namespace KnowledgeBase.Core.Persistence.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("ContentSha256");
+
                     b.HasIndex("StoredFileName")
                         .IsUnique();
 
                     b.ToTable("Assets");
+                });
+
+            modelBuilder.Entity("KnowledgeBase.Core.Persistence.EventCandidate", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("ClusterId")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<double>("Score")
+                        .HasColumnType("double precision");
+
+                    b.Property<DateOnly?>("SuggestedOccurredOn")
+                        .HasColumnType("date");
+
+                    b.Property<DateTime?>("SupersededAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ClusterId", "CreatedAtUtc")
+                        .IsUnique();
+
+                    b.HasIndex("SupersededAtUtc", "CreatedAtUtc");
+
+                    b.ToTable("EventCandidates");
+                });
+
+            modelBuilder.Entity("KnowledgeBase.Core.Persistence.EventCandidateReviewDecision", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("CandidateId")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("ChosenEventId")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<DateTime>("DecidedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<string>("SelectedAssetIdsJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CandidateId")
+                        .IsUnique();
+
+                    b.ToTable("EventCandidateReviewDecisions");
+                });
+
+            modelBuilder.Entity("KnowledgeBase.Core.Persistence.EventCluster", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("RunId")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<double>("Score")
+                        .HasColumnType("double precision");
+
+                    b.Property<string>("SignalsJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb");
+
+                    b.Property<DateTime?>("SupersededAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RunId", "Score");
+
+                    b.ToTable("EventClusters");
+                });
+
+            modelBuilder.Entity("KnowledgeBase.Core.Persistence.EventClusterPhoto", b =>
+                {
+                    b.Property<string>("ClusterId")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("AssetId")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.HasKey("ClusterId", "AssetId");
+
+                    b.HasIndex("AssetId");
+
+                    b.ToTable("EventClusterPhotos");
+                });
+
+            modelBuilder.Entity("KnowledgeBase.Core.Persistence.EventClusteringRun", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<DateTime>("CompletedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ConfigurationHash")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<string>("ModelKey")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("PipelineVersion")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CompletedAtUtc");
+
+                    b.ToTable("EventClusteringRuns");
+                });
+
+            modelBuilder.Entity("KnowledgeBase.Core.Persistence.FaceOccurrence", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("AssetId")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<double>("DetectionScore")
+                        .HasColumnType("double precision");
+
+                    b.Property<float[]>("Embedding")
+                        .IsRequired()
+                        .HasColumnType("real[]");
+
+                    b.Property<int>("Height")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("LandmarksJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb");
+
+                    b.Property<string>("RunId")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<int>("Width")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("X")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Y")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RunId");
+
+                    b.HasIndex("AssetId", "CreatedAtUtc");
+
+                    b.ToTable("FaceOccurrences");
+                });
+
+            modelBuilder.Entity("KnowledgeBase.Core.Persistence.Location", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Name", "Kind")
+                        .IsUnique();
+
+                    b.ToTable("Locations");
+                });
+
+            modelBuilder.Entity("KnowledgeBase.Core.Persistence.LocationObservation", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("AssetId")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<DateTime>("ConfirmedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("LocationId")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("SourceDecisionId")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("VisualEmbeddingId")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AssetId");
+
+                    b.HasIndex("LocationId");
+
+                    b.HasIndex("SourceDecisionId")
+                        .IsUnique();
+
+                    b.HasIndex("VisualEmbeddingId")
+                        .IsUnique();
+
+                    b.ToTable("LocationObservations");
                 });
 
             modelBuilder.Entity("KnowledgeBase.Core.Persistence.Note", b =>
@@ -174,6 +515,189 @@ namespace KnowledgeBase.Core.Persistence.Migrations
                     b.ToTable("NoteTags");
                 });
 
+            modelBuilder.Entity("KnowledgeBase.Core.Persistence.Person", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(160)
+                        .HasColumnType("character varying(160)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Name")
+                        .IsUnique();
+
+                    b.ToTable("People");
+                });
+
+            modelBuilder.Entity("KnowledgeBase.Core.Persistence.PersonReferenceFace", b =>
+                {
+                    b.Property<string>("FaceOccurrenceId")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<DateTime>("ConfirmedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("PersonId")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("SourceDecisionId")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.HasKey("FaceOccurrenceId");
+
+                    b.HasIndex("PersonId");
+
+                    b.HasIndex("SourceDecisionId");
+
+                    b.ToTable("PersonReferenceFaces");
+                });
+
+            modelBuilder.Entity("KnowledgeBase.Core.Persistence.PhotoAnalysisCandidate", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.Property<string>("ProposedLabel")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("ProposedTargetId")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<int>("Rank")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("RunId")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<double>("Score")
+                        .HasColumnType("double precision");
+
+                    b.Property<string>("SignalsJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb");
+
+                    b.Property<string>("SubjectAssetId")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("SubjectFaceOccurrenceId")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<DateTime?>("SupersededAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SubjectAssetId");
+
+                    b.HasIndex("SubjectFaceOccurrenceId");
+
+                    b.HasIndex("Kind", "SubjectAssetId", "SupersededAtUtc");
+
+                    b.HasIndex("RunId", "SubjectFaceOccurrenceId", "Kind", "Rank")
+                        .IsUnique();
+
+                    b.ToTable("PhotoAnalysisCandidates");
+                });
+
+            modelBuilder.Entity("KnowledgeBase.Core.Persistence.PhotoAnalysisReviewDecision", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("CandidateId")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("ChosenTargetId")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<DateTime>("DecidedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CandidateId", "DecidedAtUtc");
+
+                    b.ToTable("PhotoAnalysisReviewDecisions");
+                });
+
+            modelBuilder.Entity("KnowledgeBase.Core.Persistence.PhotoAnalysisRun", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("AssetId")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<DateTime>("CompletedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ConfigurationHash")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<string>("ModelKey")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("PipelineVersion")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AssetId", "CompletedAtUtc");
+
+                    b.ToTable("PhotoAnalysisRuns");
+                });
+
             modelBuilder.Entity("KnowledgeBase.Core.Persistence.ProcessingJob", b =>
                 {
                     b.Property<string>("Id")
@@ -215,13 +739,113 @@ namespace KnowledgeBase.Core.Persistence.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("AssetId")
+                    b.HasIndex("AssetId", "Kind")
                         .IsUnique()
                         .HasFilter("\"AssetId\" IS NOT NULL");
 
                     b.HasIndex("Status", "CreatedAtUtc");
 
                     b.ToTable("ProcessingJobs");
+                });
+
+            modelBuilder.Entity("KnowledgeBase.Core.Persistence.SceneObservation", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("AssetId")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<double>("Confidence")
+                        .HasColumnType("double precision");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<string>("Evidence")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.Property<string>("RelatedPersonId")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("RelatedPersonName")
+                        .HasMaxLength(160)
+                        .HasColumnType("character varying(160)");
+
+                    b.Property<string>("RunId")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("SubjectPersonId")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("SubjectPersonName")
+                        .HasMaxLength(160)
+                        .HasColumnType("character varying(160)");
+
+                    b.Property<DateTime?>("SupersededAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RelatedPersonId");
+
+                    b.HasIndex("RunId");
+
+                    b.HasIndex("SubjectPersonId");
+
+                    b.HasIndex("AssetId", "SupersededAtUtc");
+
+                    b.ToTable("SceneObservations");
+                });
+
+            modelBuilder.Entity("KnowledgeBase.Core.Persistence.SceneObservationReviewDecision", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<DateTime>("DecidedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<string>("ObservationId")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ObservationId")
+                        .IsUnique();
+
+                    b.ToTable("SceneObservationReviewDecisions");
                 });
 
             modelBuilder.Entity("KnowledgeBase.Core.Persistence.SynthesisSource", b =>
@@ -318,6 +942,39 @@ namespace KnowledgeBase.Core.Persistence.Migrations
                     b.ToTable("TagParentSuggestions");
                 });
 
+            modelBuilder.Entity("KnowledgeBase.Core.Persistence.VisualEmbedding", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("AssetId")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<float[]>("Embedding")
+                        .IsRequired()
+                        .HasColumnType("real[]");
+
+                    b.Property<string>("RunId")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RunId")
+                        .IsUnique();
+
+                    b.HasIndex("AssetId", "CreatedAtUtc");
+
+                    b.ToTable("VisualEmbeddings");
+                });
+
             modelBuilder.Entity("Microsoft.AspNetCore.DataProtection.EntityFrameworkCore.DataProtectionKey", b =>
                 {
                     b.Property<int>("Id")
@@ -335,6 +992,128 @@ namespace KnowledgeBase.Core.Persistence.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("DataProtectionKeys");
+                });
+
+            modelBuilder.Entity("KnowledgeBase.Core.Persistence.ArchiveEvent", b =>
+                {
+                    b.HasOne("KnowledgeBase.Core.Persistence.Location", null)
+                        .WithMany()
+                        .HasForeignKey("LocationId")
+                        .OnDelete(DeleteBehavior.SetNull);
+                });
+
+            modelBuilder.Entity("KnowledgeBase.Core.Persistence.ArchiveEventPerson", b =>
+                {
+                    b.HasOne("KnowledgeBase.Core.Persistence.ArchiveEvent", null)
+                        .WithMany()
+                        .HasForeignKey("EventId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("KnowledgeBase.Core.Persistence.Person", null)
+                        .WithMany()
+                        .HasForeignKey("PersonId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("KnowledgeBase.Core.Persistence.ArchiveEventPhoto", b =>
+                {
+                    b.HasOne("KnowledgeBase.Core.Persistence.AssetRecord", null)
+                        .WithMany()
+                        .HasForeignKey("AssetId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("KnowledgeBase.Core.Persistence.ArchiveEvent", null)
+                        .WithMany()
+                        .HasForeignKey("EventId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("KnowledgeBase.Core.Persistence.EventCandidate", b =>
+                {
+                    b.HasOne("KnowledgeBase.Core.Persistence.EventCluster", null)
+                        .WithMany()
+                        .HasForeignKey("ClusterId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("KnowledgeBase.Core.Persistence.EventCandidateReviewDecision", b =>
+                {
+                    b.HasOne("KnowledgeBase.Core.Persistence.EventCandidate", null)
+                        .WithMany()
+                        .HasForeignKey("CandidateId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("KnowledgeBase.Core.Persistence.EventCluster", b =>
+                {
+                    b.HasOne("KnowledgeBase.Core.Persistence.EventClusteringRun", null)
+                        .WithMany()
+                        .HasForeignKey("RunId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("KnowledgeBase.Core.Persistence.EventClusterPhoto", b =>
+                {
+                    b.HasOne("KnowledgeBase.Core.Persistence.AssetRecord", null)
+                        .WithMany()
+                        .HasForeignKey("AssetId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("KnowledgeBase.Core.Persistence.EventCluster", null)
+                        .WithMany()
+                        .HasForeignKey("ClusterId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("KnowledgeBase.Core.Persistence.FaceOccurrence", b =>
+                {
+                    b.HasOne("KnowledgeBase.Core.Persistence.AssetRecord", null)
+                        .WithMany()
+                        .HasForeignKey("AssetId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("KnowledgeBase.Core.Persistence.PhotoAnalysisRun", null)
+                        .WithMany()
+                        .HasForeignKey("RunId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("KnowledgeBase.Core.Persistence.LocationObservation", b =>
+                {
+                    b.HasOne("KnowledgeBase.Core.Persistence.AssetRecord", null)
+                        .WithMany()
+                        .HasForeignKey("AssetId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("KnowledgeBase.Core.Persistence.Location", null)
+                        .WithMany()
+                        .HasForeignKey("LocationId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("KnowledgeBase.Core.Persistence.PhotoAnalysisReviewDecision", null)
+                        .WithMany()
+                        .HasForeignKey("SourceDecisionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("KnowledgeBase.Core.Persistence.VisualEmbedding", null)
+                        .WithMany()
+                        .HasForeignKey("VisualEmbeddingId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("KnowledgeBase.Core.Persistence.Note", b =>
@@ -374,12 +1153,105 @@ namespace KnowledgeBase.Core.Persistence.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("KnowledgeBase.Core.Persistence.PersonReferenceFace", b =>
+                {
+                    b.HasOne("KnowledgeBase.Core.Persistence.FaceOccurrence", null)
+                        .WithMany()
+                        .HasForeignKey("FaceOccurrenceId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("KnowledgeBase.Core.Persistence.Person", null)
+                        .WithMany()
+                        .HasForeignKey("PersonId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("KnowledgeBase.Core.Persistence.PhotoAnalysisReviewDecision", null)
+                        .WithMany()
+                        .HasForeignKey("SourceDecisionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("KnowledgeBase.Core.Persistence.PhotoAnalysisCandidate", b =>
+                {
+                    b.HasOne("KnowledgeBase.Core.Persistence.PhotoAnalysisRun", null)
+                        .WithMany()
+                        .HasForeignKey("RunId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("KnowledgeBase.Core.Persistence.AssetRecord", null)
+                        .WithMany()
+                        .HasForeignKey("SubjectAssetId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("KnowledgeBase.Core.Persistence.FaceOccurrence", null)
+                        .WithMany()
+                        .HasForeignKey("SubjectFaceOccurrenceId")
+                        .OnDelete(DeleteBehavior.SetNull);
+                });
+
+            modelBuilder.Entity("KnowledgeBase.Core.Persistence.PhotoAnalysisReviewDecision", b =>
+                {
+                    b.HasOne("KnowledgeBase.Core.Persistence.PhotoAnalysisCandidate", null)
+                        .WithMany()
+                        .HasForeignKey("CandidateId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("KnowledgeBase.Core.Persistence.PhotoAnalysisRun", b =>
+                {
+                    b.HasOne("KnowledgeBase.Core.Persistence.AssetRecord", null)
+                        .WithMany()
+                        .HasForeignKey("AssetId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("KnowledgeBase.Core.Persistence.ProcessingJob", b =>
                 {
                     b.HasOne("KnowledgeBase.Core.Persistence.AssetRecord", null)
                         .WithMany()
                         .HasForeignKey("AssetId")
                         .OnDelete(DeleteBehavior.Cascade);
+                });
+
+            modelBuilder.Entity("KnowledgeBase.Core.Persistence.SceneObservation", b =>
+                {
+                    b.HasOne("KnowledgeBase.Core.Persistence.AssetRecord", null)
+                        .WithMany()
+                        .HasForeignKey("AssetId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("KnowledgeBase.Core.Persistence.Person", null)
+                        .WithMany()
+                        .HasForeignKey("RelatedPersonId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("KnowledgeBase.Core.Persistence.PhotoAnalysisRun", null)
+                        .WithMany()
+                        .HasForeignKey("RunId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("KnowledgeBase.Core.Persistence.Person", null)
+                        .WithMany()
+                        .HasForeignKey("SubjectPersonId")
+                        .OnDelete(DeleteBehavior.SetNull);
+                });
+
+            modelBuilder.Entity("KnowledgeBase.Core.Persistence.SceneObservationReviewDecision", b =>
+                {
+                    b.HasOne("KnowledgeBase.Core.Persistence.SceneObservation", null)
+                        .WithMany()
+                        .HasForeignKey("ObservationId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("KnowledgeBase.Core.Persistence.SynthesisSource", b =>
@@ -431,6 +1303,21 @@ namespace KnowledgeBase.Core.Persistence.Migrations
                     b.HasOne("KnowledgeBase.Core.Persistence.Tag", null)
                         .WithMany()
                         .HasForeignKey("ParentId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("KnowledgeBase.Core.Persistence.VisualEmbedding", b =>
+                {
+                    b.HasOne("KnowledgeBase.Core.Persistence.AssetRecord", null)
+                        .WithMany()
+                        .HasForeignKey("AssetId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("KnowledgeBase.Core.Persistence.PhotoAnalysisRun", null)
+                        .WithMany()
+                        .HasForeignKey("RunId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });

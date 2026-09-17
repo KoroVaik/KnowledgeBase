@@ -7,6 +7,21 @@ public enum JobKind
     // Turn one uploaded file into a Source note. Payload is unused; the file is AssetId.
     BuildSourceNote,
 
+    // Detect faces and create identity candidates. It does not call Ollama.
+    AnalyzeFaces,
+
+    // Calculates an exact byte fingerprint before face analysis chooses one duplicate representative.
+    FingerprintAsset,
+
+    // Generate a CLIP scene vector and propose reviewed location candidates.
+    AnalyzeScenes,
+
+    // Uses the VLM with reviewed person/location context to extract cautious scene observations.
+    AnalyzeSceneObservations,
+
+    // Groups canonical photos into reviewable possible events from reviewed archive evidence.
+    AnalyzeEventCandidates,
+
     // Aggregate several notes into one Synthesis (or Index) note. Payload carries the input
     // note ids and the target kind; AssetId is null.
     BuildSynthesis,

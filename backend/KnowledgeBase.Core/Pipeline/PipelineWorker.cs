@@ -76,26 +76,30 @@ public sealed class PipelineWorker(
             return false;
         }
 
-        try
+        var handler = services.GetRequiredService<PipelineHandlerSelector>().For(job.Kind);
+
+        if (handler.RequiresContentAnalyzer)
         {
-            await services.GetRequiredService<IContentAnalyzer>().EnsureModelAvailableAsync(cancellationToken);
-        }
-        catch (InvalidOperationException error)
-        {
-            // Not the job's fault - hand it back untouched (no attempt spent) and wait.
-            logger.LogWarning("Analyzer unavailable: {Reason}", error.Message);
-            job.Status = ProcessingStatus.Pending;
-            job.StartedAtUtc = null;
-            await database.SaveChangesAsync(cancellationToken);
-            await Task.Delay(_options.OutageDelay, cancellationToken);
-            return false;
+            try
+            {
+                await services.GetRequiredService<IContentAnalyzer>().EnsureModelAvailableAsync(cancellationToken);
+            }
+            catch (InvalidOperationException error)
+            {
+                // Not the job's fault - hand it back untouched (no attempt spent) and wait.
+                logger.LogWarning("Analyzer unavailable: {Reason}", error.Message);
+                job.Status = ProcessingStatus.Pending;
+                job.StartedAtUtc = null;
+                await database.SaveChangesAsync(cancellationToken);
+                await Task.Delay(_options.OutageDelay, cancellationToken);
+                return false;
+            }
         }
 
         job.Attempts += 1;
 
         try
         {
-            var handler = services.GetRequiredService<PipelineHandlerSelector>().For(job.Kind);
             var note = await handler.HandleAsync(job, cancellationToken);
 
             job.Status = ProcessingStatus.Done;
@@ -108,7 +112,9 @@ public sealed class PipelineWorker(
 
             var changeEvent = note is not null
                 ? new ChangeEvent(ChangeResources.Notes, ChangeActions.Created, note.Id)
-                : new ChangeEvent(ChangeResources.Notes, ChangeActions.Updated);
+                : job.Kind is JobKind.AnalyzeFaces or JobKind.FingerprintAsset or JobKind.AnalyzeScenes or JobKind.AnalyzeSceneObservations or JobKind.AnalyzeEventCandidates
+                    ? new ChangeEvent(ChangeResources.PhotoAnalysis, ChangeActions.Updated)
+                    : new ChangeEvent(ChangeResources.Notes, ChangeActions.Updated);
 
             services.GetRequiredService<IChangeNotifier>().Publish(changeEvent);
         }
@@ -127,7 +133,9 @@ public sealed class PipelineWorker(
             // Otherwise a job with nothing to do (e.g. no tag left to place) leaves the UI
             // waiting forever - it only ever hears about the Done path below.
             services.GetRequiredService<IChangeNotifier>()
-                .Publish(new ChangeEvent(ChangeResources.Notes, ChangeActions.Updated));
+                .Publish(job.Kind is JobKind.AnalyzeFaces or JobKind.FingerprintAsset or JobKind.AnalyzeScenes or JobKind.AnalyzeSceneObservations or JobKind.AnalyzeEventCandidates
+                    ? new ChangeEvent(ChangeResources.PhotoAnalysis, ChangeActions.Updated)
+                    : new ChangeEvent(ChangeResources.Notes, ChangeActions.Updated));
         }
         catch (Exception error) when (error is not OperationCanceledException)
         {
@@ -149,7 +157,9 @@ public sealed class PipelineWorker(
             if (giveUp)
             {
                 services.GetRequiredService<IChangeNotifier>()
-                    .Publish(new ChangeEvent(ChangeResources.Notes, ChangeActions.Updated));
+                    .Publish(job.Kind is JobKind.AnalyzeFaces or JobKind.FingerprintAsset or JobKind.AnalyzeScenes or JobKind.AnalyzeSceneObservations or JobKind.AnalyzeEventCandidates
+                        ? new ChangeEvent(ChangeResources.PhotoAnalysis, ChangeActions.Updated)
+                        : new ChangeEvent(ChangeResources.Notes, ChangeActions.Updated));
             }
         }
 

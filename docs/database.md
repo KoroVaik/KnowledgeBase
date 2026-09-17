@@ -24,7 +24,7 @@ Deploy order: **API first** (applies the migration to Neon), then restart the wo
 
 | Table | Notes |
 |---|---|
-| `Assets` (`AssetRecord`) | File metadata. **Source of truth** — `GET /api/assets` reads this, not the store. `AssetRecord.For` is a factory taking separate values, not `IFormFile` (the pipeline creates rows too). Empty name → stored name; empty MIME → `application/octet-stream`. `UploadedAtUtc` is `timestamp with time zone`. `CapturedAtUtc`/`Latitude`/`Longitude` (all nullable) hold EXIF read from image bytes — see *Photo capture metadata* in [`ai-pipeline.md`](ai-pipeline.md). |
+| `Assets` (`AssetRecord`) | File metadata. **Source of truth** — `GET /api/assets` reads this, not the store. `AssetRecord.For` is a factory taking separate values, not `IFormFile` (the pipeline creates rows too). Empty name → stored name; empty MIME → `application/octet-stream`. `UploadedAtUtc` is `timestamp with time zone`. `CapturedAtUtc`/`Latitude`/`Longitude` (all nullable) hold EXIF read from image bytes; nullable `ContentSha256` is computed by the worker for exact duplicate grouping. |
 | `ProcessingJobs` (`ProcessingJob`) | `Id`, `Kind` (`JobKind` enum-as-string), `AssetId?` FK, `Payload?` (JSON, synthesis only), `Status` (enum-as-string), `Attempts`, times, `Error`. Unique index on `AssetId` **among non-null** (aggregation jobs carry none). Index `(Status, CreatedAtUtc)` for polling. |
 | `Notes` (`Note`) | `Id`, `Title`, `Body` (`text`), `Kind`, `SourceAssetId?` FK, `SourceFileName`, `SynthesisGroup?`, times, `DeletedAtUtc`. Classification is via `NoteTag`, not a column. Unique `(Kind, SynthesisGroup)` among the living — one aggregate note per group. |
 | `NoteLinks` (`NoteLink`) | `Id`, `SourceNoteId` FK, `TargetTitle` (raw), `TargetNoteId?` (nullable for a dangling `[[...]]`). Unique `(SourceNoteId, TargetTitle)`. |
@@ -32,6 +32,21 @@ Deploy order: **API first** (applies the migration to Neon), then restart the wo
 | `Tags` (`Tag`) | `Id`, `Name` (unique), `Confirmed`, `SuggestedMergeIntoId?` (self-FK). A tag the user has vouched for is `Confirmed`; a pipeline-invented one is not (shown anyway, flagged for review) and carries the confirmed tag the model judged closest. |
 | `NoteTags` (`NoteTag`) | `NoteId` + `TagId` composite PK (the pair is unique on its own), `Ordinal`. `Ordinal 0` = primary tag **by convention**, no `IsPrimary` flag. Index on `TagId` for facet queries. No query filter — a binned note keeps its tags on screen. |
 | `DataProtectionKeys` | Auth-cookie encryption keys. Migration `AddDataProtectionKeys`. See [`backend.md`](backend.md). |
+| `People` (`Person`) | User-curated archive people. AI face evidence is a later, separate table; a name alone never claims an AI identification. |
+| `Locations` (`Location`) | User-curated physical or visual places. `(Name, Kind)` is unique so a visual scene may coexist with a physical place of the same name. |
+| `ArchiveEvents` / `ArchiveEventPeople` / `ArchiveEventPhotos` | User-curated events, optionally located and dated, with explicit person and asset links. Deleting an asset only removes its join row; the event remains. |
+| `PhotoAnalysisRuns` | One completed model execution for an asset, with pipeline, model and configuration provenance. |
+| `PhotoAnalysisCandidates` | Ranked person/location/event proposal. The proposed target is deliberately an id without an FK so historical model evidence survives a later canonical merge or deletion. `SignalsJson` stores the raw score breakdown; nullable `SupersededAtUtc` hides only an unreviewed older proposal after a fresh location run. |
+| `PhotoAnalysisReviewDecisions` | One immutable human outcome for a candidate: accepted, rejected, corrected, or merged, optionally with the chosen canonical target. |
+| `FaceOccurrences` | One model-detected face in a photo-analysis run: bounding rectangle, five landmarks, detection score and 512-value embedding. |
+| `PersonReferenceFaces` | A canonical person explicitly linked to one face occurrence by an accepting or correcting human decision. This is the reference set for later similarity rankings. |
+| `VisualEmbeddings` | One model-versioned, normalized CLIP scene vector for a scene-analysis run. It is raw model evidence, not a location link. |
+| `LocationObservations` | A reviewed asset → location link backed by one visual embedding and its source decision. These are the reference appearances for later location ranking. |
+| `SceneObservations` | A VLM observation for one asset and analysis run: kind, optional confirmed people, description, visible evidence, cautious confidence and optional supersession time. It is not a canonical archive fact. |
+| `SceneObservationReviewDecisions` | One immutable `Confirmed` or `Rejected` human outcome per scene observation. |
+| `EventClusteringRuns` | One versioned deterministic clustering execution with its model label and configuration hash. |
+| `EventClusters` / `EventClusterPhotos` | Temporary derived photo group and its explicit member assets, with JSON edge evidence and optional supersession. |
+| `EventCandidates` / `EventCandidateReviewDecisions` | A reviewable cluster and one immutable `Created`, `Attached` or `Rejected` outcome; the decision records the human-selected member photo ids. |
 
 FK behaviour: `ProcessingJobs → Assets` CASCADE; `NoteLinks → Notes` CASCADE (source) +
 SET NULL (target); `Notes → Assets` (`SourceAssetId`) SET NULL; `NoteTags → Notes` and

@@ -1,12 +1,19 @@
 using KnowledgeBase.Core.Ai;
+using KnowledgeBase.Core.FaceAnalysis;
 using KnowledgeBase.Core.Hosting;
 using KnowledgeBase.Core.Persistence;
 using KnowledgeBase.Core.Pipeline;
 using KnowledgeBase.Core.Pipeline.Extraction;
 using KnowledgeBase.Core.RealTime;
+using KnowledgeBase.Core.SceneAnalysis;
 using KnowledgeBase.Core.Storage;
 using KnowledgeBase.Worker;
+using KnowledgeBase.Worker.FaceAnalysis;
 using KnowledgeBase.Worker.Extraction;
+using KnowledgeBase.Worker.EventClustering;
+using KnowledgeBase.Worker.SceneAnalysis;
+using KnowledgeBase.Worker.SceneObservations;
+using ElBruno.LocalEmbeddings.ImageEmbeddings.Extensions;
 using Microsoft.Extensions.Options;
 
 var builder = Host.CreateApplicationBuilder(args);
@@ -20,6 +27,25 @@ builder.Services.AddAssetStorage(builder.Configuration);
 
 builder.Services.AddContentAnalyzer(builder.Configuration);
 builder.Services.AddContentPipeline(builder.Configuration);
+builder.Services.Configure<FaceAnalysisOptions>(builder.Configuration.GetSection(FaceAnalysisOptions.SectionName));
+builder.Services.Configure<VisualAnalysisOptions>(builder.Configuration.GetSection(VisualAnalysisOptions.SectionName));
+builder.Services.Configure<SceneObservationOptions>(builder.Configuration.GetSection(SceneObservationOptions.SectionName));
+builder.Services.Configure<EventClusteringOptions>(builder.Configuration.GetSection(EventClusteringOptions.SectionName));
+var visualAnalysisOptions = builder.Configuration.GetSection(VisualAnalysisOptions.SectionName).Get<VisualAnalysisOptions>() ?? new VisualAnalysisOptions();
+var visualModelDirectory = visualAnalysisOptions.ModelDirectory
+    ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "KnowledgeBase", "models", "clip");
+builder.Services.AddImageEmbeddings(options =>
+{
+    options.ModelDirectory = visualModelDirectory;
+    options.EnsureModelDownloaded = visualAnalysisOptions.EnsureModelDownloaded;
+});
+builder.Services.AddSingleton<IFaceAnalyzer, FaceOnnxFaceAnalyzer>();
+builder.Services.AddSingleton<ISceneEmbedder, ClipSceneEmbedder>();
+builder.Services.AddScoped<IPipelineHandler, FaceAnalysisHandler>();
+builder.Services.AddScoped<IPipelineHandler, AssetFingerprintHandler>();
+builder.Services.AddScoped<IPipelineHandler, SceneAnalysisHandler>();
+builder.Services.AddScoped<IPipelineHandler, SceneObservationHandler>();
+builder.Services.AddScoped<IPipelineHandler, EventCandidateHandler>();
 
 // PDF extractor + PdfPig live here, not Core, so the API image stays free of them.
 builder.Services.AddSingleton<IPdfTextExtractor, PdfPigTextExtractor>();

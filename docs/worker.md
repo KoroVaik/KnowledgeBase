@@ -80,6 +80,46 @@ the body and a shared secret in `X-Ingest-Token`; the API drops the event into i
 on one file with no queue. `AnalyzeCommand` lives in the Worker project. It accepts text,
 images and PDFs. Remove it once the worker has its first integration test.
 
+### Face analysis is a separate local pipeline job
+
+`AnalyzeFaces` is queued alongside `BuildSourceNote` for every image, but each asset may have one
+job of **each** kind rather than one job total. This means face analysis can be retried without
+replacing a note, and it runs even while Ollama is unavailable. `FaceAnalysisHandler` uses the
+local FaceONNX detector and embedder, writes archive evidence, and sends a `photo-analysis` change
+hint instead of a note change. A confirmed Person review creates the reference vector used on a
+later run; the worker never directly identifies a person as fact.
+
+`FingerprintAsset` runs before a new image's face job and records a SHA-256 of its stored bytes.
+Only the oldest image with that hash queues `AnalyzeFaces`; copies are kept but skipped. The batch
+archive action queues missing fingerprints for older images and never queues source-note jobs.
+
+### Scene analysis is local CLIP evidence, not a location decision
+
+`AnalyzeScenes` uses a local ONNX CLIP vision model (downloaded once into the worker's local model
+cache on its first scene job) to write one 512-value `VisualEmbedding` for the canonical image.
+It ranks the best confirmed appearance of each location by cosine similarity and creates at most
+five `Location` candidates. The worker never assigns a location directly. A human decision turns
+the image vector into a `LocationObservation`, which later scene jobs can use as a reference.
+
+### Scene observations are cautious VLM output, not archive facts
+
+`AnalyzeSceneObservations` runs only when a canonical image already has a reviewed person or
+location. It supplies that limited context to Ollama and requests up to ten structured `Action`,
+`Interaction`, `Object`, `Text`, or `Mood` observations. The model may use only the supplied
+person names; every result needs a visible-evidence field and a cautious ranking. The handler
+writes model/configuration provenance to `PhotoAnalysisRuns`, then appends observations. A fresh
+run supersedes only unreviewed observations for that asset; a separate human `Confirmed` or
+`Rejected` decision remains immutable.
+
+### Event clustering creates evidence, never events
+
+`AnalyzeEventCandidates` is a manual aggregate job over canonical images. It scores photo pairs
+from capture-time proximity, shared reviewed people/locations, compatible CLIP vectors, and
+confirmed scene-observation kinds. Only connected pairs above the configured threshold become
+temporary `EventClusters`; the raw per-pair signals are stored as JSON. The handler then creates
+one reviewable candidate per cluster and supersedes only earlier unreviewed candidates. It never
+creates or changes an `ArchiveEvent`.
+
 ## Open
 
 - [ ] Shared Rider run configs in `backend/.run/` (in git, not `.idea`):

@@ -24,6 +24,44 @@ public sealed class KnowledgeBaseDbContext(DbContextOptions<KnowledgeBaseDbConte
 
     public DbSet<TagParentSuggestion> TagParentSuggestions => Set<TagParentSuggestion>();
 
+    public DbSet<Person> People => Set<Person>();
+
+    public DbSet<Location> Locations => Set<Location>();
+
+    public DbSet<ArchiveEvent> ArchiveEvents => Set<ArchiveEvent>();
+
+    public DbSet<ArchiveEventPhoto> ArchiveEventPhotos => Set<ArchiveEventPhoto>();
+
+    public DbSet<ArchiveEventPerson> ArchiveEventPeople => Set<ArchiveEventPerson>();
+
+    public DbSet<PhotoAnalysisRun> PhotoAnalysisRuns => Set<PhotoAnalysisRun>();
+
+    public DbSet<PhotoAnalysisCandidate> PhotoAnalysisCandidates => Set<PhotoAnalysisCandidate>();
+
+    public DbSet<PhotoAnalysisReviewDecision> PhotoAnalysisReviewDecisions => Set<PhotoAnalysisReviewDecision>();
+
+    public DbSet<FaceOccurrence> FaceOccurrences => Set<FaceOccurrence>();
+
+    public DbSet<PersonReferenceFace> PersonReferenceFaces => Set<PersonReferenceFace>();
+
+    public DbSet<VisualEmbedding> VisualEmbeddings => Set<VisualEmbedding>();
+
+    public DbSet<LocationObservation> LocationObservations => Set<LocationObservation>();
+
+    public DbSet<SceneObservation> SceneObservations => Set<SceneObservation>();
+
+    public DbSet<SceneObservationReviewDecision> SceneObservationReviewDecisions => Set<SceneObservationReviewDecision>();
+
+    public DbSet<EventClusteringRun> EventClusteringRuns => Set<EventClusteringRun>();
+
+    public DbSet<EventCluster> EventClusters => Set<EventCluster>();
+
+    public DbSet<EventClusterPhoto> EventClusterPhotos => Set<EventClusterPhoto>();
+
+    public DbSet<EventCandidate> EventCandidates => Set<EventCandidate>();
+
+    public DbSet<EventCandidateReviewDecision> EventCandidateReviewDecisions => Set<EventCandidateReviewDecision>();
+
     public DbSet<DataProtectionKey> DataProtectionKeys => Set<DataProtectionKey>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder) =>

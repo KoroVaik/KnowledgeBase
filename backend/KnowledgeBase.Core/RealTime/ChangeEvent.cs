@@ -10,6 +10,8 @@ public static class ChangeResources
 {
     public const string Assets = "assets";
     public const string Notes = "notes";
+
+    public const string PhotoAnalysis = "photo-analysis";
 }
 
 public static class ChangeActions

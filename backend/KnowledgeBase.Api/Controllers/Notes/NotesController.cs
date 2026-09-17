@@ -362,7 +362,7 @@ public sealed class NotesController(
             return Conflict(new { error = "The file this note was made from is gone." });
         }
 
-        if (!await ProcessingQueue.EnsurePendingAsync(_database, assetId, cancellationToken))
+        if (!await ProcessingQueue.EnsurePendingAsync(_database, assetId, JobKind.BuildSourceNote, cancellationToken))
         {
             return Conflict(new { error = "This file is already queued." });
         }

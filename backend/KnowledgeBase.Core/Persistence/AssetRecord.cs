@@ -16,6 +16,8 @@ public sealed class AssetRecord
 
     public required DateTime UploadedAtUtc { get; init; }
 
+    public string? ContentSha256 { get; set; }
+
     // EXIF, best-effort - null for a screenshot, a PNG, or a photo a messenger recompressed
     // and stripped. Filled in by the pipeline after upload, not at upload time (Confirm never
     // reads the bytes).

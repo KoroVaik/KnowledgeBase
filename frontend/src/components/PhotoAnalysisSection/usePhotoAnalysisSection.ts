@@ -1,0 +1,32 @@
+import { useCallback, useEffect, useState } from 'react'
+import { createArchiveEvent, createEventCandidateReviewDecision, createLocation, createPerson, createReviewDecision, createSceneObservationReviewDecision, fetchPhotoAnalysis, queueEventAnalysis, queueFaceAnalysis, queueSceneAnalysis, queueSceneObservations } from '../../api/photoAnalysis'
+import type { PhotoAnalysis } from '../../api/photoAnalysis'
+import { fetchAssets } from '../../api/assets'
+import type { AssetSummary } from '../../api/assets'
+import { useResourceChanges } from '../../hooks/useResourceChanges'
+
+export function usePhotoAnalysisSection() {
+  const [data, setData] = useState<PhotoAnalysis | null>(null)
+  const [assets, setAssets] = useState<AssetSummary[]>([])
+  const [error, setError] = useState<string | null>(null)
+  const reload = useCallback(() => {
+    void Promise.all([fetchPhotoAnalysis(), fetchAssets()]).then(([analysis, allAssets]) => { setData(analysis); setAssets(allAssets) }).catch((err: unknown) => setError(err instanceof Error ? err.message : 'Unexpected error'))
+  }, [])
+  useEffect(reload, [reload])
+  useResourceChanges('photo-analysis', reload)
+
+  async function save(action: () => Promise<void>) { setError(null); try { await action(); reload() } catch (err) { setError(err instanceof Error ? err.message : 'Unexpected error') } }
+  return {
+    data, assets: assets.filter(asset => asset.contentType.startsWith('image/')), error,
+    addPerson: (name: string) => void save(() => createPerson(name)),
+    addLocation: (name: string, kind: string) => void save(() => createLocation(name, kind)),
+    addEvent: (title: string, occurredOn: string | null, locationId: string | null, personIds: string[], assetIds: string[]) => void save(() => createArchiveEvent({ title, occurredOn, locationId, personIds, assetIds })),
+    reviewCandidate: (candidateId: string, kind: string, chosenTargetId: string | null) => void save(() => createReviewDecision(candidateId, { kind, chosenTargetId, note: null })),
+    reviewSceneObservation: (observationId: string, kind: string) => void save(() => createSceneObservationReviewDecision(observationId, kind)),
+    reviewEventCandidate: (candidateId: string, body: { kind: string; chosenEventId: string | null; title: string | null; occurredOn: string | null; locationId: string | null; personIds: string[]; assetIds: string[] }) => void save(() => createEventCandidateReviewDecision(candidateId, body)),
+    queueFaceAnalysis: () => void save(queueFaceAnalysis),
+    queueSceneAnalysis: () => void save(queueSceneAnalysis),
+    queueSceneObservations: () => void save(queueSceneObservations),
+    queueEventAnalysis: () => void save(queueEventAnalysis),
+  }
+}

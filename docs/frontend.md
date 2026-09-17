@@ -325,7 +325,34 @@ alignment edge.
 - **Kind description from the backend**, shown as a custom tooltip behind an "i" icon next to
   the label (hover, keyboard focus, or tap — mobile Safari does not focus a tapped button, so
   tap toggles explicit state). Not the native `title`: it waits ~1 s and never shows on touch.
-  Labels themselves still live in `KIND_LABELS`.
+Labels themselves still live in `KIND_LABELS`.
+
+### Photo analysis catalogue
+
+`PhotoAnalysisSection` is a card with three nested subsections: Persons, Locations and Events.
+They are live archive records, not placeholder UI: a person or location can be created directly,
+and an event can be created with an optional date/location plus selected people and existing image
+assets. Unreviewed AI candidates appear in these same contextual subsections rather than a
+separate generic review page. Each shows its source photo, candidate rank and raw score; the
+reviewer can expand the immutable model evidence and accept, reject, or correct it to a canonical
+record. The section is empty until a worker writes candidates.
+
+Locations add a **Refresh location suggestions** action. It requests a new scene-analysis pass for
+canonical photos that still have no confirmed location; the list shows each location's number of
+confirmed photo references. The API client supplies zero-valued analysis statuses when an older or
+transitional backend response lacks a newly added status field, so a rolling API restart does not
+crash the card before the next refresh.
+
+Events contains **Refresh scene observations**, not a fourth top-level archive section. It shows
+each active, unreviewed VLM observation with photo name, kind, optional context names, cautious
+confidence and expandable visible evidence. Confirm and Reject are review decisions; they never
+rewrite the observation itself. The API client also defaults a missing observation list or status
+to an empty list / zero count during a rolling backend restart.
+
+Events also contains **Refresh event candidates**. A candidate card shows the member photos, score
+and expandable clustering evidence. The reviewer can uncheck photos, enter the canonical event
+details to create it, attach the chosen photos to an existing event, or reject the proposal. The
+card is absent when the archive has no group above the clustering threshold.
 
 ### Note body is untrusted-shape Markdown
 
@@ -334,6 +361,11 @@ spacing. Without the heading scope the model's `# Title` inherits the page's 56 
 marketing `h1` and fills the row.
 
 ## Open
+
+- [ ] **Local dev connection resilience.** During a photo-analysis browser check the first session
+      request briefly returned HTTP 502 and Vite HMR could not open its WebSocket; retry recovered
+      the authenticated UI and the feature flow completed, but reproduce the startup condition
+      before treating either issue as fixed.
 
 ### Bugs / polish
 

@@ -12,6 +12,16 @@ internal static class JobKindDescriptions
     {
         JobKind.BuildSourceNote =>
             "Reads one uploaded file with the AI model and turns it into a source note with tags.",
+        JobKind.AnalyzeFaces =>
+            "Detects faces in one image and suggests matching people from confirmed reference faces.",
+        JobKind.FingerprintAsset =>
+            "Calculates an exact file fingerprint so duplicate images can share one face analysis.",
+        JobKind.AnalyzeScenes =>
+            "Generates a CLIP scene vector and proposes the most similar reviewed locations.",
+        JobKind.AnalyzeSceneObservations =>
+            "Uses reviewed people and locations to extract cautious actions, interactions and scene details.",
+        JobKind.AnalyzeEventCandidates =>
+            "Groups photos from reviewed archive evidence into possible events for human review.",
         JobKind.BuildSynthesis =>
             "Combines several existing notes into one synthesis (or index) note.",
         JobKind.GroupTags =>

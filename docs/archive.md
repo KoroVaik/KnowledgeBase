@@ -199,6 +199,36 @@ not just compiled.
 
 ## Database
 
+- Photo-archive foundation: canonical people, locations and events; auditable model runs,
+  candidates and review decisions; `FaceOccurrence` / `PersonReferenceFace`; and one worker job
+  per `(asset, kind)`. Migration applied locally and browser-verified: `brad.jpg` produced an
+  unknown face, correcting it created a reference, and a second upload proposed that person at
+  cosine score `1.000`.
+- Batch face-analysis backfill: `FingerprintAsset` stores SHA-256 for existing image assets,
+  queues one face-analysis job for the oldest member of each exact-duplicate group, and retains
+  all duplicate files. Browser-verified with 14 existing photos: jobs completed without failure
+  and two identical `brad.jpg` assets produced no duplicate review candidate.
+- Fingerprint canonicalisation no longer fails on PostgreSQL: the worker selects the oldest
+  duplicate with SQL-translatable ordering by upload time and id. Browser-verified on four new
+  photos: all face jobs completed, five face occurrences appeared, and no fingerprint SQL failure
+  or browser console error occurred.
+- Scene-analysis foundation: local CLIP ONNX creates normalized 512-value `VisualEmbedding` rows;
+  a reviewed location decision creates a `LocationObservation` reference, and a refresh appends
+  new cosine-ranked candidates while superseding only earlier unreviewed ones. Browser-verified:
+  four scene jobs completed, one visual location reference was confirmed, and the next refresh
+  proposed it for the remaining photos with rank, score and evidence.
+- Scene-observation foundation: canonical photos with reviewed person or location context can run
+  structured Ollama observations (`Action`, `Interaction`, `Object`, `Text`, `Mood`) with model
+  provenance, visible evidence and independent Confirm/Reject decisions. Browser-verified: two
+  jobs completed without failure, produced four observations, and confirming one removed it from
+  the active review queue without changing the model record.
+
+## Frontend fixes
+
+- Photo analysis no longer crashes while an API restart returns a response that predates
+  `sceneAnalysisStatus`: the API client normalizes absent analysis-status fields to zero. Verified
+  by three reloads with no `pendingSceneJobs` TypeError.
+
 - `AddPipelineAndNotes` migration: `ProcessingJob`, `Note`, `NoteLink` with indexes and
   FK behaviour. Applied locally, checked with `psql \d`.
 - Postgres + EF Core for asset metadata (was SQLite — dropped, no disk in the prod

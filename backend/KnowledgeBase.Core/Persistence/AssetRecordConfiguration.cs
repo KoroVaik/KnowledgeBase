@@ -15,5 +15,7 @@ internal sealed class AssetRecordConfiguration : IEntityTypeConfiguration<AssetR
         builder.Property(asset => asset.StoredFileName).HasMaxLength(64);
         builder.Property(asset => asset.OriginalFileName).HasMaxLength(255);
         builder.Property(asset => asset.ContentType).HasMaxLength(255);
+        builder.Property(asset => asset.ContentSha256).HasMaxLength(64);
+        builder.HasIndex(asset => asset.ContentSha256);
     }
 }

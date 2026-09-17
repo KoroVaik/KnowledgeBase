@@ -4,6 +4,7 @@ import { UploadDropZone } from './components/UploadDropZone'
 import { NotesList } from './components/NotesList/NotesList'
 import { TagsSection } from './components/TagsSection/TagsSection'
 import { JobsSection } from './components/JobsSection/JobsSection'
+import { PhotoAnalysisSection } from './components/PhotoAnalysisSection/PhotoAnalysisSection'
 import { useAppAuth } from './hooks/useAppAuth'
 import './App.css'
 
@@ -82,6 +83,7 @@ function App() {
           <AssetList reloadToken={uploadCount} maxSourceChars={features.maxSourceChars} />
           <NotesList />
           <TagsSection />
+          <PhotoAnalysisSection />
           <JobsSection />
         </>
       )}

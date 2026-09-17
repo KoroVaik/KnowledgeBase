@@ -11,5 +11,7 @@ public interface IPipelineHandler
 {
     JobKind Kind { get; }
 
+    bool RequiresContentAnalyzer => true;
+
     Task<Note?> HandleAsync(ProcessingJob job, CancellationToken cancellationToken);
 }

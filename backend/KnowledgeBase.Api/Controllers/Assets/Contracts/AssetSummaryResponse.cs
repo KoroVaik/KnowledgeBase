@@ -1,6 +1,7 @@
 namespace KnowledgeBase.Api.Controllers.Assets.Contracts;
 
 public sealed record AssetSummaryResponse(
+    string Id,
     string StoredFileName,
     string OriginalFileName,
     // The stored MIME type, so the UI can tell an image (which it can preview inline) from the rest.

@@ -10,6 +10,7 @@ history**. Load only what the task touches.
 | [`frontend.md`](frontend.md) | touching `frontend/` | SPA structure, SSE client, decisions + open items |
 | [`worker.md`](worker.md) | touching `backend/KnowledgeBase.Worker` or the queue | the AI process, queue, worker→API bridge |
 | [`ai-pipeline.md`](ai-pipeline.md) | touching analysis / Ollama / extraction | model contract, extractors, model quirks |
+| [`photo-archive.md`](photo-archive.md) | touching people, photo locations, event clustering, or archive review | archive-domain rules and phased foundation plan |
 | [`database.md`](database.md) | touching EF model or migrations | schema, migration ownership, soft-delete, indexes |
 | [`infra.md`](infra.md) | deploying, or touching `infra/` | Render, Neon, R2, Garage, CI, Docker, env vars |
 | [`archive.md`](archive.md) | only if you need the history of a done thing | one-line log of completed + verified work |

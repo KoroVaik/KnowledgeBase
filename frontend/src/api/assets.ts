@@ -12,6 +12,7 @@ export interface UploadedAsset {
 
 /** Mirrors AssetSummaryResponse in backend/Controllers/Assets. */
 export interface AssetSummary {
+  id: string
   storedFileName: string
   originalFileName: string
   /** Stored MIME type - lets the UI tell an image (previewable inline) from the rest. */

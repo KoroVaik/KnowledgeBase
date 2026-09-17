@@ -15,9 +15,9 @@ internal sealed class ProcessingJobConfiguration : IEntityTypeConfiguration<Proc
         builder.Property(job => job.Status).HasConversion<string>().HasMaxLength(16);
         builder.Property(job => job.Error).HasMaxLength(2000);
 
-        // One job per asset: re-enqueuing the same upload must not spawn a second worker run.
+        // One job of each kind per asset: source-note and face analysis may run independently.
         // Aggregation jobs have no asset, so the constraint only covers the rows that carry one.
-        builder.HasIndex(job => job.AssetId)
+        builder.HasIndex(job => new { job.AssetId, job.Kind })
             .IsUnique()
             .HasFilter("\"AssetId\" IS NOT NULL");
 

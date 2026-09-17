@@ -133,6 +133,27 @@ descriptions would bring that migration back (decision 2026-09-13).
 given kinds (`Failed` excluded), null if none. No new column: aggregation jobs insert a fresh row
 per run, so the table already is the run history. Feeds the "last run" hint on *Suggest for review*.
 
+### Photo archive catalogue and review — `GET/POST /api/photo-analysis`
+
+`PhotoAnalysisController` lists and creates user-curated people, locations and events; an event
+can link uploaded image assets, people and one location. Its list response also contains only
+unreviewed model candidates. `POST /candidates/{id}/decisions` validates the candidate kind and
+the selected canonical target, then appends one human decision without editing model evidence.
+Runs and candidates are written by future worker handlers directly to the shared database.
+`POST /analyze-faces` starts the initial archive backfill: it queues fingerprints first, then the
+worker queues a face job only for each exact-duplicate group's canonical asset. `POST
+/analyze-scenes` refreshes location suggestions for canonical images that do not yet have a
+confirmed location observation; it never changes reviewed decisions. `POST /analyze-observations`
+queues VLM observation jobs only for canonical images with reviewed person or location context.
+The list includes only active, unreviewed observations; `POST /observations/{id}/decisions`
+appends a `Confirmed` or `Rejected` outcome without changing the model output. A refresh
+supersedes only the older unreviewed observations for that image.
+`POST /analyze-events` queues one aggregate event-clustering job after any new images are
+fingerprinted. The response exposes active event candidates with their member photos and immutable
+edge evidence. `POST /event-candidates/{id}/decisions` either creates a user-named event with the
+selected candidate photos, attaches those selected photos to an existing event, or records a
+rejection; the original cluster is never altered.
+
 ### Password in plaintext — deferred on purpose
 
 During local dev the password sits as a plain default (`Password`) in

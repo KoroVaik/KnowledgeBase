@@ -24,10 +24,10 @@ public sealed class ProcessingJob
 
     public string? Error { get; set; }
 
-    public static ProcessingJob Queue(string assetId) => new()
+    public static ProcessingJob Queue(string assetId, JobKind kind = JobKind.BuildSourceNote) => new()
     {
         Id = Guid.NewGuid().ToString("N"),
-        Kind = JobKind.BuildSourceNote,
+        Kind = kind,
         AssetId = assetId,
         CreatedAtUtc = DateTime.UtcNow,
         Status = ProcessingStatus.Pending,

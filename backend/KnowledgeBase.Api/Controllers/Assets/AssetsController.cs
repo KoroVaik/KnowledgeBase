@@ -40,14 +40,14 @@ public sealed class AssetsController(
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> List(CancellationToken cancellationToken)
     {
-        // LEFT JOIN asset → its job → its note. GroupJoin + SelectMany + DefaultIfEmpty is
+        // LEFT JOIN asset → its source-note job → its note. GroupJoin + SelectMany + DefaultIfEmpty is
         // how EF spells LEFT JOIN.
         var rows = await _database.Assets
             .GroupJoin(
                 _database.ProcessingJobs,
                 asset => asset.Id,
                 job => job.AssetId,
-                (asset, jobs) => new { asset, jobs })
+                (asset, jobs) => new { asset, jobs = jobs.Where(job => job.Kind == JobKind.BuildSourceNote) })
             .SelectMany(
                 pair => pair.jobs.DefaultIfEmpty(),
                 (pair, job) => new { pair.asset, job })
@@ -72,6 +72,7 @@ public sealed class AssetsController(
 
         var assets = rows
             .Select(row => new AssetSummaryResponse(
+                row.asset.Id,
                 row.asset.StoredFileName,
                 row.asset.OriginalFileName,
                 row.asset.ContentType,
@@ -206,6 +207,11 @@ public sealed class AssetsController(
         if (ProcessableContent.Classify(record.ContentType, record.OriginalFileName) is not null)
         {
             _database.ProcessingJobs.Add(ProcessingJob.Queue(record.Id));
+
+            if (ProcessableContent.Classify(record.ContentType, record.OriginalFileName) is ContentKind.Image)
+            {
+                _database.ProcessingJobs.Add(ProcessingJob.Queue(record.Id, JobKind.FingerprintAsset));
+            }
         }
 
         await _database.SaveChangesAsync(CancellationToken.None);
@@ -292,7 +298,13 @@ public sealed class AssetsController(
             return Conflict(new { error = "The pipeline does not handle this kind of file." });
         }
 
-        if (!await ProcessingQueue.EnsurePendingAsync(_database, record.Id, cancellationToken))
+        var queued = await ProcessingQueue.EnsurePendingAsync(_database, record.Id, JobKind.BuildSourceNote, cancellationToken);
+        if (ProcessableContent.Classify(record.ContentType, record.OriginalFileName) is ContentKind.Image)
+        {
+            queued |= await ProcessingQueue.EnsurePendingAsync(_database, record.Id, JobKind.FingerprintAsset, cancellationToken);
+        }
+
+        if (!queued)
         {
             return Conflict(new { error = "This file is already queued." });
         }
