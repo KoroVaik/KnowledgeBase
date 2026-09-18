@@ -55,7 +55,7 @@ infra/worker/stop-worker.ps1                 # stop and remove the container
 
 ## Updating after a deploy
 
-Automatic: a PR merged into `main` that touches Core, Worker or `infra/worker` runs
+Automatic: a push to `main` that touches Core, Worker or `infra/worker` runs
 `.github/workflows/worker-cd.yml` on the self-hosted runner below, which rebuilds and
 restarts the container. A failed build leaves the running worker as it was.
 
@@ -78,7 +78,7 @@ stranger's pull request could run code on this PC.
 2. Configure it with the token from that page:
 
    ```powershell
-   .\config.cmd --url https://github.com/KoroVaik/KnowledgeBase --token <TOKEN> --labels knowledgebase-worker --runasservice
+   .\config.cmd --url https://github.com/KoroVaik/KnowledgeBase --token <TOKEN> --runasservice
    ```
 
    When asked for the service account, give **your own Windows account** (and its

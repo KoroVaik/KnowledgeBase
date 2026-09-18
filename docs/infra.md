@@ -136,7 +136,8 @@ not re-download it.
 
 ### Deploying a new build
 
-`.github/workflows/worker-cd.yml` on a PR merged into `main` (Core, Worker, `infra/worker`; a direct push does not deploy):
+`.github/workflows/worker-cd.yml` on a push to `main` (Core, Worker, `infra/worker`; other
+paths do not deploy):
 `docker compose up -d --build` on the runner. Compose reads secrets from
 `WORKER_ENV_FILE` (set in the runner's `.env`), because the runner's checkout has no
 gitignored `worker.env`. `run-worker.ps1` stays for manual starts. The API-first order is
@@ -203,8 +204,9 @@ in Docker, API, worker (as needed), frontend.
       Not Render auto-deploy — it would ship a broken build, it knows nothing about
       tests. Deploy Hook URL in repo secrets.
 - [ ] **CD for the worker**: workflow + compose + migration wait are written and build;
-      not yet run. Remaining: install the runner (`infra/worker/README.md`), run
-      **Worker CD** manually, then a real push to `main`.
+      runner installed as a Windows service (`ROSPC`) with `WORKER_ENV_FILE` in
+      `WORKER_ENV_FILE` in `C:\actions-runner\.env`. Not yet run: first **Worker CD** run
+      via the manual button, then a real push to `main`.
 - [ ] Separate pipeline for the frontend on Cloudflare Pages, if it stops being served
       from ASP.NET.
 - [ ] If the frontend and API ever move to different addresses — allowed origins from

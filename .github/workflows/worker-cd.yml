@@ -1,10 +1,10 @@
 name: Worker CD
 
-# Deploys on a merged PR only; a direct push to main does not ship. The manual button stays.
+# Deploys on every push to main, whether committed directly or merged from a PR (a PR
+# merge is also a push, so the two triggers must not be combined — it would deploy twice).
 on:
   workflow_dispatch:
-  pull_request:
-    types: [closed]
+  push:
     branches: [main]
     paths:
       - 'backend/KnowledgeBase.Core/**'
@@ -22,16 +22,13 @@ concurrency:
 
 jobs:
   deploy:
-    # "closed" also fires for a PR closed without merging.
-    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.merged == true
-    # The self-hosted runner on the home PC (infra/worker/README.md).
-    runs-on: [self-hosted, knowledgebase-worker]
+    # The self-hosted runner on the home PC (infra/worker/README.md). Matching on the
+    # default label only: the repo is private and has exactly one runner, so a custom
+    # label would add a re-registration step without narrowing anything.
+    runs-on: self-hosted
 
     steps:
-      # For a PR event the default ref is the PR's merge preview, not what landed on main.
       - uses: actions/checkout@v5
-        with:
-          ref: ${{ github.event.pull_request.merge_commit_sha || github.sha }}
 
       # up --build builds first and recreates the container only after a successful build,
       # so a broken build leaves the running worker untouched.
