@@ -318,4 +318,8 @@ not just compiled.
   review card per face (three photos affected). The handler now skips a photo that already has stored
   faces; verified by requeuing a finished job, which came back `Skipped` with no new occurrence. The
   existing duplicates were retired by superseding their candidates, not deleted.
+- Face box off the face on phone photos: the worker detected on the raw sideways pixels while the
+  browser shows the EXIF-rotated image. Detection now auto-orients first (`face-analysis/v2`) and the
+  duplicate guard is version-scoped. The two affected photos were requeued in prod after rebuilding the
+  worker container: the new box lands exactly on the face and the old candidate is superseded.
 

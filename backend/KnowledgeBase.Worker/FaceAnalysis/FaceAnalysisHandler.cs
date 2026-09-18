@@ -10,6 +10,9 @@ namespace KnowledgeBase.Worker.FaceAnalysis;
 
 public sealed class FaceAnalysisHandler(KnowledgeBaseDbContext database, IAssetContentReader reader, IFaceAnalyzer analyzer) : IPipelineHandler
 {
+    // v2: detection runs on the EXIF-rotated image; v1 boxes on a rotated phone photo point elsewhere.
+    private const string PipelineVersion = "face-analysis/v2";
+
     public JobKind Kind => JobKind.AnalyzeFaces;
 
     public bool RequiresContentAnalyzer => false;
@@ -34,15 +37,24 @@ public sealed class FaceAnalysisHandler(KnowledgeBaseDbContext database, IAssetC
 
         // A job left Running by a stopped worker is requeued on the next start, and detection has no
         // memory of its own: running it twice would store every face of this photo a second time and
-        // put it up for review twice. Re-ranking against new references is RescoreFaces' job.
-        if (await database.FaceOccurrences.AnyAsync(occurrence => occurrence.AssetId == asset.Id, cancellationToken))
+        // put it up for review twice. Re-ranking against new references is RescoreFaces' job. Only
+        // faces from this pipeline version count, so a requeue after a detection fix detects again.
+        if (await (from occurrence in database.FaceOccurrences
+                   join earlierRun in database.PhotoAnalysisRuns on occurrence.RunId equals earlierRun.Id
+                   where occurrence.AssetId == asset.Id && earlierRun.PipelineVersion == PipelineVersion
+                   select occurrence).AnyAsync(cancellationToken))
             throw new SkippableContentException("This image already has face occurrences from an earlier analysis run.");
 
         var faces = await analyzer.AnalyzeAsync(await reader.ReadBytesAsync(asset.StoredFileName, cancellationToken), cancellationToken);
         var now = DateTime.UtcNow;
+        await database.PhotoAnalysisCandidates
+            .Where(candidate => candidate.Kind == PhotoAnalysisCandidateKind.Person && candidate.SubjectAssetId == asset.Id
+                && candidate.SupersededAtUtc == null
+                && !database.PhotoAnalysisReviewDecisions.Any(decision => decision.CandidateId == candidate.Id))
+            .ExecuteUpdateAsync(update => update.SetProperty(candidate => candidate.SupersededAtUtc, now), cancellationToken);
         var run = new PhotoAnalysisRun
         {
-            Id = Guid.NewGuid().ToString("N"), AssetId = asset.Id, PipelineVersion = "face-analysis/v1",
+            Id = Guid.NewGuid().ToString("N"), AssetId = asset.Id, PipelineVersion = PipelineVersion,
             ModelKey = analyzer.ModelKey, ConfigurationHash = analyzer.ConfigurationHash, CompletedAtUtc = now
         };
         database.PhotoAnalysisRuns.Add(run);

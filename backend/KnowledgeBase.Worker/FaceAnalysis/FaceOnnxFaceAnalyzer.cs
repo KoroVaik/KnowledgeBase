@@ -6,6 +6,7 @@ using KnowledgeBase.Core.FaceAnalysis;
 using Microsoft.Extensions.Options;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
+using SixLabors.ImageSharp.Processing;
 
 namespace KnowledgeBase.Worker.FaceAnalysis;
 
@@ -21,6 +22,9 @@ public sealed class FaceOnnxFaceAnalyzer(IOptions<FaceAnalysisOptions> options) 
     {
         cancellationToken.ThrowIfCancellationRequested();
         using var image = Image.Load<Rgb24>(imageBytes);
+        // A phone stores the sensor's sideways pixels plus an EXIF rotation that the browser applies and
+        // ImageSharp does not: without this, boxes land in a frame the review screen never shows.
+        image.Mutate(context => context.AutoOrient());
         var pixels = ToBgrFloatArray(image);
         using var detector = new FaceDetector(_options.DetectionThreshold, _options.ConfidenceThreshold, _options.NonMaximumSuppressionThreshold);
         using var embedder = new FaceEmbedder();

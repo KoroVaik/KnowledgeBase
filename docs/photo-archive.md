@@ -43,6 +43,12 @@ review twice - three photos in the local archive ended up with duplicate faces t
 now skips an asset that already has stored face occurrences; refreshing a photo's identities is
 `RescoreFaces`' job, which re-ranks what is already detected instead of detecting again.
 
+The skip only counts faces from the current `PipelineVersion` (`face-analysis/v2`), so a detection fix
+is applied to an old photo by requeueing its `AnalyzeFaces` job: the new run supersedes the photo's
+unreviewed person candidates and leaves reviewed ones and reference faces alone. v2 detects on the
+EXIF-rotated image - v1 detected on the raw sideways pixels of a phone photo, so its boxes pointed at
+the wrong part of the picture the browser shows.
+
 ### Face candidates cover every plausible person, and a re-score rewrites only what moved
 
 A face proposes every person whose best confirmed reference reaches 0.25, capped at twenty, plus its
@@ -215,6 +221,9 @@ usable.
       AI, but it goes through the FIFO job queue, so a new photo waits behind slow AI jobs before its
       analysis can even be queued. Hashing in the upload stream would leave `FingerprintAsset` needed
       only for the existing archive.
+- [ ] **Check whether CLIP scene vectors see phone photos sideways.** `ClipSceneEmbedder` hands the raw
+      bytes to `ClipImageEncoder`; if that library ignores EXIF orientation like ImageSharp does, a
+      rotated phone photo gets a vector for the sideways picture and location matching suffers.
 - [ ] **Phase 2 — face-quality calibration.** Validate the detector confidence and similarity
       behaviour on a small manually labelled archive subset before introducing acceptance
       thresholds or any automatic decision.
