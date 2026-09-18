@@ -1,6 +1,6 @@
 import { formatDateTime } from '../../format'
 import { useJobsSection } from './useJobsSection'
-import type { ActiveJob } from '../../api/jobs'
+import type { ActiveJob, FailedJob } from '../../api/jobs'
 import { useCollapsibleSection } from '../../hooks/useCollapsibleSection'
 import { InfoHint } from '../InfoHint/InfoHint'
 import './JobsSection.css'
@@ -13,7 +13,7 @@ const KIND_LABELS: Record<string, string> = {
 }
 
 export function JobsSection() {
-  const { state } = useJobsSection()
+  const { state, retrying, retryError, retry } = useJobsSection()
   const { collapsed, toggle } = useCollapsibleSection('jobs')
 
   return (
@@ -45,6 +45,42 @@ export function JobsSection() {
               ))}
             </ul>
           )}
+
+          {state.status === 'ready' && state.failed.length > 0 && (
+            <div className="jobs-failed">
+              <div className="jobs-failed-head">
+                <h3>
+                  Failed <span className="section-count">{state.failed.length}</span>
+                </h3>
+                <button
+                  type="button"
+                  className="btn btn-sm"
+                  onClick={() => void retry('all')}
+                  disabled={retrying !== null}
+                >
+                  {retrying === 'all' ? 'Retrying…' : 'Retry all'}
+                </button>
+              </div>
+
+              {retryError !== null && (
+                <p className="notes-error" role="alert">
+                  {retryError}
+                </p>
+              )}
+
+              <ul className="jobs-list">
+                {state.failed.map((job) => (
+                  <FailedJobRow
+                    key={job.id}
+                    job={job}
+                    retrying={retrying === job.id}
+                    disabled={retrying !== null}
+                    onRetry={() => void retry(job.id)}
+                  />
+                ))}
+              </ul>
+            </div>
+          )}
         </>
       )}
     </section>
@@ -73,6 +109,42 @@ function JobRow({ job }: { job: ActiveJob }) {
       </div>
       {/* Set when a previous attempt failed and the worker handed the job back to the queue. */}
       {job.error !== null && <div className="job-error">Last attempt failed: {job.error}</div>}
+    </li>
+  )
+}
+
+function FailedJobRow({
+  job,
+  retrying,
+  disabled,
+  onRetry,
+}: {
+  job: FailedJob
+  retrying: boolean
+  disabled: boolean
+  onRetry: () => void
+}) {
+  return (
+    <li className="job">
+      <div className="job-head">
+        <span className="job-kind">
+          {KIND_LABELS[job.kind] ?? job.kind}
+          <InfoHint id={`job-${job.id}`} label="What this job does" description={job.kindDescription} />
+          {job.assetFileName !== null && ` — ${job.assetFileName}`}
+        </span>
+        <span className="job-actions">
+          <span className="job-status job-status-failed">Failed</span>
+          <button type="button" className="btn btn-xs" onClick={onRetry} disabled={disabled}>
+            {retrying ? 'Retrying…' : 'Retry'}
+          </button>
+        </span>
+      </div>
+      <div className="job-meta">
+        Queued {formatDateTime(job.createdAtUtc)}
+        {job.completedAtUtc !== null && ` · Failed ${formatDateTime(job.completedAtUtc)}`}
+        {` · ${job.attempts} ${job.attempts === 1 ? 'attempt' : 'attempts'}`}
+      </div>
+      {job.error !== null && <div className="job-error">{job.error}</div>}
     </li>
   )
 }

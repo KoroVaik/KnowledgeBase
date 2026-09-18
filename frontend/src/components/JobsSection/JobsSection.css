@@ -71,6 +71,35 @@
   background: var(--running-bg);
 }
 
+.job-status-failed {
+  color: var(--danger);
+  background: var(--danger-bg);
+}
+
+.job-actions {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.jobs-failed {
+  margin-top: 16px;
+}
+
+.jobs-failed-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.jobs-failed-head h3 {
+  margin: 0;
+  font-size: 14px;
+  color: var(--text-h);
+}
+
 @media (max-width: 600px) {
   .job {
     padding-inline: 14px;

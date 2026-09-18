@@ -125,6 +125,11 @@ to keep open. `backend/KnowledgeBase.Worker/Dockerfile` + `infra/worker/docker-c
 Host starts as Production. Secrets in `infra/worker/worker.env` (gitignored). Full
 instructions: [`../infra/worker/README.md`](../infra/worker/README.md).
 
+The worker image is **Debian-based, not Alpine** (unlike the API). ONNX Runtime (FaceONNX, CLIP)
+ships a glibc-only native library; on Alpine's musl it fails to load. The CLIP model lives in
+the named volume `models` (`VisualAnalysis__ModelDirectory=/models/clip`) so a rebuild does
+not re-download it.
+
 `host.docker.internal:11434` reaches the native Ollama on Docker Desktop with no changes
 (its own proxy). On native Linux Docker it points at the real host IP and Ollama on
 `127.0.0.1` would refuse it.

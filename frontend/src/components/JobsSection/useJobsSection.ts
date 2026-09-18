@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { fetchActiveJobs } from '../../api/jobs'
-import type { ActiveJob } from '../../api/jobs'
+import { fetchActiveJobs, fetchFailedJobs, retryAllFailedJobs, retryJob } from '../../api/jobs'
+import type { ActiveJob, FailedJob } from '../../api/jobs'
 
 export type JobsState =
   | { status: 'loading' }
-  | { status: 'ready'; jobs: ActiveJob[] }
+  | { status: 'ready'; jobs: ActiveJob[]; failed: FailedJob[] }
   | { status: 'error'; message: string }
 
 const POLL_MS = 5000
@@ -16,14 +16,17 @@ const POLL_MS = 5000
 export function useJobsSection() {
   const [state, setState] = useState<JobsState>({ status: 'loading' })
   const latestReload = useRef(0)
+  // A job id, 'all', or null when no retry is in flight.
+  const [retrying, setRetrying] = useState<string | null>(null)
+  const [retryError, setRetryError] = useState<string | null>(null)
 
   const reload = useCallback(() => {
     const reloadId = ++latestReload.current
 
-    fetchActiveJobs()
-      .then((jobs) => {
+    Promise.all([fetchActiveJobs(), fetchFailedJobs()])
+      .then(([jobs, failed]) => {
         if (reloadId === latestReload.current) {
-          setState({ status: 'ready', jobs })
+          setState({ status: 'ready', jobs, failed })
         }
       })
       .catch((error: unknown) => {
@@ -44,7 +47,24 @@ export function useJobsSection() {
     return () => window.clearInterval(timer)
   }, [reload])
 
-  return { state }
+  const retry = useCallback(
+    async (target: string) => {
+      setRetrying(target)
+      setRetryError(null)
+
+      try {
+        await (target === 'all' ? retryAllFailedJobs() : retryJob(target))
+        reload()
+      } catch (error: unknown) {
+        setRetryError(messageOf(error))
+      } finally {
+        setRetrying(null)
+      }
+    },
+    [reload],
+  )
+
+  return { state, retrying, retryError, retry }
 }
 
 function messageOf(error: unknown): string {

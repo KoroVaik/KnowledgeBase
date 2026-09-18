@@ -124,6 +124,11 @@ worker resets a failed-but-not-final attempt back to `Pending` and leaves `Error
 `PipelineWorker.TickAsync`), so a queued job can already carry its last failure. UI:
 [`frontend.md`](frontend.md) *Jobs section*.
 
+`GET /api/jobs/failed` lists the `Failed` rows; `POST /api/jobs/{id}/retry` and
+`POST /api/jobs/failed/retry` reset them to `Pending` with `Attempts = 0` and `Error` cleared,
+so the worker gives each one a full `MaxAttempts` again. Only `Failed` is retriable — a
+`Skipped` job would be skipped again on the same input.
+
 `KindDescription` — one sentence on what the kind does, for the UI's info tooltip. Lives in
 code (`JobKindDescriptions`, a switch over `JobKind` with no default arm), **not** a lookup
 table: `JobKind` is stored as a string so a new kind needs no migration, and a table of

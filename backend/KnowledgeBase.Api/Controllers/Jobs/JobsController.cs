@@ -1,5 +1,6 @@
 using KnowledgeBase.Api.Controllers.Jobs.Contracts;
 using KnowledgeBase.Core.Persistence;
+using KnowledgeBase.Core.RealTime;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -11,9 +12,10 @@ namespace KnowledgeBase.Api.Controllers.Jobs;
 [Route("api/[controller]")]
 [Authorize]
 [Produces("application/json")]
-public sealed class JobsController(KnowledgeBaseDbContext database) : ControllerBase
+public sealed class JobsController(KnowledgeBaseDbContext database, IChangeNotifier notifier) : ControllerBase
 {
     private readonly KnowledgeBaseDbContext _database = database;
+    private readonly IChangeNotifier _notifier = notifier;
 
     /// <summary>Lists jobs still Pending or Running, oldest first, each with a short description of its kind.</summary>
     /// <response code="200">The listing, possibly empty.</response>
@@ -73,5 +75,104 @@ public sealed class JobsController(KnowledgeBaseDbContext database) : Controller
             .MaxAsync(job => job.CompletedAtUtc, cancellationToken);
 
         return Ok(new LastCompletedJobResponse(completedAtUtc));
+    }
+
+    /// <summary>Lists jobs the worker gave up on, most recently failed first.</summary>
+    /// <response code="200">The listing, possibly empty.</response>
+    /// <response code="401">No session, or it has expired.</response>
+    [HttpGet("failed")]
+    [ProducesResponseType(typeof(IReadOnlyList<FailedJobResponse>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    public async Task<IActionResult> ListFailed(CancellationToken cancellationToken)
+    {
+        var rows = await (
+            from job in _database.ProcessingJobs
+            where job.Status == ProcessingStatus.Failed
+            join asset in _database.Assets on job.AssetId equals asset.Id into assetJoin
+            from asset in assetJoin.DefaultIfEmpty()
+            orderby job.CompletedAtUtc descending
+            select new { Job = job, AssetFileName = asset != null ? asset.OriginalFileName : null })
+            .ToListAsync(cancellationToken);
+
+        var jobs = rows.Select(row => new FailedJobResponse(
+            row.Job.Id,
+            row.Job.Kind.ToString(),
+            JobKindDescriptions.For(row.Job.Kind),
+            row.Job.AssetId,
+            row.AssetFileName,
+            row.Job.CreatedAtUtc,
+            row.Job.CompletedAtUtc,
+            row.Job.Attempts,
+            row.Job.Error));
+
+        return Ok(jobs);
+    }
+
+    /// <summary>Puts one failed job back in the queue with a fresh set of attempts.</summary>
+    /// <param name="id">The job id.</param>
+    /// <param name="cancellationToken">Request cancellation.</param>
+    /// <response code="202">Queued.</response>
+    /// <response code="401">No session, or it has expired.</response>
+    /// <response code="404">No such job.</response>
+    /// <response code="409">The job has not failed (it is queued, running, done or skipped).</response>
+    [HttpPost("{id}/retry")]
+    [ProducesResponseType(StatusCodes.Status202Accepted)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> Retry(string id, CancellationToken cancellationToken)
+    {
+        var job = await _database.ProcessingJobs.SingleOrDefaultAsync(item => item.Id == id, cancellationToken);
+
+        if (job is null)
+        {
+            return NotFound();
+        }
+
+        if (job.Status != ProcessingStatus.Failed)
+        {
+            return Conflict(new { error = "Only a failed job can be retried." });
+        }
+
+        Requeue(job);
+        await _database.SaveChangesAsync(CancellationToken.None);
+        _notifier.Publish(new ChangeEvent(ChangeResources.Assets, ChangeActions.Updated));
+
+        return Accepted();
+    }
+
+    /// <summary>Puts every failed job back in the queue with a fresh set of attempts.</summary>
+    /// <response code="200">How many jobs were re-queued, possibly zero.</response>
+    /// <response code="401">No session, or it has expired.</response>
+    [HttpPost("failed/retry")]
+    [ProducesResponseType(typeof(RetryFailedJobsResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    public async Task<IActionResult> RetryAllFailed(CancellationToken cancellationToken)
+    {
+        var jobs = await _database.ProcessingJobs
+            .Where(job => job.Status == ProcessingStatus.Failed)
+            .ToListAsync(cancellationToken);
+
+        foreach (var job in jobs)
+        {
+            Requeue(job);
+        }
+
+        if (jobs.Count > 0)
+        {
+            await _database.SaveChangesAsync(CancellationToken.None);
+            _notifier.Publish(new ChangeEvent(ChangeResources.Assets, ChangeActions.Updated));
+        }
+
+        return Ok(new RetryFailedJobsResponse(jobs.Count));
+    }
+
+    private static void Requeue(ProcessingJob job)
+    {
+        job.Status = ProcessingStatus.Pending;
+        job.Attempts = 0;
+        job.Error = null;
+        job.StartedAtUtc = null;
+        job.CompletedAtUtc = null;
     }
 }

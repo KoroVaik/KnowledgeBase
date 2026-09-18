@@ -22,12 +22,16 @@ public sealed class AssetFingerprintHandler(KnowledgeBaseDbContext database, IAs
             throw new SkippableContentException("Fingerprinting for photo analysis only applies to image assets.");
 
         asset.ContentSha256 ??= Convert.ToHexString(SHA256.HashData(await reader.ReadBytesAsync(asset.StoredFileName, cancellationToken)));
-        var canonicalAssetId = await database.Assets
-            .Where(item => item.ContentSha256 == asset.ContentSha256)
+        // The fresh hash is only tracked, not saved yet, so this query can't see this asset's own row.
+        var earlierCopy = await database.Assets
+            .Where(item => item.Id != asset.Id && item.ContentSha256 == asset.ContentSha256)
             .OrderBy(item => item.UploadedAtUtc).ThenBy(item => item.Id)
-            .Select(item => item.Id)
-            .FirstAsync(cancellationToken);
-        if (canonicalAssetId == asset.Id)
+            .Select(item => new { item.Id, item.UploadedAtUtc })
+            .FirstOrDefaultAsync(cancellationToken);
+        var isCanonical = earlierCopy is null
+            || earlierCopy.UploadedAtUtc > asset.UploadedAtUtc
+            || (earlierCopy.UploadedAtUtc == asset.UploadedAtUtc && earlierCopy.Id.CompareTo(asset.Id) > 0);
+        if (isCanonical)
         {
             await ProcessingQueue.EnsureQueuedAsync(database, asset.Id, JobKind.AnalyzeFaces, cancellationToken);
             await ProcessingQueue.EnsureQueuedAsync(database, asset.Id, JobKind.AnalyzeScenes, cancellationToken);

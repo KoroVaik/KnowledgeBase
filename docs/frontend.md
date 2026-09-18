@@ -326,6 +326,10 @@ alignment edge.
   the label (hover, keyboard focus, or tap — mobile Safari does not focus a tapped button, so
   tap toggles explicit state). Not the native `title`: it waits ~1 s and never shows on touch.
 Labels themselves still live in `KIND_LABELS`.
+- **Failed jobs get their own block** under the active list (`GET /api/jobs/failed`), each with
+  **Retry**, plus **Retry all**. Retry is always a human decision, never automatic: until the
+  cause is fixed a job just fails three times again. Skipped jobs are not offered — the same
+  input cannot succeed. Jobs of a deleted file vanish with it (cascade), so none show here.
 
 ### Photo analysis catalogue
 
@@ -414,6 +418,10 @@ marketing `h1` and fills the row.
       pending** — a queued job appearing (upload, `suggest-merges`, `suggest-hierarchy`), the
       `Running` badge while the worker has it, the row disappearing once `Done`/`Failed`, the
       retry case (`Error` shown on a re-queued `Pending` row), phone width.
+- [ ] **Failed jobs + Retry** (`GET /api/jobs/failed`, `POST /api/jobs/{id}/retry`,
+      `POST /api/jobs/failed/retry`): build + lint pass, browser run pending — the Failed block
+      appears only with failed jobs, Retry moves a row back to Queued, Retry all empties the
+      block, phone width.
 - [ ] **Job kind info tooltip** (`kindDescription`, `JobKindHint`): build + lint pass,
       browser run pending — hover, Tab focus, tap on phone width, tooltip not clipped at the
       card edge.

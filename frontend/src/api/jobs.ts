@@ -40,3 +40,43 @@ export async function fetchLastCompleted(kinds: string[]): Promise<string | null
   const body = (await response.json()) as { completedAtUtc: string | null }
   return body.completedAtUtc
 }
+
+/** Mirrors FailedJobResponse in backend Controllers/Jobs. */
+export interface FailedJob {
+  id: string
+  kind: string
+  kindDescription: string
+  assetId: string | null
+  assetFileName: string | null
+  createdAtUtc: string
+  completedAtUtc: string | null
+  attempts: number
+  error: string | null
+}
+
+/** Jobs the worker gave up on, most recently failed first. */
+export async function fetchFailedJobs(): Promise<FailedJob[]> {
+  const response = await apiFetch('/api/jobs/failed')
+
+  if (!response.ok) {
+    throw new Error(await readErrorMessage(response, 'Could not load the failed jobs'))
+  }
+
+  return (await response.json()) as FailedJob[]
+}
+
+export async function retryJob(id: string): Promise<void> {
+  const response = await apiFetch(`/api/jobs/${encodeURIComponent(id)}/retry`, { method: 'POST' })
+
+  if (!response.ok) {
+    throw new Error(await readErrorMessage(response, 'Could not retry the job'))
+  }
+}
+
+export async function retryAllFailedJobs(): Promise<void> {
+  const response = await apiFetch('/api/jobs/failed/retry', { method: 'POST' })
+
+  if (!response.ok) {
+    throw new Error(await readErrorMessage(response, 'Could not retry the failed jobs'))
+  }
+}
