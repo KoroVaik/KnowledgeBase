@@ -39,11 +39,30 @@ builder.Services.AddImageEmbeddings(options =>
     options.ModelDirectory = visualModelDirectory;
     options.EnsureModelDownloaded = visualAnalysisOptions.EnsureModelDownloaded;
 });
+builder.Services.AddSingleton(sp =>
+{
+    var faceOptions = sp.GetRequiredService<IOptions<FaceAnalysisOptions>>().Value;
+    var configuredPath = faceOptions.RecognitionModelPath;
+    if (Path.IsPathRooted(configuredPath) && File.Exists(configuredPath)) return new ArcFaceEmbedder(configuredPath);
+    var candidates = new[]
+    {
+        Path.GetFullPath(configuredPath),
+        Path.Combine(AppContext.BaseDirectory, configuredPath),
+        Path.Combine(Directory.GetCurrentDirectory(), configuredPath),
+        // The documented way to start the worker is `dotnet run` from the repo root, where
+        // the models folder hangs off the project directory rather than the working one.
+        Path.Combine(Directory.GetCurrentDirectory(), "backend", "KnowledgeBase.Worker", configuredPath),
+    };
+    var found = candidates.FirstOrDefault(File.Exists);
+    return new ArcFaceEmbedder(found ?? throw new FileNotFoundException(
+        $"The ArcFace embedding model was not found. Looked at: {string.Join("; ", candidates.Distinct())}.", configuredPath));
+});
 builder.Services.AddSingleton<IFaceAnalyzer, FaceOnnxFaceAnalyzer>();
 builder.Services.AddSingleton<ISceneEmbedder, ClipSceneEmbedder>();
 builder.Services.AddScoped<IPipelineHandler, FaceAnalysisHandler>();
 builder.Services.AddScoped<IPipelineHandler, AssetFingerprintHandler>();
 builder.Services.AddScoped<IPipelineHandler, FaceRescoreHandler>();
+builder.Services.AddScoped<IPipelineHandler, FaceModelMigrationHandler>();
 builder.Services.AddScoped<IPipelineHandler, SceneAnalysisHandler>();
 builder.Services.AddScoped<IPipelineHandler, SceneObservationHandler>();
 builder.Services.AddScoped<IPipelineHandler, EventCandidateHandler>();
@@ -78,5 +97,21 @@ if (AnalyzeCommand.Matches(args))
 }
 
 await host.WaitForMigrationsAsync(TimeSpan.FromSeconds(30));
+
+// Face models may have changed since this archive was last analysed (an embedder swap, a
+// detection fix): queue the self-healing migration before the poll loop takes normal jobs.
+try
+{
+    using var scope = host.Services.CreateScope();
+    await FaceModelMigrationQueue.EnqueueIfGapAsync(
+        scope.ServiceProvider.GetRequiredService<KnowledgeBaseDbContext>(),
+        scope.ServiceProvider.GetRequiredService<IFaceAnalyzer>(),
+        CancellationToken.None);
+}
+catch (Exception error)
+{
+    // The database may still be unreachable; the next start re-checks. Never blocks the worker.
+    Console.Error.WriteLine($"[face-migration] Start-up check skipped: {error.Message}");
+}
 
 host.Run();

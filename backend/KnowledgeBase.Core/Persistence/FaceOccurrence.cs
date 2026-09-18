@@ -11,6 +11,11 @@ public sealed class FaceOccurrence
     public required int Height { get; init; }
     public required double DetectionScore { get; init; }
     public required string LandmarksJson { get; init; }
-    public required float[] Embedding { get; init; }
+    // Re-embeddable: an embedder swap rewrites both fields in place instead of re-detecting.
+    public required float[] Embedding { get; set; }
+    public string? EmbeddingModelKey { get; set; }
+    // Assigned when the occurrence is stored (or by the migration pass for legacy rows), so the
+    // column is null only between a schema upgrade and the worker's first identity assignment.
+    public string? IdentityId { get; set; }
     public required DateTime CreatedAtUtc { get; init; }
 }

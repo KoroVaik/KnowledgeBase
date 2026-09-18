@@ -6,8 +6,9 @@ export interface Person { id: string; name: string; eventCount: number; referenc
 export interface LocationReferencePhoto { assetId: string; assetName: string; confirmedAtUtc: string }
 export interface Location { id: string; name: string; kind: string; eventCount: number; confirmedPhotoCount: number; referencePhotos: LocationReferencePhoto[] }
 export interface ArchiveEvent { id: string; title: string; occurredOn: string | null; locationId: string | null; locationName: string | null; personIds: string[]; assetIds: string[] }
-export interface PhotoAnalysisCandidateMatch { targetId: string; score: number }
-export interface PhotoAnalysisCandidate { id: string; kind: string; subjectAssetId: string; subjectAssetName: string; subjectFaceOccurrenceId: string | null; proposedTargetId: string | null; proposedTargetName: string | null; proposedLabel: string | null; rank: number; score: number; signalsJson: string; runId: string; faceBounds?: FaceBounds | null; matches: PhotoAnalysisCandidateMatch[] }
+// score is the raw stored measure; confidence is the calibrated 0-1 form the UI shows as a percent.
+export interface PhotoAnalysisCandidateMatch { targetId: string; score: number; confidence: number }
+export interface PhotoAnalysisCandidate { id: string; kind: string; subjectAssetId: string; subjectAssetName: string; subjectFaceOccurrenceId: string | null; proposedTargetId: string | null; proposedTargetName: string | null; proposedLabel: string | null; rank: number; score: number; confidence: number; signalsJson: string; runId: string; faceBounds?: FaceBounds | null; matches: PhotoAnalysisCandidateMatch[] }
 export interface SceneObservation { id: string; assetId: string; assetName: string; kind: string; subjectPersonName: string | null; relatedPersonName: string | null; description: string; evidence: string; confidence: number; runId: string }
 export interface EventCandidatePhoto { id: string; name: string }
 export interface EventCandidate { id: string; score: number; suggestedOccurredOn: string | null; signalsJson: string; photos: EventCandidatePhoto[] }

@@ -10,13 +10,17 @@ using SixLabors.ImageSharp.Processing;
 
 namespace KnowledgeBase.Worker.FaceAnalysis;
 
-public sealed class FaceOnnxFaceAnalyzer(IOptions<FaceAnalysisOptions> options) : IFaceAnalyzer
+public sealed class FaceOnnxFaceAnalyzer(ArcFaceEmbedder embedder, IOptions<FaceAnalysisOptions> options) : IFaceAnalyzer, IDisposable
 {
     private readonly FaceAnalysisOptions _options = options.Value;
 
-    public string ModelKey => "FaceONNX 4.1.1.3: YOLOv5s-face + ResNet27";
+    public string EmbeddingModelKey => "insightface w600k_r50 (ArcFace)";
+
+    public string ModelKey => $"FaceONNX 4.1.1.3: YOLOv5s-face + {EmbeddingModelKey}";
 
     public string ConfigurationHash => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes($"{ModelKey}|{_options.DetectionThreshold}|{_options.ConfidenceThreshold}|{_options.NonMaximumSuppressionThreshold}")));
+
+    public void Dispose() => embedder.Dispose();
 
     public Task<IReadOnlyList<DetectedFace>> AnalyzeAsync(byte[] imageBytes, CancellationToken cancellationToken)
     {
@@ -27,12 +31,14 @@ public sealed class FaceOnnxFaceAnalyzer(IOptions<FaceAnalysisOptions> options) 
         image.Mutate(context => context.AutoOrient());
         var pixels = ToBgrFloatArray(image);
         using var detector = new FaceDetector(_options.DetectionThreshold, _options.ConfidenceThreshold, _options.NonMaximumSuppressionThreshold);
-        using var embedder = new FaceEmbedder();
 
-        var faces = detector.Forward(pixels).Select(face => new DetectedFace(
-            face.Rectangle.X, face.Rectangle.Y, face.Rectangle.Width, face.Rectangle.Height, face.Score,
-            face.Points.All.Select(point => new FaceLandmark(point.X, point.Y)).ToList(),
-            embedder.Forward(pixels.Align(face.Box, face.Points.RotationAngle)))).ToList();
+        var faces = detector.Forward(pixels).Select(face =>
+        {
+            var landmarks = face.Points.All.Select(point => new FaceLandmark(point.X, point.Y)).ToList();
+            return new DetectedFace(
+                face.Rectangle.X, face.Rectangle.Y, face.Rectangle.Width, face.Rectangle.Height, face.Score,
+                landmarks, embedder.Embed(image, landmarks));
+        }).ToList();
 
         return Task.FromResult<IReadOnlyList<DetectedFace>>(faces);
     }

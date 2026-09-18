@@ -35,14 +35,16 @@ public sealed record PhotoAnalysisCandidateResponse(
     string? ProposedTargetName,
     string? ProposedLabel,
     int Rank,
+    // Score is the raw stored measure; Confidence is the calibrated 0-1 form the review screen shows.
     double Score,
+    double Confidence,
     string SignalsJson,
     string RunId,
     FaceBoundsResponse? FaceBounds,
     IReadOnlyList<PhotoAnalysisCandidateMatchResponse> Matches);
 
 /// <summary>What this subject scored against one target in the same run, for every ranked target - not only the best one.</summary>
-public sealed record PhotoAnalysisCandidateMatchResponse(string TargetId, double Score);
+public sealed record PhotoAnalysisCandidateMatchResponse(string TargetId, double Score, double Confidence);
 
 public sealed record FaceBoundsResponse(int X, int Y, int Width, int Height);
 

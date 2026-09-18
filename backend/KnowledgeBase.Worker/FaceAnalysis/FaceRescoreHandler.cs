@@ -19,17 +19,10 @@ public sealed class FaceRescoreHandler(KnowledgeBaseDbContext database) : IPipel
             join person in database.People on reference.PersonId equals person.Id
             select new PersonReferenceEmbedding(person.Id, person.Name, occurrence.Id, occurrence.Embedding)).ToListAsync(cancellationToken);
 
-        // A confirmed face is a reference, and a rejected suggestion must not come back as a fresh
-        // one - both stay untouched. A confirmation that was revoked leaves neither, and its face is
-        // back in review with a stale copy of the original proposal, so that one is re-scored.
-        var settledOccurrenceIds = (await database.PersonReferenceFaces
-            .Select(reference => reference.FaceOccurrenceId).ToListAsync(cancellationToken)).ToHashSet();
-        settledOccurrenceIds.UnionWith(await (
-            from candidate in database.PhotoAnalysisCandidates
-            join decision in database.PhotoAnalysisReviewDecisions on candidate.Id equals decision.CandidateId
-            where candidate.SubjectFaceOccurrenceId != null
-                && (decision.Kind == PhotoAnalysisDecisionKind.Rejected || decision.Kind == PhotoAnalysisDecisionKind.Merged)
-            select candidate.SubjectFaceOccurrenceId!).ToListAsync(cancellationToken));
+        // Settled states (references, rejections) attach to the face identity, so a re-detection
+        // of a disposed face must not come back into review through a re-score any more than
+        // through detection. A revoked confirmation leaves neither state, and that face returns.
+        var settledIdentityIds = await FaceIdentityState.SettledIdsAsync(database, cancellationToken);
 
         var decidedCandidateIds = (await database.PhotoAnalysisReviewDecisions
             .Select(decision => decision.CandidateId).ToListAsync(cancellationToken)).ToHashSet();
@@ -43,9 +36,11 @@ public sealed class FaceRescoreHandler(KnowledgeBaseDbContext database) : IPipel
 
         // An occurrence of an older detection version has no open candidates - the newer run
         // superseded them - so re-ranking it writes its stale box back into review as a fresh
-        // proposal. Only the current version's detections are live ranking subjects.
+        // proposal. Only the current version's detections are live ranking subjects; one still
+        // without an identity is left for the migration pass, not ranked from limbo.
         var openOccurrences = (await database.FaceOccurrences.ToListAsync(cancellationToken))
-            .Where(occurrence => !settledOccurrenceIds.Contains(occurrence.Id)
+            .Where(occurrence => occurrence.IdentityId is not null
+                && !settledIdentityIds.Contains(occurrence.IdentityId)
                 && canonicalAssetIds.Contains(occurrence.AssetId)
                 && sourceRuns.TryGetValue(occurrence.RunId, out var sourceRun)
                 && sourceRun.PipelineVersion == FaceAnalysisPipeline.CurrentDetectionVersion)

@@ -17,7 +17,7 @@ import './PhotoAnalysisSection.css'
 // against at all, and one it compared and left outside the stored top five.
 interface ReviewTarget { id: string; name: string; hasReferences?: boolean }
 
-/** The score is a ranking measure, not a probability — red up to 50%, blending to green at 100%. */
+/** The calibrated confidence is a 0-1 probability — red at 50% (uncertain), blending to green at 100%. */
 function scoreColor(score: number) {
   return `hsl(${Math.round(Math.min(1, Math.max(0, (score - 0.5) * 2)) * 120)} 75% 55%)`
 }
@@ -311,6 +311,7 @@ function ExistingTargetPicker({ label, ariaLabel, targets, matches, noReferences
   onChoose: (targetId: string) => void
 }) {
   const scoreByTarget = new Map(matches.map(match => [match.targetId, match.score]))
+  const confidenceByTarget = new Map(matches.map(match => [match.targetId, match.confidence]))
   const ranked = [...targets].sort((left, right) => {
     const leftScore = scoreByTarget.get(left.id)
     const rightScore = scoreByTarget.get(right.id)
@@ -327,7 +328,7 @@ function ExistingTargetPicker({ label, ariaLabel, targets, matches, noReferences
         return <button type="button" key={target.id} className="target-picker-option" onClick={() => { close(); onChoose(target.id) }}>
           <span className="target-picker-name">{target.name}</span>
           {score !== undefined
-            ? <span style={{ color: scoreColor(score) }}>{Math.round(score * 100)}%</span>
+            ? <span style={{ color: scoreColor(confidenceByTarget.get(target.id) ?? score) }}>{Math.round((confidenceByTarget.get(target.id) ?? score) * 100)}%</span>
             : target.hasReferences === false
               ? noReferencesLabel !== null && <span className="target-picker-note">{noReferencesLabel}</span>
               : target.hasReferences === true && <span className="target-picker-note">score too low</span>}
@@ -365,13 +366,13 @@ function CandidateReviews({ kind, candidates, targets, onReview, onReviewAsNew, 
     const chooseExisting = (value: string) => { if (value) onReview(candidate.id, 'Corrected', value) }
     return <article className={faceBounds != null ? 'candidate-review candidate-review-with-face-preview' : showPhoto ? 'candidate-review candidate-review-with-image' : 'candidate-review'} key={candidate.id}>
     {showPhoto && (faceBounds != null ? <PersonCandidatePreview key={candidate.subjectFaceOccurrenceId} asset={assetsById.get(candidate.subjectAssetId)} faceBounds={faceBounds}
-      label={`${Math.round(candidate.score * 100)}% · ${proposedName ?? 'Unknown'}`}
-      labelContent={<><span style={{ color: scoreColor(candidate.score) }}>{Math.round(candidate.score * 100)}%</span> · {proposedName ?? 'Unknown'}</>}
-      onOpen={() => setOpenPhoto({ title: proposedName ?? 'Original photo', assetId: candidate.subjectAssetId, faceBounds, score: candidate.score })} /> : <CandidateThumbnail key={candidate.subjectAssetId} asset={assetsById.get(candidate.subjectAssetId)} />)}
+      label={`${Math.round(candidate.confidence * 100)}% · ${proposedName ?? 'Unknown'}`}
+      labelContent={<><span style={{ color: scoreColor(candidate.confidence) }}>{Math.round(candidate.confidence * 100)}%</span> · {proposedName ?? 'Unknown'}</>}
+      onOpen={() => setOpenPhoto({ title: proposedName ?? 'Original photo', assetId: candidate.subjectAssetId, faceBounds, score: candidate.confidence })} /> : <CandidateThumbnail key={candidate.subjectAssetId} asset={assetsById.get(candidate.subjectAssetId)} />)}
     <div className="candidate-review-details">
       <span className="candidate-subject">Photo: {candidate.subjectAssetName}</span>
       {confident
-        ? <p className="candidate-question">Is this «{proposedName}»? {confidenceBadge(candidate.score, candidate.score >= 0.5 ? 'Likely match' : 'Possible match')}</p>
+        ? <p className="candidate-question">Is this «{proposedName}»? {confidenceBadge(candidate.confidence, candidate.confidence >= 0.5 ? 'Likely match' : 'Possible match')}</p>
         : <p className="candidate-question">{wording.noMatch}</p>}
       <div className="candidate-actions">
         {confident && candidate.proposedTargetId && <button className="btn btn-xs btn-primary" type="button" onClick={() => onReview(candidate.id, 'Accepted', null)}>Yes, it's «{proposedName}»</button>}

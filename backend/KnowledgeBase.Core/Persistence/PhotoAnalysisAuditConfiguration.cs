@@ -24,7 +24,9 @@ internal sealed class PhotoAnalysisCandidateConfiguration : IEntityTypeConfigura
         builder.Property(candidate => candidate.SubjectFaceOccurrenceId).HasMaxLength(32);
         builder.Property(candidate => candidate.ProposedTargetId).HasMaxLength(32); builder.Property(candidate => candidate.ProposedLabel).HasMaxLength(200);
         builder.Property(candidate => candidate.Kind).HasConversion<string>().HasMaxLength(16); builder.Property(candidate => candidate.SignalsJson).HasColumnType("jsonb");
-        builder.HasIndex(candidate => new { candidate.RunId, candidate.SubjectFaceOccurrenceId, candidate.Kind, candidate.Rank }).IsUnique();
+        // Not unique: revoking a confirmation re-opens the original proposal as a new row with the
+        // same run/face/kind/rank, while the decided original stays in the audit trail.
+        builder.HasIndex(candidate => new { candidate.RunId, candidate.SubjectFaceOccurrenceId, candidate.Kind, candidate.Rank });
         builder.HasIndex(candidate => new { candidate.Kind, candidate.SubjectAssetId, candidate.SupersededAtUtc });
         builder.HasOne<PhotoAnalysisRun>().WithMany().HasForeignKey(candidate => candidate.RunId).OnDelete(DeleteBehavior.Cascade);
         builder.HasOne<AssetRecord>().WithMany().HasForeignKey(candidate => candidate.SubjectAssetId).OnDelete(DeleteBehavior.Cascade);
@@ -39,9 +41,23 @@ internal sealed class FaceOccurrenceConfiguration : IEntityTypeConfiguration<Fac
         builder.HasKey(occurrence => occurrence.Id); builder.Property(occurrence => occurrence.Id).HasMaxLength(32);
         builder.Property(occurrence => occurrence.RunId).HasMaxLength(32); builder.Property(occurrence => occurrence.AssetId).HasMaxLength(32);
         builder.Property(occurrence => occurrence.LandmarksJson).HasColumnType("jsonb"); builder.Property(occurrence => occurrence.Embedding).HasColumnType("real[]");
+        builder.Property(occurrence => occurrence.EmbeddingModelKey).HasMaxLength(100); builder.Property(occurrence => occurrence.IdentityId).HasMaxLength(32);
         builder.HasIndex(occurrence => new { occurrence.AssetId, occurrence.CreatedAtUtc });
+        builder.HasIndex(occurrence => occurrence.IdentityId);
         builder.HasOne<PhotoAnalysisRun>().WithMany().HasForeignKey(occurrence => occurrence.RunId).OnDelete(DeleteBehavior.Cascade);
         builder.HasOne<AssetRecord>().WithMany().HasForeignKey(occurrence => occurrence.AssetId).OnDelete(DeleteBehavior.Cascade);
+        builder.HasOne<FaceIdentity>().WithMany().HasForeignKey(occurrence => occurrence.IdentityId).OnDelete(DeleteBehavior.Restrict);
+    }
+}
+
+internal sealed class FaceIdentityConfiguration : IEntityTypeConfiguration<FaceIdentity>
+{
+    public void Configure(EntityTypeBuilder<FaceIdentity> builder)
+    {
+        builder.HasKey(identity => identity.Id); builder.Property(identity => identity.Id).HasMaxLength(32);
+        builder.Property(identity => identity.AssetId).HasMaxLength(32);
+        builder.HasIndex(identity => identity.AssetId);
+        builder.HasOne<AssetRecord>().WithMany().HasForeignKey(identity => identity.AssetId).OnDelete(DeleteBehavior.Cascade);
     }
 }
 

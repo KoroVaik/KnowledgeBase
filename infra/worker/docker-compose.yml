@@ -18,6 +18,7 @@ services:
       # reaches a native Ollama bound to 127.0.0.1 with no host-side change.
       Ai__Ollama__BaseUrl: http://host.docker.internal:11434
       VisualAnalysis__ModelDirectory: /models/clip
+      FaceAnalysis__RecognitionModelPath: /models/arcface/w600k_r50.onnx
     # Keeps the downloaded CLIP model across image rebuilds.
     volumes:
       - models:/models

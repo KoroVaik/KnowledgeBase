@@ -64,17 +64,38 @@ public sealed class FaceAnalysisHandler(KnowledgeBaseDbContext database, IAssetC
             join person in database.People on reference.PersonId equals person.Id
             select new PersonReferenceEmbedding(person.Id, person.Name, occurrence.Id, occurrence.Embedding)).ToListAsync(cancellationToken);
 
-        foreach (var face in faces)
+        var earlierFaces = (await database.FaceOccurrences
+            .Where(occurrence => occurrence.AssetId == asset.Id && occurrence.IdentityId != null)
+            .ToListAsync(cancellationToken))
+            .Select(occurrence => new FaceForIdentityMatching(occurrence.Id, occurrence.RunId, occurrence.IdentityId, occurrence.Embedding))
+            .ToList();
+        var settledIdentityIds = await FaceIdentityState.SettledIdsAsync(database, cancellationToken);
+
+        var occurrences = faces.Select(face => new FaceOccurrence
         {
-            var occurrence = new FaceOccurrence
+            Id = Guid.NewGuid().ToString("N"), RunId = run.Id, AssetId = asset.Id,
+            X = face.X, Y = face.Y, Width = face.Width, Height = face.Height,
+            DetectionScore = face.DetectionScore, LandmarksJson = JsonSerializer.Serialize(face.Landmarks),
+            Embedding = face.Embedding, EmbeddingModelKey = analyzer.EmbeddingModelKey, CreatedAtUtc = now
+        }).ToList();
+        var inheritedIdentities = FaceIdentityMatcher.MatchAgainstAssigned(
+            occurrences.Select(occurrence => new FaceForIdentityMatching(occurrence.Id, occurrence.RunId, null, occurrence.Embedding)).ToList(),
+            earlierFaces);
+
+        foreach (var occurrence in occurrences)
+        {
+            if (!inheritedIdentities.TryGetValue(occurrence.Id, out var identityId))
             {
-                Id = Guid.NewGuid().ToString("N"), RunId = run.Id, AssetId = asset.Id,
-                X = face.X, Y = face.Y, Width = face.Width, Height = face.Height,
-                DetectionScore = face.DetectionScore, LandmarksJson = JsonSerializer.Serialize(face.Landmarks),
-                Embedding = face.Embedding, CreatedAtUtc = now
-            };
+                identityId = Guid.NewGuid().ToString("N");
+                database.FaceIdentities.Add(new FaceIdentity { Id = identityId, AssetId = asset.Id, CreatedAtUtc = now });
+            }
+            occurrence.IdentityId = identityId;
             database.FaceOccurrences.Add(occurrence);
-            database.PhotoAnalysisCandidates.AddRange(FaceCandidateRanking.For(run.Id, occurrence, references, now));
+            // A settled identity is a face the reviewer already disposed of (a reference or a
+            // rejection on any of its occurrences): a re-detection of it is stored as evidence
+            // but never reopened for review.
+            if (!settledIdentityIds.Contains(occurrence.IdentityId))
+                database.PhotoAnalysisCandidates.AddRange(FaceCandidateRanking.For(run.Id, occurrence, references, now));
         }
 
         return null;

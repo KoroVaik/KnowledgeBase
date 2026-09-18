@@ -149,6 +149,15 @@ not just compiled.
 
 ## Worker & AI pipeline
 
+- Face embedder swapped to ArcFace (2026-09-18): insightface `w600k_r50.onnx` via ONNX
+  Runtime with 5-point similarity alignment, `FaceOccurrence.EmbeddingModelKey` (migration
+  `AddFaceEmbeddingModelKey`), self-healing `MigrateFaceModels` job (worker auto-queues it on
+  start when stale embeddings or outdated detections exist; re-embeds, re-detects, re-scores,
+  idempotent), overlap-skip so re-detected confirmed faces don't re-open review, and
+  API-calibrated `confidence` (logistic over `FaceAnalysis:Center/Scale`) shown instead of the
+  raw cosine. Verified locally: auto-migration picked up a simulated stale embedding and
+  re-embedded it, converged archive queues nothing, same-person pair 0.531–0.655 vs impostor
+  ~0.04, API serving `confidence` (0.531 → 99%).
 - Worker split into its own process (`KnowledgeBase.Worker`), namespaces
   `KnowledgeBase.{Core,Api,Worker}.*`. End-to-end run passed locally (Postgres + Garage +
   Ollama `qwen2.5vl:7b`).
@@ -241,6 +250,14 @@ not just compiled.
   provenance, visible evidence and independent Confirm/Reject decisions. Browser-verified: two
   jobs completed without failure, produced four observations, and confirming one removed it from
   the active review queue without changing the model record.
+- Face revoke always returned 500: `ReopenReviewedCandidate` re-inserts the original candidate as
+  a fresh unreviewed row with the same `(RunId, SubjectFaceOccurrenceId, Kind, Rank)`, and the
+  candidates table's unique index forbade that second row while the decided original stays in the
+  audit trail (location revokes escaped it only because their `SubjectFaceOccurrenceId` is NULL,
+  which Postgres treats as distinct). The index is now non-unique (migration
+  `AllowReopenedCandidateDuplicates`). Verified: the exact failing DELETE went 500 → 204, the
+  reference face is gone, the reopened candidate is back in the review queue, and the queued
+  `RescoreFaces` job ran to `Done`.
 
 ## Frontend fixes
 

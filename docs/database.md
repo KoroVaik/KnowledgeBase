@@ -18,6 +18,9 @@ dotnet ef migrations add <Name> \
   --startup-project backend/KnowledgeBase.Api
 ```
 
+When a running dev API locks its output folder, Core can be its own startup project instead —
+`DesignTimeDbContextFactory` supplies the model without touching configuration.
+
 Deploy order: **API first** (applies the migration to Neon), then restart the worker.
 
 ### Tables
@@ -40,7 +43,8 @@ Deploy order: **API first** (applies the migration to Neon), then restart the wo
 | `PhotoAnalysisRuns` | One completed model execution for an asset, with pipeline, model and configuration provenance. |
 | `PhotoAnalysisCandidates` | Ranked person/location/event proposal. The proposed target is deliberately an id without an FK so historical model evidence survives a later canonical merge or deletion. `SignalsJson` stores the raw score breakdown; nullable `SupersededAtUtc` hides only an unreviewed older proposal after a fresh location run. |
 | `PhotoAnalysisReviewDecisions` | One immutable human outcome for a candidate: accepted, rejected, corrected, or merged, optionally with the chosen canonical target. |
-| `FaceOccurrences` | One model-detected face in a photo-analysis run: bounding rectangle, five landmarks, detection score and 512-value embedding. |
+| `FaceOccurrences` | One model-detected face in a photo-analysis run: bounding rectangle, five landmarks, detection score and 512-value embedding. Nullable `IdentityId` links it to the physical face it belongs to (null only until the worker's migration pass assigns one). |
+| `FaceIdentities` | One physical face on one photo, stable across detection versions: every occurrence a re-detection stores for that face points at the same row, so settled review states follow the face instead of any single occurrence. |
 | `PersonReferenceFaces` | A canonical person explicitly linked to one face occurrence by an accepting or correcting human decision. This is the reference set for later similarity rankings. |
 | `VisualEmbeddings` | One model-versioned, normalized CLIP scene vector for a scene-analysis run. It is raw model evidence, not a location link. |
 | `LocationObservations` | A reviewed asset → location link backed by one visual embedding and its source decision. These are the reference appearances for later location ranking. |

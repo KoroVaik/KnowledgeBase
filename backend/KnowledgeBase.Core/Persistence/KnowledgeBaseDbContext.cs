@@ -42,6 +42,8 @@ public sealed class KnowledgeBaseDbContext(DbContextOptions<KnowledgeBaseDbConte
 
     public DbSet<FaceOccurrence> FaceOccurrences => Set<FaceOccurrence>();
 
+    public DbSet<FaceIdentity> FaceIdentities => Set<FaceIdentity>();
+
     public DbSet<PersonReferenceFace> PersonReferenceFaces => Set<PersonReferenceFace>();
 
     public DbSet<VisualEmbedding> VisualEmbeddings => Set<VisualEmbedding>();

@@ -1,11 +1,13 @@
 using KnowledgeBase.Api.Controllers.Auth.Configuration;
 using KnowledgeBase.Api.Controllers.Events.Configuration;
 using KnowledgeBase.Api.Infrastructure.Hosting;
+using KnowledgeBase.Core.FaceAnalysis;
 using KnowledgeBase.Core.Hosting;
 using KnowledgeBase.Core.Persistence;
 using KnowledgeBase.Core.Pipeline;
 using KnowledgeBase.Core.RealTime;
 using KnowledgeBase.Core.Storage;
+using Microsoft.Extensions.Options;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -28,6 +30,9 @@ builder.Services.Configure<EventsOptions>(builder.Configuration.GetSection(Event
 
 // The pipeline runs in the Worker; the API only advertises its text-size limit via /api/features.
 builder.Services.Configure<PipelineOptions>(builder.Configuration.GetSection(PipelineOptions.SectionName));
+
+// Turns the worker's raw cosine face scores into the percents the review screen shows.
+builder.Services.Configure<FaceConfidenceCalibration>(builder.Configuration.GetSection(FaceConfidenceCalibration.SectionName));
 
 var app = builder.Build();
 

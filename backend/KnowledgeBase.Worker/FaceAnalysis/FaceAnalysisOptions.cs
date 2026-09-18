@@ -9,4 +9,8 @@ public sealed class FaceAnalysisOptions
     public float ConfidenceThreshold { get; set; } = 0.8f;
 
     public float NonMaximumSuppressionThreshold { get; set; } = 0.3f;
+
+    // Resolved against the process directory, the app directory, or the repo layout when run via
+    // `dotnet run`. In the deployed container it is an absolute path into the models volume.
+    public string RecognitionModelPath { get; set; } = "models/w600k_r50.onnx";
 }

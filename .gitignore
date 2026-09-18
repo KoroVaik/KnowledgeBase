@@ -10,3 +10,6 @@ infra/worker/worker.env
 
 # dotnet build outputs redirected away from bin/obj (running Api/Worker lock those).
 .dotnet-artifacts/
+
+# The ArcFace embedding model (174 MB) — downloaded once, lives on the home PC's models volume.
+backend/KnowledgeBase.Worker/models/

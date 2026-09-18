@@ -54,6 +54,7 @@ public static class FaceCandidateRanking
             JsonSerializer.Serialize(new
             {
                 metric = "cosine",
+                embedder = occurrence.EmbeddingModelKey,
                 referenceFaceId = candidate.FaceOccurrenceId,
                 detectionScore = occurrence.DetectionScore,
                 referenceCount = references.Count(reference => reference.PersonId == candidate.PersonId),
@@ -71,7 +72,7 @@ public static class FaceCandidateRanking
         ProposedLabel = label, Rank = rank, Score = score, SignalsJson = signalsJson, CreatedAtUtc = createdAtUtc,
     };
 
-    private static double CosineSimilarity(float[] left, float[] right)
+    public static double CosineSimilarity(float[] left, float[] right)
     {
         if (left.Length != right.Length) throw new InvalidOperationException("Face embeddings from different models cannot be compared.");
         double dot = 0, leftLength = 0, rightLength = 0;

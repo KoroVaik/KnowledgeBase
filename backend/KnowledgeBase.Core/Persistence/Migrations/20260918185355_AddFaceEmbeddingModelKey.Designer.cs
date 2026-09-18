@@ -3,6 +3,7 @@ using System;
 using KnowledgeBase.Core.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace KnowledgeBase.Core.Persistence.Migrations
 {
     [DbContext(typeof(KnowledgeBaseDbContext))]
-    partial class KnowledgeBaseDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260918185355_AddFaceEmbeddingModelKey")]
+    partial class AddFaceEmbeddingModelKey
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -285,27 +288,6 @@ namespace KnowledgeBase.Core.Persistence.Migrations
                     b.ToTable("EventClusteringRuns");
                 });
 
-            modelBuilder.Entity("KnowledgeBase.Core.Persistence.FaceIdentity", b =>
-                {
-                    b.Property<string>("Id")
-                        .HasMaxLength(32)
-                        .HasColumnType("character varying(32)");
-
-                    b.Property<string>("AssetId")
-                        .IsRequired()
-                        .HasMaxLength(32)
-                        .HasColumnType("character varying(32)");
-
-                    b.Property<DateTime>("CreatedAtUtc")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("AssetId");
-
-                    b.ToTable("FaceIdentities");
-                });
-
             modelBuilder.Entity("KnowledgeBase.Core.Persistence.FaceOccurrence", b =>
                 {
                     b.Property<string>("Id")
@@ -334,10 +316,6 @@ namespace KnowledgeBase.Core.Persistence.Migrations
                     b.Property<int>("Height")
                         .HasColumnType("integer");
 
-                    b.Property<string>("IdentityId")
-                        .HasMaxLength(32)
-                        .HasColumnType("character varying(32)");
-
                     b.Property<string>("LandmarksJson")
                         .IsRequired()
                         .HasColumnType("jsonb");
@@ -357,8 +335,6 @@ namespace KnowledgeBase.Core.Persistence.Migrations
                         .HasColumnType("integer");
 
                     b.HasKey("Id");
-
-                    b.HasIndex("IdentityId");
 
                     b.HasIndex("RunId");
 
@@ -653,7 +629,8 @@ namespace KnowledgeBase.Core.Persistence.Migrations
 
                     b.HasIndex("Kind", "SubjectAssetId", "SupersededAtUtc");
 
-                    b.HasIndex("RunId", "SubjectFaceOccurrenceId", "Kind", "Rank");
+                    b.HasIndex("RunId", "SubjectFaceOccurrenceId", "Kind", "Rank")
+                        .IsUnique();
 
                     b.ToTable("PhotoAnalysisCandidates");
                 });
@@ -1154,15 +1131,6 @@ namespace KnowledgeBase.Core.Persistence.Migrations
                         .IsRequired();
                 });
 
-            modelBuilder.Entity("KnowledgeBase.Core.Persistence.FaceIdentity", b =>
-                {
-                    b.HasOne("KnowledgeBase.Core.Persistence.AssetRecord", null)
-                        .WithMany()
-                        .HasForeignKey("AssetId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-                });
-
             modelBuilder.Entity("KnowledgeBase.Core.Persistence.FaceOccurrence", b =>
                 {
                     b.HasOne("KnowledgeBase.Core.Persistence.AssetRecord", null)
@@ -1170,11 +1138,6 @@ namespace KnowledgeBase.Core.Persistence.Migrations
                         .HasForeignKey("AssetId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
-
-                    b.HasOne("KnowledgeBase.Core.Persistence.FaceIdentity", null)
-                        .WithMany()
-                        .HasForeignKey("IdentityId")
-                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("KnowledgeBase.Core.Persistence.PhotoAnalysisRun", null)
                         .WithMany()

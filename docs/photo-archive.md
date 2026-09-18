@@ -79,6 +79,49 @@ Fine-tuning a foundation model is not a planned early step: it needs a large, cl
 dataset, dedicated training infrastructure, and a separate evaluation process. Review data
 first improves thresholds and candidate ranking instead.
 
+### A face's identity survives re-detection
+
+Detection names a physical face on a photo with a `FaceIdentity` row, not with its `FaceOccurrence`
+row: every occurrence any run stores for that face points at the same identity. When a run stores a
+face, it is matched against what earlier runs of the same photo already assigned - the best pair
+scoring at least a 0.5 embedding cosine wins, one-to-one, so a person appearing twice on one photo
+keeps two identities. The comparison is embedding cosine, not box overlap: a re-detection crops
+nearly the same pixels, so the match survives a detector change, which near-identical boxes cannot
+promise.
+
+Review states settle the identity, not an occurrence: a confirmed reference face or a rejected or
+merged proposal on any occurrence of that identity closes it. A re-detection of a settled face is
+stored as evidence and never reopens review - not through detection, not through a re-score, and the
+migration pass retires open proposals on settled identities that predate identities.
+`PersonReferenceFace` still points at the specific confirmed occurrence, so ranking keeps comparing
+against the crop the reviewer actually confirmed, and re-embedding keeps that reference's vector
+current.
+
+### Face model migrations are self-healing; scores stay raw, percents are calibrated
+
+Every `FaceOccurrence` records the `EmbeddingModelKey` of the embedder that produced its vector
+(the current one is insightface ArcFace `w600k_r50`), and detection runs are versioned. The
+worker closes the gap between stored data and current code itself: on start it counts stale
+embeddings and canonical photos without a run of the current detection version, and if either is
+non-zero it queues a `MigrateFaceModels` job for itself. That job re-crops and re-embeds every
+stale face (references included, in place, per-photo resumable), requeues detection for the
+outdated photos, and re-scores. Detection fixes ride the same path — no separate procedure.
+
+A model swap is therefore: put the .onnx file in place, change the code, restart the worker.
+The migration is idempotent (each step touches only rows not matching current code) and
+deduplicated (one pending/running job at a time); a converged archive queues nothing. Reviewed
+decisions are never touched by any of this — a re-embed rewrites embeddings, not history, and
+re-detected faces belonging to an already-settled identity store their occurrence but do not re-open
+the settled identity for review. The migration also assigns identities to occurrences that predate
+the identity system, replaying each photo's runs oldest first.
+
+A cosine score is not a probability, and the raw value stays the stored evidence. The API adds a
+calibrated `confidence` at read time for person candidates: a logistic over the raw score with
+`FaceAnalysis:Center` and `FaceAnalysis:Scale` (defaults 0.28 / 0.05, halfway between the expected
+same-person and different-person ranges for this embedder). The review screen shows that as the
+percent; the raw score remains in the Model evidence section. Once score distributions have been
+measured on real labelled data, the two numbers move to config - no re-run needed.
+
 ### Exact duplicate bytes share one analysis
 
 An exact duplicate is defined by SHA-256 over the stored bytes, not by filename, file size, or
@@ -139,11 +182,14 @@ remain unknown and reviewable rather than being silently assigned.
 **Done when:** confirmed reference faces make later suggestions for the same person better,
 and a wrong suggestion can be rejected without losing the original model result.
 
-The first implementation uses local FaceONNX models: its embedded YOLOv5 face detector returns
-a bounding box and five landmarks, and its ResNet27 embedder produces a 512-value vector. Every
-image upload queues `FingerprintAsset` alongside `BuildSourceNote`; the fingerprint job then queues
-`AnalyzeFaces` and `AnalyzeScenes` for the canonical asset of the duplicate group. The worker stores the
-face occurrence and top-five cosine-similarity candidates per detected face. With no confirmed
+The first implementation detects with the local FaceONNX YOLOv5s-face model (bounding box plus
+five landmarks) and embeds with the local insightface `w600k_r50.onnx` ArcFace model, a 512-value
+vector of the 112×112 crop that a 5-point similarity transform aligns onto the standard template
+(FaceONNX's own ResNet27 embedder was replaced 2026-09-18: same-person and different-person
+cosines sat so close together that a confirmed face could score 37%). Every image upload queues
+`FingerprintAsset` alongside `BuildSourceNote`; the fingerprint job then queues `AnalyzeFaces`
+and `AnalyzeScenes` for the canonical asset of the duplicate group. The worker stores the face
+occurrence and top-five cosine-similarity candidates per detected face. With no confirmed
 reference faces, it creates an explicit unknown candidate so the reviewer can create a person and
 correct the candidate to them. Accepting or correcting a face candidate creates a
 `PersonReferenceFace`; a later run compares against all such references for that person.
@@ -226,9 +272,25 @@ usable.
 - [ ] **Check whether CLIP scene vectors see phone photos sideways.** `ClipSceneEmbedder` hands the raw
       bytes to `ClipImageEncoder`; if that library ignores EXIF orientation like ImageSharp does, a
       rotated phone photo gets a vector for the sideways picture and location matching suffers.
+- [ ] **Face identities — run pending.** Identity assignment at detection (`FaceIdentityMatcher`,
+      0.5 embedding cosine, one-to-one per run pair), the identity-based settled filter in detection,
+      re-score and the review list, and the migration pass that assigns identities to occurrences
+      stored before identities existed are all in code; the build is green, nothing ran against live
+      data yet. On the next worker start the gap check should queue one `MigrateFaceModels` job, which
+      assigns identities and retires open proposals on settled identities; the review queue must not
+      show re-detected copies of confirmed or rejected faces afterwards. The 0.5 matching cosine is
+      as unmeasured as the score calibration below.
+- [ ] **ArcFace model on the home PC.** The worker container expects `w600k_r50.onnx` at
+      `/models/arcface/` in the `models` volume (compose already sets
+      `FaceAnalysis__RecognitionModelPath`); download instructions are in
+      [`../infra/worker/README.md`](../infra/worker/README.md). Until then face analysis fails
+      with a "model was not found" error listing the probed paths.
 - [ ] **Phase 2 — face-quality calibration.** Validate the detector confidence and similarity
       behaviour on a small manually labelled archive subset before introducing acceptance
-      thresholds or any automatic decision.
+      thresholds or any automatic decision. First step after the ArcFace swap: measure the
+      same-person and different-person cosine distributions on real data and set
+      `FaceAnalysis:Center`/`Scale` from them (defaults are placeholders from typical ArcFace
+      behaviour, not measurements).
 - [ ] **Phase 3 — location-score calibration.** Review a manually labelled archive subset before
       interpreting cosine scores as a confidence or introducing any automatic location decision.
 - [ ] **Phase 4 — scene-observation calibration.** Review a manually labelled archive subset to

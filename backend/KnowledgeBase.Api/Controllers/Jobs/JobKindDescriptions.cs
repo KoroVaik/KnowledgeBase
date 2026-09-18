@@ -18,6 +18,8 @@ internal static class JobKindDescriptions
             "Calculates an exact file fingerprint so duplicate images can share one face analysis.",
         JobKind.RescoreFaces =>
             "Re-ranks people suggestions for faces nobody has reviewed yet, using the latest confirmed reference faces.",
+        JobKind.MigrateFaceModels =>
+            "Brings stored face data up to the current models — embeddings, detections and face identities — then re-ranks suggestions.",
         JobKind.AnalyzeScenes =>
             "Generates a CLIP scene vector and proposes the most similar reviewed locations.",
         JobKind.AnalyzeSceneObservations =>

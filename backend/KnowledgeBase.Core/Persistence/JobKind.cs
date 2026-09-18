@@ -17,6 +17,12 @@ public enum JobKind
     // and reads no file; AssetId and Payload unused.
     RescoreFaces,
 
+    // One self-healing model migration: re-embeds faces stored by an older embedder, assigns face
+    // identities to occurrences without one, requeues detection for photos analysed by an older
+    // pipeline version, then re-scores. AssetId and Payload unused; the worker enqueues it itself
+    // on start when the check finds any gap.
+    MigrateFaceModels,
+
     // Generate a CLIP scene vector and propose reviewed location candidates.
     AnalyzeScenes,
 

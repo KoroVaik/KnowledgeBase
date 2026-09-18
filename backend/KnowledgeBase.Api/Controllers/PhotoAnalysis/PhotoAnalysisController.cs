@@ -1,4 +1,5 @@
 using KnowledgeBase.Api.Controllers.PhotoAnalysis.Contracts;
+using KnowledgeBase.Core.FaceAnalysis;
 using KnowledgeBase.Core.Persistence;
 using KnowledgeBase.Core.Pipeline;
 using KnowledgeBase.Core.Pipeline.EventClustering;
@@ -7,6 +8,7 @@ using KnowledgeBase.Core.RealTime;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using System.Text.Json;
 
 namespace KnowledgeBase.Api.Controllers.PhotoAnalysis;
@@ -16,8 +18,14 @@ namespace KnowledgeBase.Api.Controllers.PhotoAnalysis;
 [Route("api/photo-analysis")]
 [Authorize]
 [Produces("application/json")]
-public sealed class PhotoAnalysisController(KnowledgeBaseDbContext database, IChangeNotifier notifier) : ControllerBase
+public sealed class PhotoAnalysisController(KnowledgeBaseDbContext database, IChangeNotifier notifier, IOptions<FaceConfidenceCalibration> faceCalibration) : ControllerBase
 {
+    // A face score is a cosine between embeddings; person candidates show its calibrated form.
+    // Every other candidate kind has its own score scale, so it is shown as stored.
+    private double ConfidenceFor(PhotoAnalysisCandidate candidate) =>
+        candidate.Kind == PhotoAnalysisCandidateKind.Person
+            ? faceCalibration.Value.ToConfidence(candidate.Score)
+            : candidate.Score;
     [HttpGet]
     public async Task<ActionResult<PhotoAnalysisResponse>> List(CancellationToken cancellationToken)
     {
@@ -35,11 +43,19 @@ public sealed class PhotoAnalysisController(KnowledgeBaseDbContext database, ICh
         // locations - but the reviewer decides about the face or the photo, not about each guess in turn.
         // Only the best open guess per subject is offered here; the rest stay in the database as evidence.
         // A face's guesses can come from several re-scores, so "best" means the highest score, not the
-        // newest run, and the stored Rank is history rather than the current order. A subject is done once
-        // its decision still stands: a confirmed reference face or location observation, or a rejection.
-        // Revoking a confirmation removes that reference, so the subject reappears with its reopened candidate.
-        var confirmedFaceOccurrenceIds = (await database.PersonReferenceFaces
-            .Select(reference => reference.FaceOccurrenceId).ToListAsync(cancellationToken)).ToHashSet();
+        // newest run, and the stored Rank is history rather than the current order. A face subject is
+        // done once its decision still stands on the face's identity (a confirmed reference or a
+        // rejection, whichever occurrence the re-detection stored), so re-detections of an already
+        // reviewed face never come back; a face not yet given an identity is hidden until the worker's
+        // migration pass assigns one. The subject is the identity itself, not one occurrence row: a
+        // re-detected copy keeps its own open rows, and per-occurrence grouping would offer the same
+        // face twice once a revoke reopens the subject. Revoking a confirmation removes that reference,
+        // so the subject reappears with its reopened candidate.
+        var settledFaceIdentityIds = await FaceIdentityState.SettledIdsAsync(database, cancellationToken);
+        var faceIdentityByOccurrenceId = (await database.FaceOccurrences
+            .Where(occurrence => occurrence.IdentityId != null)
+            .ToListAsync(cancellationToken))
+            .ToDictionary(occurrence => occurrence.Id, occurrence => occurrence.IdentityId!);
         var confirmedLocationAssetIds = (await database.LocationObservations
             .Select(observation => observation.AssetId).ToListAsync(cancellationToken)).ToHashSet();
         var rejectedSubjects = (await (
@@ -54,10 +70,13 @@ public sealed class PhotoAnalysisController(KnowledgeBaseDbContext database, ICh
                 && !database.PhotoAnalysisReviewDecisions.Any(decision => decision.CandidateId == candidate.Id))
             .ToListAsync(cancellationToken))
             .Where(candidate => canonicalAssetIds.Contains(candidate.SubjectAssetId)
-                && (candidate.SubjectFaceOccurrenceId is null || !confirmedFaceOccurrenceIds.Contains(candidate.SubjectFaceOccurrenceId))
+                && (candidate.Kind != PhotoAnalysisCandidateKind.Person
+                    || (candidate.SubjectFaceOccurrenceId is not null
+                        && faceIdentityByOccurrenceId.TryGetValue(candidate.SubjectFaceOccurrenceId, out var identityId)
+                        && !settledFaceIdentityIds.Contains(identityId)))
                 && (candidate.Kind != PhotoAnalysisCandidateKind.Location || !confirmedLocationAssetIds.Contains(candidate.SubjectAssetId))
                 && !rejectedSubjects.Contains(ReviewSubjectKey(candidate.Kind, candidate.SubjectAssetId, candidate.SubjectFaceOccurrenceId)))
-            .GroupBy(candidate => ReviewSubjectKey(candidate.Kind, candidate.SubjectAssetId, candidate.SubjectFaceOccurrenceId))
+            .GroupBy(candidate => PendingSubjectKey(candidate, faceIdentityByOccurrenceId))
             .Select(group =>
             {
                 var best = group.OrderByDescending(candidate => candidate.Score).ThenByDescending(candidate => candidate.CreatedAtUtc).First();
@@ -68,7 +87,7 @@ public sealed class PhotoAnalysisController(KnowledgeBaseDbContext database, ICh
                     .GroupBy(candidate => candidate.ProposedTargetId!)
                     .Select(targetGroup => targetGroup.OrderByDescending(candidate => candidate.CreatedAtUtc).First())
                     .OrderByDescending(candidate => candidate.Score)
-                    .Select(candidate => new PhotoAnalysisCandidateMatchResponse(candidate.ProposedTargetId!, candidate.Score))
+                    .Select(candidate => new PhotoAnalysisCandidateMatchResponse(candidate.ProposedTargetId!, candidate.Score, ConfidenceFor(candidate)))
                     .ToList();
                 // Ordered by when the subject first came up for review, not by its newest row: a re-score
                 // must not shuffle the queue the reviewer is working through.
@@ -161,6 +180,7 @@ public sealed class PhotoAnalysisController(KnowledgeBaseDbContext database, ICh
                 subject.Best.ProposedLabel,
                 subject.Best.Rank,
                 subject.Best.Score,
+                ConfidenceFor(subject.Best),
                 subject.Best.SignalsJson,
                 subject.Best.RunId,
                 subject.Best.SubjectFaceOccurrenceId is { } faceOccurrenceId
@@ -538,15 +558,38 @@ public sealed class PhotoAnalysisController(KnowledgeBaseDbContext database, ICh
     private static string ReviewSubjectKey(PhotoAnalysisCandidateKind kind, string subjectAssetId, string? subjectFaceOccurrenceId) =>
         $"{kind}:{subjectFaceOccurrenceId ?? subjectAssetId}";
 
+    // A face's review subject is its identity, not one stored occurrence row: a re-detection of the
+    // same face keeps its own open candidate rows, so per-occurrence grouping would offer that face
+    // twice once a revoke reopens the subject. Occurrences without an identity never reach here -
+    // the list filter hides them until the worker's migration pass assigns one.
+    private static string PendingSubjectKey(PhotoAnalysisCandidate candidate, IReadOnlyDictionary<string, string> faceIdentityByOccurrenceId) =>
+        candidate.Kind == PhotoAnalysisCandidateKind.Person
+            && candidate.SubjectFaceOccurrenceId is { } occurrenceId
+            && faceIdentityByOccurrenceId.TryGetValue(occurrenceId, out var identityId)
+            ? $"{PhotoAnalysisCandidateKind.Person}:identity:{identityId}"
+            : ReviewSubjectKey(candidate.Kind, candidate.SubjectAssetId, candidate.SubjectFaceOccurrenceId);
+
     // The reviewer answers about a face or a photo, not about each of its five ranked proposals:
     // one decision closes the rest, which stay in the audit trail as superseded. A proposal that
     // already carries its own decision is never touched.
     private async Task SupersedeSiblingCandidates(PhotoAnalysisCandidate decided, DateTime supersededAtUtc, CancellationToken cancellationToken)
     {
         var faceOccurrenceId = decided.SubjectFaceOccurrenceId;
-        var siblings = faceOccurrenceId is not null
-            ? database.PhotoAnalysisCandidates.Where(item => item.SubjectFaceOccurrenceId == faceOccurrenceId)
-            : database.PhotoAnalysisCandidates.Where(item => item.Kind == decided.Kind && item.SubjectAssetId == decided.SubjectAssetId && item.RunId == decided.RunId);
+        // The decision settles the face's identity, not one occurrence row of it: a re-detected copy
+        // of the same face holds its own open rows, and those are this subject's duplicates rather
+        // than new proposals. Without an identity, the occurrence itself stays the subject.
+        var identityId = faceOccurrenceId is null
+            ? null
+            : await database.FaceOccurrences
+                .Where(occurrence => occurrence.Id == faceOccurrenceId)
+                .Select(occurrence => occurrence.IdentityId)
+                .SingleOrDefaultAsync(cancellationToken);
+        var siblings = identityId is not null
+            ? database.PhotoAnalysisCandidates.Where(item => item.SubjectFaceOccurrenceId != null
+                && database.FaceOccurrences.Any(occurrence => occurrence.Id == item.SubjectFaceOccurrenceId && occurrence.IdentityId == identityId))
+            : faceOccurrenceId is not null
+                ? database.PhotoAnalysisCandidates.Where(item => item.SubjectFaceOccurrenceId == faceOccurrenceId)
+                : database.PhotoAnalysisCandidates.Where(item => item.Kind == decided.Kind && item.SubjectAssetId == decided.SubjectAssetId && item.RunId == decided.RunId);
 
         foreach (var sibling in await siblings
             .Where(item => item.Id != decided.Id && item.SupersededAtUtc == null

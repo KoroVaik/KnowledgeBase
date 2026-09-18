@@ -30,6 +30,17 @@ See [`../../docs/worker.md`](../../docs/worker.md) for the design and
   updates the list without a reload. Empty → notes appear only after F5, everything else
   works. Generate: `openssl rand -hex 32` (any long random string).
 
+### ArcFace embedding model
+
+Face embeddings come from `w600k_r50.onnx` (insightface `buffalo_l`, ~174 MB, not in git).
+Download `buffalo_l.zip` from <https://github.com/deepinsight/insightface/releases/tag/v0.7>,
+extract, and put `w600k_r50.onnx` into the `models` Docker volume under `/models/arcface/`
+(the compose file already points `FaceAnalysis__RecognitionModelPath` there), e.g.:
+
+```powershell
+docker run --rm -v knowledgebase-worker_models:/mnt -v ${PWD}:/src alpine sh -c "mkdir -p /mnt/arcface && cp /src/w600k_r50.onnx /mnt/arcface/"
+```
+
 ## Running
 
 ```powershell
