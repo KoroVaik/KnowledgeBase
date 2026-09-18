@@ -98,7 +98,7 @@ server just never finishes, with `EventSource` reconnecting on its own.
   - `/api/features` returns `Google.IsConfigured` — the SPA shows the button only when
     the flow will actually work.
   - Vite proxy needs `changeOrigin: false` — the backend builds `redirect_uri` from the
-    `Host` header. See [`frontend.md`](frontend.md).
+    `Host` header. See [`frontend-features.md`](frontend-features.md).
 
 ### Data Protection keys → database
 
@@ -130,7 +130,7 @@ worker already polls — no new job-kind logic, no write path. Scoped to active 
 is terminal too, `MaxAttempts` exhausted. `Error` is still returned for a `Pending` row — the
 worker resets a failed-but-not-final attempt back to `Pending` and leaves `Error` set (see
 `PipelineWorker.TickAsync`), so a queued job can already carry its last failure. UI:
-[`frontend.md`](frontend.md) *Jobs section*.
+[`frontend-features.md`](frontend-features.md) *Jobs section*.
 
 `GET /api/jobs/failed` lists the `Failed` rows; `POST /api/jobs/{id}/retry` and
 `POST /api/jobs/failed/retry` reset them to `Pending` with `Attempts = 0` and `Error` cleared,
@@ -187,7 +187,8 @@ re-raise every task.)
 - [ ] A 401 during upload does not drop the frontend to "logged out" — the session went
       stale and the user sees an upload error. Needs a shared 401 handler. (Also breaks
       `GET /api/events` → the connection banner says "no server" though the server is
-      alive and just does not recognise us.) Partly a [`frontend.md`](frontend.md) item.
+      alive and just does not recognise us.) Partly a
+      [`frontend-features.md`](frontend-features.md) item.
 - [ ] Remove the dead `Features__*` env vars from Render — `Features__DirectAssetAccessEnabled`
       and now `Features__GoogleSignInEnabled` (the whole `Features` section is gone from
       code). ASP.NET ignores unknown keys, so this is cleanup, not a blocker; Google stays

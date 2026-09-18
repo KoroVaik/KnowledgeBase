@@ -232,7 +232,8 @@ mid-string (`done_reason: "length"`). Fixed:
       to the exact expected date and decimal lat/lon, and a plain JPEG with no EXIF at all
       returns nulls without throwing. `GET /api/assets` now returns the three fields and
       `AssetList` shows them in the file row (`Taken …`, `lat, lon`) — see *Capture date +
-      geolocation in the file row* in [`frontend.md`](frontend.md). **Not yet verified**:
+      geolocation in the file row* in
+      [`frontend-features.md`](frontend-features.md). **Not yet verified**:
       migration `AddAssetCaptureMetadata` applied to the local DB, and a real upload (a
       phone photo, through `SourceNoteHandler`) landing correctly in `Assets.CapturedAtUtc`/
       `Latitude`/`Longitude` and showing up in the browser — a real photo's EXIF layout can

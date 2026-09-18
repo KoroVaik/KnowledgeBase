@@ -101,7 +101,11 @@ latest commit`.
   rights — so the backend key is `--owner` **forever**, not just for the edit. The rule
   is deliberately wide (`*` in origin, methods, headers): home storage, and a narrow list
   would mean re-uploading the rule every time the PC address changes or a device is
-  added. Rule file: `infra/garage/cors.json`. R2 has the same rule.
+  added. Rule file: `infra/garage/cors.json`. R2's rule is narrower, set in the Cloudflare
+  dashboard: origin only the Render URL, methods `GET` + `PUT`, header `content-type`.
+  `GET` is what `ProgressiveImage` needs (see [`frontend.md`](frontend.md)) — with PUT-only
+  every image download failed CORS; without CORS at all plain `<img>` display still worked,
+  which is how the gap stayed invisible.
 - **R2 was one code change, not zero:** `UseChunkEncoding = false` on `PutObjectRequest`
   — R2 does not do `STREAMING-AWS4-HMAC-SHA256-PAYLOAD`. Garage is unaffected.
 

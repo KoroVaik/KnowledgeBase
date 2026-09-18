@@ -7,7 +7,8 @@ history**. Load only what the task touches.
 |---|---|---|
 | [`architecture.md`](architecture.md) | always, first | the system shape, the process split, the deliberate constraints |
 | [`backend.md`](backend.md) | touching `backend/KnowledgeBase.Api` | HTTP API structure, auth, decisions + open items |
-| [`frontend.md`](frontend.md) | touching `frontend/` | SPA structure, SSE client, decisions + open items |
+| [`frontend.md`](frontend.md) | writing or changing any UI in `frontend/` | SPA structure, conventions, **shared components inventory**, styling |
+| [`frontend-features.md`](frontend-features.md) | touching a specific screen or feature in `frontend/` | per-feature decisions + all frontend open items |
 | [`worker.md`](worker.md) | touching `backend/KnowledgeBase.Worker` or the queue | the AI process, queue, worker→API bridge |
 | [`ai-pipeline.md`](ai-pipeline.md) | touching analysis / Ollama / extraction | model contract, extractors, model quirks |
 | [`photo-archive.md`](photo-archive.md) | touching people, photo locations, event clustering, or archive review | archive-domain rules and phased foundation plan |
@@ -19,7 +20,13 @@ history**. Load only what the task touches.
 
 ## How these docs are kept
 
+- **One file = one topic an agent can load alone.** Aim for a few hundred lines; when an
+  area file outgrows that, split it by topic (`frontend.md` + `frontend-features.md` is the
+  example) instead of letting one heap grow. An agent reads whole files, so the split —
+  not an index inside a file — is what makes "load only what the task touches" real.
 - **`architecture.md`** — stable. Changes only when a deliberate constraint changes.
+- **Before creating a new UI component**, check the **Shared components** inventory in
+  `frontend.md` — reuse or extend an existing component instead of duplicating it.
 - **Each area file** has two sections:
   - **Decisions** — the *why* behind the current design. The thing an agent needs so it
     does not "fix" something that was chosen on purpose. Newer wins; a superseded

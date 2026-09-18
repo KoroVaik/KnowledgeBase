@@ -67,7 +67,7 @@ SET NULL (target); `Notes → Assets` (`SourceAssetId`) SET NULL; `NoteTags → 
   name) instead of the busiest-first default. Plain text ranking, not the model's call —
   it ranks a human's typing for a pick list, it does not decide a "correct" merge (that
   stays `SuggestedMergeIntoId`, below). `excludeId` drops one tag (the one being merged)
-  from the results. See `TagPicker` in [`frontend.md`](frontend.md).
+  from the results. See `TagPicker` in [`frontend-features.md`](frontend-features.md).
 - `POST /api/tags/suggest-merges` queues a `GroupTags` job (see *Synthesis pipeline* in
   [`ai-pipeline.md`](ai-pipeline.md)) that re-runs the closest-matching-tag call over
   **every** unconfirmed tag in one pass, not only ones invented in the same run as a
@@ -114,7 +114,7 @@ SET NULL (target); `Notes → Assets` (`SourceAssetId`) SET NULL; `NoteTags → 
   though the hierarchy is a DAG and could take one. Widening that (re-running the search
   for already-placed tags, on demand rather than automatically) is a later Open item, not
   done now.
-- UI: [`frontend.md`](frontend.md) *One review queue, not two*.
+- UI: [`frontend-features.md`](frontend-features.md) *One review queue, not two*.
 
 ### `NoteKind` — one table, three lifecycles
 
@@ -202,7 +202,8 @@ UTC as local time. Fixed with a value converter in the model; **not needed in Po
         first), and one to activate a chosen version — soft-delete the live one, un-delete
         the pick, move inbound links. The swap logic is the `process-again` replacement in
         reverse (separate `SaveChanges` around the partial unique index on `Title`).
-      - UI: a version dropdown in `FilePanel` — see [`frontend.md`](frontend.md).
+      - UI: a version dropdown in `FilePanel` — see
+        [`frontend-features.md`](frontend-features.md).
 - [ ] **More note kinds, each processed its own way.** After `Source` / `Synthesis` /
       `Index`: user-written notes (no AI, or AI only on request), general/standalone notes
       not tied to any file. The `JobKind` → `IPipelineHandler` seam is in place — each new

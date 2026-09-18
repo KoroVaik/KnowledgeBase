@@ -63,6 +63,11 @@ not just compiled.
 
 ## Frontend
 
+- Progressive image loading (2026-09-18): `components/ProgressiveImage` — images download via
+  XHR so the placeholder shows real percent over a shimmer gradient, fade-in when done; applied to
+  FilePanel preview, all PhotoAnalysisSection previews/thumbnails, PhotoMultiSelect thumbs.
+  Verified: prod, owner-checked (shimmer + percent, then the fix of R2's PUT-only CORS rule —
+  see [`infra.md`](infra.md)).
 - Scaffold `frontend/` (React 19 + TS + Vite), `strict: true`. Lint is oxlint.
 - Vite proxy `/api` → `:5244` instead of CORS. `VITE_API_BASE_URL` removed.
 - Login form, Sign-out, session check on load. `unreachable` state with "Try again" for a
@@ -75,7 +80,7 @@ not just compiled.
 - Bulk upload drop zone: native `<dialog>`, `upload/classify.ts` (ready / warning /
   blocked), clipboard paste (button + `.upload-paste` field), folder detection.
   **Code + build + lint done; full browser run still pending — see
-  [`frontend.md`](frontend.md).**
+  [`frontend-features.md`](frontend-features.md).**
 - Upload progress bar: `putToBucket` on `XMLHttpRequest`.
 - Markdown render via `marked` + `dangerouslySetInnerHTML` (no DOMPurify, on purpose).
 - Wiki-link rendering: `notes/renderNoteBody.ts` as a `marked` extension, server-computed
@@ -88,7 +93,8 @@ not just compiled.
   state, "Delete selected" firing the single-file `DELETE` per row via `Promise.allSettled`.
   Verified in the browser by subagent (select / select-all / indeterminate / confirm text /
   happy-path delete of `zz-`-prefixed test files / phone layout). Partial-failure and
-  disabled-while-deleting paths still pending — see [`frontend.md`](frontend.md).
+  disabled-while-deleting paths still pending — see
+  [`frontend-features.md`](frontend-features.md).
 - Files + Notes merged into one "Files" section: a row expands to a `FilePanel` with
   `Process again` / `Delete` / `Download` and a Note / File preview toggle (inline `<img>`
   for images, highlighted-but-inert `[[links]]`). The "Notes" section stays for
