@@ -57,10 +57,13 @@ These are decisions, not gaps. Do not offer to "fix" them.
 - **Full-text search and backlinks in the DB have not moved yet.** When they do, it is
   the same database, not a new one.
 - **Frontend**: React + TypeScript, `strict: true`, avoid `any`.
-- **Auth is single-user, no registration** (decision 2026-09-06, supersedes "not
-  planned"). It is a deploy prerequisite: a public URL without it means open access to
-  the notes. Cookie session, password from config; Google OAuth is a second identity
-  source behind a flag. See [`backend.md`](backend.md).
+- **Auth: one user today, multi-user-ready model** (decision 2026-09-18, supersedes
+  "single-user"; auth itself since 2026-09-06). It is a deploy prerequisite: a public URL
+  without it means open access to the notes. Cookie session, password from config; Google
+  OAuth is a second identity source. A `Users` table exists and the session carries the
+  user id, so new per-user state is keyed by it from the start. Not yet: registration, and
+  notes/files/tags are still global, not owned by a user. See [`backend.md`](backend.md)
+  and [`storage-and-caching.md`](storage-and-caching.md).
 
 ## Working rules
 

@@ -99,7 +99,9 @@
 }
 
 #root {
-  width: 1126px;
+  /* Single-column stacked layout (no side nav / multi-pane view yet) - a wide cap just
+     leaves dead space beside the cards, not extra content. */
+  width: min(100%, 1120px);
   max-width: 100%;
   margin: 0 auto;
   text-align: center;

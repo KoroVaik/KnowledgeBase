@@ -68,6 +68,14 @@ server just never finishes, with `EventSource` reconnecting on its own.
   behind a proxy every request arrives from one address otherwise.
 - `OnRedirectToLogin` → 401 instead of 302: the cookie scheme default redirects to a
   login page, and `fetch()` would read that HTML as success.
+- **The session carries the user id** (claim `kb:user-id`, `User.GetUserId()`), not only a
+  display name — decision 2026-09-18. Password sign-in → the owner row; Google →
+  `IUserDirectory` looks the email up in `Users` and falls back to the owner (the allow-list
+  predates accounts and lists the owner's own addresses). Not `NameIdentifier`: Google fills
+  that with its own account id. `OnValidatePrincipal` rejects a cookie without the claim, so
+  the pre-accounts cookies cost one sign-in after that deploy.
+- **Per-user preferences** — `GET /api/preferences`, `PUT /api/preferences/{key}`. See
+  [`storage-and-caching.md`](storage-and-caching.md).
 - Password hash: PBKDF2 via `PasswordHasher<T>` (in-framework, no NuGet). Generate with
   `dotnet run -- hash-password <pw>`, store in user-secrets.
 - **Google OAuth** — a second identity source, no separate on/off flag: it is live
@@ -191,5 +199,8 @@ re-raise every task.)
       `GoogleChallengeProperties { Prompt = "select_account" }`. Deliberately not done:
       silent re-login is nicer for a single-user app. Revisit only if a second Google
       account starts causing confusion.
+- [ ] **Multi-user, step 2:** registration / inviting a user, and an owner column on notes,
+      assets, tags and archive records with every query filtered by it. Today only
+      preferences are per user.
 - [ ] GitHub OAuth as a second identity source — after Google, likely redundant. Kept as
       an option, not a plan.

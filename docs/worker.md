@@ -22,9 +22,11 @@ inbound.
   into Core; `dotnet ef` still works with
   `--project KnowledgeBase.Core --startup-project KnowledgeBase.Api`.
 - **Only the API runs migrations**, on startup (`MigrateDatabase`, an extension on
-  `IHost`). The worker takes `AddDatabase` but does not migrate. **Deploy order: API
-  first** (it applies the migration to Neon), then restart the worker — a worker brought
-  up against an old schema fails on the first hit to a new table.
+  `IHost`). The worker takes `AddDatabase` but does not migrate. A worker on an old schema
+  fails on the first hit to a new table, so it **waits on startup**
+  (`WaitForMigrationsAsync`, every 30 s) until no migration it knows is pending. This makes
+  the API-first order independent of how either side is deployed (decision 2026-09-18,
+  chosen over sequencing it in the pipelines).
 - `UseLocalOverrides` is a generic extension on `IHostApplicationBuilder` (works for both
   `WebApplicationBuilder` and the worker's `HostApplicationBuilder`).
 - Worker `Program.cs`: `AddDatabase` + `AddAssetStorage` + `AddContentAnalyzer` +

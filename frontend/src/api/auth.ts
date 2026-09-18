@@ -1,6 +1,7 @@
 import { apiFetch, readErrorMessage } from './http'
 
 export interface CurrentUser {
+  id: string
   name: string
 }
 

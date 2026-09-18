@@ -31,6 +31,8 @@ Deploy order: **API first** (applies the migration to Neon), then restart the wo
 | `SynthesisSources` (`SynthesisSource`) | `SynthesisNoteId` + `InputNoteId` composite PK, both FK to `Notes` CASCADE. Provenance: which notes a synthesis absorbed. Index on `InputNoteId` for the staleness query. |
 | `Tags` (`Tag`) | `Id`, `Name` (unique), `Confirmed`, `SuggestedMergeIntoId?` (self-FK). A tag the user has vouched for is `Confirmed`; a pipeline-invented one is not (shown anyway, flagged for review) and carries the confirmed tag the model judged closest. |
 | `NoteTags` (`NoteTag`) | `NoteId` + `TagId` composite PK (the pair is unique on its own), `Ordinal`. `Ordinal 0` = primary tag **by convention**, no `IsPrimary` flag. Index on `TagId` for facet queries. No query filter — a binned note keeps its tags on screen. |
+| `Users` (`UserAccount`) | `Id` (32), `Email?` (lower-cased, unique), `CreatedAtUtc`. The owner row (`UserAccount.OwnerId`) is seeded by migration `AddUsersAndPreferences`. `Email` is how a Google sign-in finds a non-owner account once they exist. |
+| `UserPreferences` (`UserPreference`) | `UserId` + `Key` composite PK, `ValueJson` (`jsonb`), `UpdatedAtUtc`. FK to `Users` CASCADE. UI settings, see [`storage-and-caching.md`](storage-and-caching.md). |
 | `DataProtectionKeys` | Auth-cookie encryption keys. Migration `AddDataProtectionKeys`. See [`backend.md`](backend.md). |
 | `People` (`Person`) | User-curated archive people. AI face evidence is a later, separate table; a name alone never claims an AI identification. |
 | `Locations` (`Location`) | User-curated physical or visual places. `(Name, Kind)` is unique so a visual scene may coexist with a physical place of the same name. |

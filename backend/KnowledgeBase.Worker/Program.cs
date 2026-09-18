@@ -77,4 +77,6 @@ if (AnalyzeCommand.Matches(args))
     return;
 }
 
+await host.WaitForMigrationsAsync(TimeSpan.FromSeconds(30));
+
 host.Run();

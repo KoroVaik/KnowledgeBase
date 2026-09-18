@@ -1,7 +1,9 @@
 .photo-analysis { margin-top: 24px; padding: 0 18px 10px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); }
 .photo-analysis > h2 { display:flex; gap:8px; align-items:center; margin:0 -18px 14px; padding:13px 18px; font-size:12px; font-weight:600; letter-spacing:.08em; text-transform:uppercase; color:var(--text-muted); background:var(--surface-2); border-bottom:1px solid var(--border); border-radius:11px 11px 0 0; }
 .photo-analysis-sections { display:grid; gap:12px; }
-.photo-analysis .photo-analysis-subsection { margin:0; }
+/* margin-block only: a full `margin: 0` here would also reset the horizontal bleed
+   that .subsection-panel (TagsSection.css) relies on to sit flush with the card edge. */
+.photo-analysis .photo-analysis-subsection { margin-block: 0; }
 .photo-analysis form { display:flex; gap:6px; flex-wrap:wrap; }
 .photo-analysis ul { padding:0; margin:12px 0 0; list-style:none; }
 .photo-analysis li { display:flex; justify-content:space-between; gap:8px; padding:6px 0; border-top:1px solid var(--border); font-size:13px; }

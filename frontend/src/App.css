@@ -1,5 +1,5 @@
 .app {
-  padding: 0 32px 48px;
+  padding: 0 4px 48px;
   text-align: left;
 }
 
@@ -262,7 +262,7 @@
   /* Tighter card inset on a phone; the bleed margins have to match it or the rows stop
      lining up with the header strip. */
   .app {
-    padding: 0 16px 40px;
+    padding: 0 4px 40px;
   }
 
   .assets,

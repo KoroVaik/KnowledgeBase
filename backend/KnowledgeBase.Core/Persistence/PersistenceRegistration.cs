@@ -37,4 +37,29 @@ public static class PersistenceRegistration
 
         return app;
     }
+
+    // The worker is deployed independently of the API, so it may start before the API has
+    // migrated Neon; taking jobs against the old schema would fail them.
+    public static async Task WaitForMigrationsAsync(this IHost app, TimeSpan pollInterval)
+    {
+        var logger = app.Services.GetRequiredService<ILoggerFactory>().CreateLogger(nameof(WaitForMigrationsAsync));
+
+        while (true)
+        {
+            using var scope = app.Services.CreateScope();
+            var database = scope.ServiceProvider.GetRequiredService<KnowledgeBaseDbContext>().Database;
+            var pending = (await database.GetPendingMigrationsAsync()).ToList();
+
+            if (pending.Count == 0)
+            {
+                return;
+            }
+
+            logger.LogWarning(
+                "Waiting for the API to apply {Count} migration(s), latest {Migration}; next check in {Interval}",
+                pending.Count, pending[^1], pollInterval);
+
+            await Task.Delay(pollInterval);
+        }
+    }
 }

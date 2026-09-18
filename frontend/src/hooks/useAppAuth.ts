@@ -4,6 +4,7 @@ import type { CurrentUser } from '../api/auth'
 import { fetchFeatures } from '../api/features'
 import type { FeatureFlags } from '../api/features'
 import { reconnectNow } from '../api/realtime'
+import { startPreferences, stopPreferences } from '../preferences/preferences'
 import { useConnectionStatus } from './useConnectionStatus'
 
 export type AuthState =
@@ -36,7 +37,7 @@ export function useAppAuth() {
     void fetchCurrentUser()
       .then((user) => {
         if (!cancelled) {
-          setAuth(user === null ? { status: 'anonymous' } : { status: 'authenticated', user })
+          setAuth(sessionState(user))
         }
       })
       .catch((error: unknown) => {
@@ -74,7 +75,7 @@ export function useAppAuth() {
     if (seenOnline.current) {
       void fetchCurrentUser()
         .then((user) => {
-          setAuth(user === null ? { status: 'anonymous' } : { status: 'authenticated', user })
+          setAuth(sessionState(user))
         })
         .catch(() => {
           // Keep whatever is on screen - the banner already reports the outage.
@@ -100,6 +101,7 @@ export function useAppAuth() {
     void fetchCurrentUser()
       .then((user) => {
         if (!cancelled && user === null) {
+          stopPreferences()
           setAuth({ status: 'anonymous', message: 'Your session has expired. Please sign in again.' })
         }
       })
@@ -122,12 +124,13 @@ export function useAppAuth() {
     try {
       await logout()
     } finally {
+      stopPreferences()
       setAuth({ status: 'anonymous' })
     }
   }
 
   function markSignedIn(user: CurrentUser) {
-    setAuth({ status: 'authenticated', user })
+    setAuth(sessionState(user))
   }
 
   function bumpUploadCount() {
@@ -170,6 +173,18 @@ function useReconnectCountdown(reconnectAt: number | null, observedAt: number): 
   }
 
   return Math.max(0, Math.ceil((reconnectAt - Math.max(now, observedAt)) / 1_000))
+}
+
+/** Preferences start here, not in an effect: an effect runs after the signed-in page has
+ *  already rendered once with every section at its default. */
+function sessionState(user: CurrentUser | null): AuthState {
+  if (user === null) {
+    stopPreferences()
+    return { status: 'anonymous' }
+  }
+
+  startPreferences(user.id)
+  return { status: 'authenticated', user }
 }
 
 function messageOf(error: unknown): string {

@@ -9,8 +9,10 @@ services:
     container_name: knowledgebase-worker
     restart: unless-stopped
     # Neon + R2 credentials. Copy worker.env.example -> worker.env and fill in.
+    # The CD runner deploys from its own checkout, which has no worker.env, so it points
+    # WORKER_ENV_FILE at the filled copy.
     env_file:
-      - worker.env
+      - ${WORKER_ENV_FILE:-worker.env}
     environment:
       # Docker Desktop routes host.docker.internal to host loopback services, so this
       # reaches a native Ollama bound to 127.0.0.1 with no host-side change.

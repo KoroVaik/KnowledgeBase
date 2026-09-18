@@ -1,0 +1,47 @@
+name: Worker CD
+
+# Deploys on a merged PR only; a direct push to main does not ship. The manual button stays.
+on:
+  workflow_dispatch:
+  pull_request:
+    types: [closed]
+    branches: [main]
+    paths:
+      - 'backend/KnowledgeBase.Core/**'
+      - 'backend/KnowledgeBase.Worker/**'
+      - 'infra/worker/**'
+      - '.github/workflows/worker-cd.yml'
+
+permissions:
+  contents: read
+
+# A deploy is never cancelled halfway; a newer push waits and then ships on top.
+concurrency:
+  group: worker-cd
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    # "closed" also fires for a PR closed without merging.
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.merged == true
+    # The self-hosted runner on the home PC (infra/worker/README.md).
+    runs-on: [self-hosted, knowledgebase-worker]
+
+    steps:
+      # For a PR event the default ref is the PR's merge preview, not what landed on main.
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.pull_request.merge_commit_sha || github.sha }}
+
+      # up --build builds first and recreates the container only after a successful build,
+      # so a broken build leaves the running worker untouched.
+      - name: Rebuild and restart the worker
+        shell: powershell
+        run: |
+          $ErrorActionPreference = "Stop"
+          if (-not $env:WORKER_ENV_FILE) {
+              throw "WORKER_ENV_FILE is not set in the runner's .env - see infra/worker/README.md"
+          }
+          docker compose -f infra/worker/docker-compose.yml up -d --build --remove-orphans
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          docker image prune -f

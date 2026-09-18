@@ -2,6 +2,7 @@ using System.Security.Claims;
 using KnowledgeBase.Api.Controllers.Auth.Configuration;
 using KnowledgeBase.Api.Controllers.Auth.Contracts;
 using KnowledgeBase.Api.Controllers.Auth.Services;
+using KnowledgeBase.Core.Persistence;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.Google;
@@ -12,7 +13,7 @@ using Microsoft.Extensions.Options;
 namespace KnowledgeBase.Api.Controllers.Auth;
 
 /// <summary>
-/// Single-user session: password sign-in, sign-out and the current identity.
+/// Session: password sign-in, sign-out and the current identity.
 /// </summary>
 [ApiController]
 [Route("api/[controller]")]
@@ -54,14 +55,17 @@ public sealed class AuthController(
         }
 
         var identity = new ClaimsIdentity(
-            [new Claim(ClaimTypes.Name, _options.OwnerName)],
+            [
+                new Claim(ClaimTypes.Name, _options.OwnerName),
+                new Claim(UserClaims.UserId, UserAccount.OwnerId),
+            ],
             CookieAuthenticationDefaults.AuthenticationScheme);
 
         await HttpContext.SignInAsync(
             CookieAuthenticationDefaults.AuthenticationScheme,
             new ClaimsPrincipal(identity));
 
-        return Ok(new CurrentUserResponse(_options.OwnerName));
+        return Ok(new CurrentUserResponse(UserAccount.OwnerId, _options.OwnerName));
     }
 
     /// <summary>
@@ -106,5 +110,5 @@ public sealed class AuthController(
     [ProducesResponseType(typeof(CurrentUserResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     public ActionResult<CurrentUserResponse> Me() =>
-        Ok(new CurrentUserResponse(User.Identity?.Name ?? _options.OwnerName));
+        Ok(new CurrentUserResponse(User.GetUserId(), User.Identity?.Name ?? _options.OwnerName));
 }

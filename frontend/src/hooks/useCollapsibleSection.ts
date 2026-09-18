@@ -1,29 +1,15 @@
-import { useState } from 'react'
+import { usePreference } from '../preferences/usePreference'
 
-const STORAGE_PREFIX = 'kb.section-collapsed.'
+function isBoolean(value: unknown): value is boolean {
+  return typeof value === 'boolean'
+}
 
-/** Collapsed state for a page section or subsection, kept in localStorage so it survives
- *  a reload - per-tab UI state, not data, so it does not belong in the API. */
+/** Collapsed state for a page section or subsection, saved per user on the server. */
 export function useCollapsibleSection(key: string, defaultCollapsed = true) {
-  const [collapsed, setCollapsed] = useState(() => {
-    try {
-      const stored = localStorage.getItem(STORAGE_PREFIX + key)
-      return stored === null ? defaultCollapsed : stored === '1'
-    } catch {
-      return defaultCollapsed
-    }
-  })
+  const [collapsed, setCollapsed] = usePreference(`section-collapsed:${key}`, defaultCollapsed, isBoolean)
 
   function toggle() {
-    setCollapsed((current) => {
-      const next = !current
-      try {
-        localStorage.setItem(STORAGE_PREFIX + key, next ? '1' : '0')
-      } catch {
-        // Private browsing / storage denial - collapsing still works, just not remembered.
-      }
-      return next
-    })
+    setCollapsed(!collapsed)
   }
 
   return { collapsed, toggle }

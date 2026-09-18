@@ -1,5 +1,6 @@
-﻿using System.Security.Claims;
+using System.Security.Claims;
 using KnowledgeBase.Api.Controllers.Auth.Services;
+using Microsoft.AspNetCore.Authentication;
 using KnowledgeBase.Core.Persistence;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.DataProtection;
@@ -22,6 +23,7 @@ public static class AuthRegistration
 
         // Singleton: the limiter *is* the state; per-request would reset every client's window.
         services.AddSingleton<ILoginAttemptLimiter, LoginAttemptLimiter>();
+        services.AddScoped<IUserDirectory, UserDirectory>();
 
         // Data Protection keys default to disk, thrown away on each container deploy (= logout).
         services.AddDataProtection().PersistKeysToDbContext<KnowledgeBaseDbContext>();
@@ -53,6 +55,16 @@ public static class AuthRegistration
                     context.Response.StatusCode = StatusCodes.Status403Forbidden;
                     return Task.CompletedTask;
                 };
+
+                // Cookies issued before accounts existed carry only a name; one sign-in re-issues them.
+                options.Events.OnValidatePrincipal = async context =>
+                {
+                    if (context.Principal?.FindFirst(UserClaims.UserId) is null)
+                    {
+                        context.RejectPrincipal();
+                        await context.HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+                    }
+                };
             });
 
         // Only with credentials: the handler checks its callback on every request, and the
@@ -77,18 +89,22 @@ public static class AuthRegistration
                 options.CorrelationCookie.SameSite = SameSiteMode.Lax;
                 options.CorrelationCookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
 
-                options.Events.OnTicketReceived = context =>
+                options.Events.OnTicketReceived = async context =>
                 {
-                    if (auth.Google.Allows(context.Principal?.FindFirst(ClaimTypes.Email)?.Value))
+                    var email = context.Principal?.FindFirst(ClaimTypes.Email)?.Value;
+
+                    if (email is null || !auth.Google.Allows(email) || context.Principal?.Identity is not ClaimsIdentity identity)
                     {
-                        return Task.CompletedTask;
+                        // HandleResponse stops the handler before sign-in; Fail would be a 500.
+                        context.HandleResponse();
+                        context.Response.Redirect($"/?authError={NotAllowedError}");
+
+                        return;
                     }
 
-                    // HandleResponse stops the handler before sign-in; Fail would be a 500.
-                    context.HandleResponse();
-                    context.Response.Redirect($"/?authError={NotAllowedError}");
-
-                    return Task.CompletedTask;
+                    var users = context.HttpContext.RequestServices.GetRequiredService<IUserDirectory>();
+                    var userId = await users.ResolveGoogleUserIdAsync(email, context.HttpContext.RequestAborted);
+                    identity.AddClaim(new Claim(UserClaims.UserId, userId));
                 };
 
                 // Denied consent or a lost correlation cookie; the default rethrows to an error page.

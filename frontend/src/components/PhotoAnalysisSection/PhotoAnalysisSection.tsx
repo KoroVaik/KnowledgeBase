@@ -439,12 +439,12 @@ function EventCandidateReviews({ candidates, events, locations, people, assetsBy
 
 export function PhotoAnalysisSection() {
   const { data, assets, error, addPerson, addLocation, addEvent, reviewCandidate, reviewCandidateAsNew, reviewSceneObservation, reviewEventCandidate, queueFaceAnalysis, queueSceneAnalysis, queueSceneObservations, queueEventAnalysis, revokeReferenceFace, revokeLocationPhoto, detachEventPhoto } = usePhotoAnalysisSection()
-  const { collapsed: peopleCollapsed, toggle: togglePeople } = useCollapsibleSection('photo-analysis:people', false)
-  const { collapsed: knownPersonsCollapsed, toggle: toggleKnownPersons } = useCollapsibleSection('photo-analysis:known-persons', false)
-  const { collapsed: knownLocationsCollapsed, toggle: toggleKnownLocations } = useCollapsibleSection('photo-analysis:known-locations', false)
-  const { collapsed: knownEventsCollapsed, toggle: toggleKnownEvents } = useCollapsibleSection('photo-analysis:known-events', false)
-  const { collapsed: locationsCollapsed, toggle: toggleLocations } = useCollapsibleSection('photo-analysis:locations', false)
-  const { collapsed: eventsCollapsed, toggle: toggleEvents } = useCollapsibleSection('photo-analysis:events', false)
+  const { collapsed: peopleCollapsed, toggle: togglePeople } = useCollapsibleSection('photo-analysis:people')
+  const { collapsed: knownPersonsCollapsed, toggle: toggleKnownPersons } = useCollapsibleSection('photo-analysis:known-persons')
+  const { collapsed: knownLocationsCollapsed, toggle: toggleKnownLocations } = useCollapsibleSection('photo-analysis:known-locations')
+  const { collapsed: knownEventsCollapsed, toggle: toggleKnownEvents } = useCollapsibleSection('photo-analysis:known-events')
+  const { collapsed: locationsCollapsed, toggle: toggleLocations } = useCollapsibleSection('photo-analysis:locations')
+  const { collapsed: eventsCollapsed, toggle: toggleEvents } = useCollapsibleSection('photo-analysis:events')
   const [personName, setPersonName] = useState('')
   const [locationName, setLocationName] = useState('')
   const [locationKind, setLocationKind] = useState('Physical')

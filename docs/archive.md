@@ -7,6 +7,12 @@ not just compiled.
 
 ## Backend — API
 
+- Per-user UI settings (2026-09-18): `Users` + `UserPreferences` (migration
+  `AddUsersAndPreferences`), user id in the session cookie, `GET/PUT /api/preferences`, section
+  collapsed state moved from `localStorage` onto it. Verified: migration, endpoints via curl
+  (401 / 204 / 400s), toggle → reload → cleared `localStorage` → state back from the server, old
+  `kb.section-collapsed.*` keys migrated and removed, no flip on load.
+
 - Scaffold `backend/` (ASP.NET Core 8, minimal API first, then MVC controllers).
 - `KnowledgeBase.sln` split into Core + Api + Worker (was one `Backend.csproj`).
 - Vertical-slice structure: `Controllers/<feature>/` + `Infrastructure/`. `Program.cs`
@@ -322,4 +328,9 @@ not just compiled.
   browser shows the EXIF-rotated image. Detection now auto-orients first (`face-analysis/v2`) and the
   duplicate guard is version-scoped. The two affected photos were requeued in prod after rebuilding the
   worker container: the new box lands exactly on the face and the old candidate is superseded.
+- Nested subsection panels drifting right with depth: `.subsection-panel` now bleeds `margin-inline:
+  -10px` (nested: -6px) to sit closer to the parent card's edge; the real culprit was
+  `.photo-analysis .photo-analysis-subsection { margin: 0 }` silently overriding the bleed — now
+  `margin-block: 0`. Page inset also trimmed (`.app` 32→16 px). Verified in the browser: card and
+  panel levels share near-one left edge, no horizontal scroll.
 

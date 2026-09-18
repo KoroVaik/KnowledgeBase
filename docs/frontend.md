@@ -6,6 +6,7 @@ typescript-eslint. See [`architecture.md`](architecture.md) for constraints,
 
 Layout: `api/` (one module per resource + `http.ts` + `realtime.ts`), `components/`,
 `hooks/`, `upload/` (queue, classifier, drop-zone state), `notes/` (body renderer),
+`preferences/` (per-user UI settings store + `usePreference`),
 `format.ts`, `assetKind.ts` (is-image / is-processable, mirrors the backend), `download.ts`.
 
 ### Component vs hook split, co-located per component
@@ -226,10 +227,14 @@ nothing you could see from a step back.
 
 `.subsection-panel` (`TagsSection.css`) mirrors the same card-with-header-strip shape one
 depth step below the card itself: bordered box, `.tags-subhead` as the bled header strip
-(uppercase, `.section-count` pill), body below. Both its tones step up from the card's own
+(uppercase, `.section-count` pill), body below. Both tones step up from the card's own
 (`--surface-2` body, `--surface-hover` strip) rather than reusing `--surface`/`--surface-2`
 — reusing those exactly would make the subsection blend into the card instead of reading as
-nested inside it. Generic on purpose so any subsection (not just Tags') can opt in. Used
+nested inside it. Generic on purpose so any subsection (not just Tags') can opt in. The panel
+itself also bleeds `margin-inline: -10px` (a panel inside a panel: -6px) so nesting does not
+drift right with depth — depth is carried by the tone steps alone. **Don't reset a panel's
+horizontal margin** (e.g. a `margin: 0` on a wrapper): that silently kills the bleed — the
+original bug, now `margin-block: 0` in `PhotoAnalysisSection.css`. Used
 today by every subsection in `TagsSection`: "To review", "Confirmed" and "Hierarchy".
 
 ### One review queue, not two
@@ -367,6 +372,14 @@ and expandable clustering evidence. The reviewer can uncheck photos, enter the c
 details to create it, attach the chosen photos to an existing event, or reject the proposal. The
 card is absent when the archive has no group above the clustering threshold.
 
+### UI settings — `usePreference`
+
+Anything the user sets about the layout (a collapsed section, a view toggle) goes through
+`usePreference` / `useCollapsibleSection`, which save it per user on the server with a
+`localStorage` cache — never a bare `useState` or a raw `localStorage` key. The store is started
+from `useAppAuth` at the moment the session is known, not in an effect, so the first render
+already has the saved values. Details in [`storage-and-caching.md`](storage-and-caching.md).
+
 ### Note body is untrusted-shape Markdown
 
 `.note-body` scopes its own `h1`–`h4` (20 / 17 / 15 / 14 px) and `p` / `ul` / `ol`
@@ -408,6 +421,11 @@ marketing `h1` and fills the row.
       `public/icons.svg` — committed, no reference anywhere.
 
 ### Pending browser verification
+
+- [ ] Every `PUT /api/preferences/*` shows `net::ERR_ABORTED` in the browser-pane network log
+      although it returns 204 and the value persists — same quirk as the tag accept/reject
+      mutations below. The code aborts nothing; find out whether it is the pane, the Vite proxy
+      on a bodiless 204, or real.
 
 - [ ] **Single-choice dropdowns on the shared `Dropdown`** (new `components/Select`): all
       remaining native `<select>` elements in `PhotoAnalysisSection` were converted — build +

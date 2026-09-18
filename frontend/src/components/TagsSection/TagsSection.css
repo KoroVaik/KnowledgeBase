@@ -32,8 +32,16 @@
    than the outer card, so both tones step up from it (--surface-2 body, --surface-hover
    strip) rather than reusing the card's own --surface/--surface-2 - reusing those exactly
    would make the subsection blend into the card instead of reading as nested inside it.
-   Generic on purpose so any subsection (not just Tags') can opt in. */
+   Generic on purpose so any subsection (not just Tags') can opt in.
+
+   The negative inline margin bleeds the panel part-way back over the parent card's
+   padding, the same trick the card header strips use - without it every nesting level
+   adds the parent's full padding again and deep sections drift far from the card edge.
+   Partial on purpose (~half the padding stays as the visible inset). A panel inside a
+   panel only has 12 px + 1 px of parent padding; depth there is carried by the
+   recessed background tones. */
 .subsection-panel {
+  margin-inline: -10px;
   padding: 0 12px 8px;
   border: 1px solid var(--border);
   border-radius: 8px;
@@ -42,6 +50,11 @@
 
 .subsection-panel + .subsection-panel {
   margin-top: 16px;
+}
+
+/* Nested panel: the parent panel's own inset is 12 px padding + 1 px border. */
+.subsection-panel .subsection-panel {
+  margin-inline: -6px;
 }
 
 .subsection-panel > .tags-subhead {

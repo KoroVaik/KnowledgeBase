@@ -62,6 +62,10 @@ public sealed class KnowledgeBaseDbContext(DbContextOptions<KnowledgeBaseDbConte
 
     public DbSet<EventCandidateReviewDecision> EventCandidateReviewDecisions => Set<EventCandidateReviewDecision>();
 
+    public DbSet<UserAccount> Users => Set<UserAccount>();
+
+    public DbSet<UserPreference> UserPreferences => Set<UserPreference>();
+
     public DbSet<DataProtectionKey> DataProtectionKeys => Set<DataProtectionKey>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder) =>

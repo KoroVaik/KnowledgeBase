@@ -134,9 +134,16 @@ not re-download it.
 (its own proxy). On native Linux Docker it points at the real host IP and Ollama on
 `127.0.0.1` would refuse it.
 
-### Deploying a new build (decided, not built yet)
+### Deploying a new build
 
-Today it is manual: `run-worker.ps1` rebuilds and restarts. The plan is a **self-hosted
+`.github/workflows/worker-cd.yml` on a PR merged into `main` (Core, Worker, `infra/worker`; a direct push does not deploy):
+`docker compose up -d --build` on the runner. Compose reads secrets from
+`WORKER_ENV_FILE` (set in the runner's `.env`), because the runner's checkout has no
+gitignored `worker.env`. `run-worker.ps1` stays for manual starts. The API-first order is
+enforced by the worker itself, not by the pipeline: it waits on startup until no migration
+is pending (see [`worker.md`](worker.md)). Setup: [`../infra/worker/README.md`](../infra/worker/README.md).
+
+The mechanism is a **self-hosted
 GitHub Actions runner** on the PC, installed as a Windows service — the GitHub equivalent
 of a private Azure DevOps build agent. It dials out to GitHub and asks for work, so there
 is no inbound port, no tunnel and no extra daemon; the job runs the real `docker compose`,
@@ -195,9 +202,9 @@ in Docker, API, worker (as needed), frontend.
 - [ ] **CD**: `push to main → build + lint + test → green → curl the Render Deploy Hook`.
       Not Render auto-deploy — it would ship a broken build, it knows nothing about
       tests. Deploy Hook URL in repo secrets.
-- [ ] **CD for the worker**: `push to main` → the new image is live on the home PC without
-      a manual `run-worker.ps1`. Mechanism decided (self-hosted runner — see "Worker → home
-      PC"), not built. Order still applies: API (migrations) first, worker second.
+- [ ] **CD for the worker**: workflow + compose + migration wait are written and build;
+      not yet run. Remaining: install the runner (`infra/worker/README.md`), run
+      **Worker CD** manually, then a real push to `main`.
 - [ ] Separate pipeline for the frontend on Cloudflare Pages, if it stops being served
       from ASP.NET.
 - [ ] If the frontend and API ever move to different addresses — allowed origins from

@@ -55,13 +55,47 @@ infra/worker/stop-worker.ps1                 # stop and remove the container
 
 ## Updating after a deploy
 
-Order: **API first** (it applies migrations to Neon on startup), **then** the worker. A
-worker brought up against the old schema would fail on the first hit to a new table.
+Automatic: a PR merged into `main` that touches Core, Worker or `infra/worker` runs
+`.github/workflows/worker-cd.yml` on the self-hosted runner below, which rebuilds and
+restarts the container. A failed build leaves the running worker as it was.
 
-```powershell
-git pull
-infra/worker/run-worker.ps1        # stop old, rebuild image, start new
-```
+Order does not matter: on startup the worker waits (checking every 30 s) until the API has
+applied every migration the worker knows about, and only then takes jobs. The log shows
+`Waiting for the API to apply N migration(s)` meanwhile.
+
+`run-worker.ps1` stays for the manual cases: the first start, running uncommitted local
+code, or when the runner is off. Both manage the same compose project, so whichever ran
+last wins.
+
+## Self-hosted runner (one-time setup)
+
+The GitHub equivalent of a private Azure DevOps agent: a Windows service that dials out to
+GitHub and asks for jobs. **Only safe while the repo is private** — on a public repo a
+stranger's pull request could run code on this PC.
+
+1. GitHub → repo **Settings → Actions → Runners → New self-hosted runner → Windows**.
+   Run the download/extract commands it shows, e.g. into `C:\actions-runner`.
+2. Configure it with the token from that page:
+
+   ```powershell
+   .\config.cmd --url https://github.com/KoroVaik/KnowledgeBase --token <TOKEN> --labels knowledgebase-worker --runasservice
+   ```
+
+   When asked for the service account, give **your own Windows account** (and its
+   password), not the default `NT AUTHORITY\NETWORK SERVICE` — that account cannot reach
+   Docker Desktop.
+3. Create `C:\actions-runner\.env` (the runner passes it to every job as env vars) with the
+   full path to the filled `worker.env`:
+
+   ```
+   WORKER_ENV_FILE=C:\path\to\KnowledgeBase\infra\worker\worker.env
+   ```
+
+   Restart the service (`Restart-Service "actions.runner.*"`) so it picks the file up.
+4. Actions tab → **Worker CD → Run workflow** to check it end to end.
+
+Docker Desktop starts on user login, so after a reboot a deploy only works once you have
+logged in; until then the job waits in the queue.
 
 ## If the worker cannot see Ollama
 
