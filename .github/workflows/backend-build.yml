@@ -1,0 +1,29 @@
+name: Backend build
+
+# A reusable workflow: only builds. Backend CI calls it for checks, Worker CD calls it
+# as the gate its deploy waits on.
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    working-directory: backend
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '8.0.x'
+
+      # Building the solution covers all three projects (Api, Core, Worker).
+      - run: dotnet restore KnowledgeBase.sln
+
+      - run: dotnet build KnowledgeBase.sln -c Release --no-restore

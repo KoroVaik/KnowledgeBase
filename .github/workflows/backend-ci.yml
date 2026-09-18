@@ -1,18 +1,20 @@
 name: Backend CI
 
 on:
-  # Ручний запуск кнопкою на вкладці Actions — не залежить від paths-фільтра
+  # Manual button on the Actions tab — ignores the paths filter
   workflow_dispatch:
   push:
     branches: [main]
     paths:
       - 'backend/**'
       - '.github/workflows/backend-ci.yml'
+      - '.github/workflows/backend-build.yml'
   pull_request:
     branches: [main]
     paths:
       - 'backend/**'
       - '.github/workflows/backend-ci.yml'
+      - '.github/workflows/backend-build.yml'
 
 permissions:
   contents: read
@@ -21,23 +23,6 @@ concurrency:
   group: backend-ci-${{ github.ref }}
   cancel-in-progress: true
 
-defaults:
-  run:
-    working-directory: backend
-
 jobs:
   build:
-    runs-on: ubuntu-latest
-
-    steps:
-      - uses: actions/checkout@v5
-
-      - uses: actions/setup-dotnet@v5
-        with:
-          dotnet-version: '8.0.x'
-
-      # Building the solution covers all three projects (Api, Core, Worker) - the worker stays
-      # compilable under CI without a separate workflow.
-      - run: dotnet restore KnowledgeBase.sln
-
-      - run: dotnet build KnowledgeBase.sln -c Release --no-restore
+    uses: ./.github/workflows/backend-build.yml

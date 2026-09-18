@@ -11,6 +11,7 @@ on:
       - 'backend/KnowledgeBase.Worker/**'
       - 'infra/worker/**'
       - '.github/workflows/worker-cd.yml'
+      - '.github/workflows/backend-build.yml'
 
 permissions:
   contents: read
@@ -21,7 +22,12 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # The same build Backend CI runs; the deploy below waits for it to succeed.
+  build:
+    uses: ./.github/workflows/backend-build.yml
+
   deploy:
+    needs: build
     # The self-hosted runner on the home PC (infra/worker/README.md). Matching on the
     # default label only: the repo is private and has exactly one runner, so a custom
     # label would add a re-registration step without narrowing anything.

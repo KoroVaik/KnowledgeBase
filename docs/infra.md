@@ -137,7 +137,9 @@ not re-download it.
 ### Deploying a new build
 
 `.github/workflows/worker-cd.yml` on a push to `main` (Core, Worker, `infra/worker`; other
-paths do not deploy):
+paths do not deploy). It first runs the shared backend build
+([`backend-build.yml`](../.github/workflows/backend-build.yml), the same one Backend CI
+calls) and only on a green build does
 `docker compose up -d --build` on the runner. Compose reads secrets from
 `WORKER_ENV_FILE` (set in the runner's `.env`), because the runner's checkout has no
 gitignored `worker.env`. `run-worker.ps1` stays for manual starts. The API-first order is
