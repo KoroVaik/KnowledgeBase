@@ -193,6 +193,13 @@ not just compiled.
   `.txt` uploaded → note got `Automotive`(existing, ord 0) + `Hypercar`(new, unconfirmed,
   ord 1) + two more existing tags the model padded with; one new tag, no duplicate
   `Automotive`, `/api/notes/{id}` returned them ordered.
+- Rescore reopened superseded v1 detections (2026-09-18): after a photo's `face-analysis/v2`
+  re-run superseded its v1 candidates, a `face-rescore/v1` job wrote a fresh open candidate
+  for the old v1 occurrence — a stale EXIF-era box reappeared in review as "fur, 48% Sashka".
+  `FaceRescoreHandler` now re-ranks only occurrences whose run is `FaceAnalysisPipeline.
+  CurrentDetectionVersion` (shared constant with `FaceAnalysisHandler`); one stale prod row
+  superseded by hand. Verified: worker rebuilt and restarted, a manual `RescoreFaces` job ran
+  → the asset's only open candidate is the v2 face one, no new rows on the v1 occurrence.
 
 - Tags section (`components/TagsSection.tsx`) inside `NotesList`, between the synthesis
   notes and the bin: `GET /api/tags`, a row per tag with ≥2 Source notes + "Synthesise"

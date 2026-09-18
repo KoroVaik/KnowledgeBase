@@ -62,3 +62,7 @@
   border: 1px solid var(--border);
   border-radius: 6px;
 }
+
+.file-panel-image.progressive-image-loading {
+  min-height: 240px;
+}

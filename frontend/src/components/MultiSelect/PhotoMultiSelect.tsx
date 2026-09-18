@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { fetchDownloadUrl } from '../../api/assets'
 import { Dropdown } from '../Dropdown/Dropdown'
+import { ProgressiveImage } from '../ProgressiveImage/ProgressiveImage'
 import { SelectionHead } from './MultiSelect'
 import './MultiSelect.css'
 
@@ -19,8 +20,7 @@ function PhotoThumb({ photo }: { photo: PhotoOption }) {
     void fetchDownloadUrl(photo.storedFileName).then(link => { if (!cancelled) setUrl(link) }).catch(() => { })
     return () => { cancelled = true }
   }, [photo.storedFileName])
-  if (url === null) return <span className="photo-thumb photo-thumb-empty" />
-  return <img className="photo-thumb" src={url} alt="" loading="lazy" />
+  return <ProgressiveImage className="photo-thumb" url={url} alt="" ariaHidden />
 }
 
 /** Photos as removable thumbnail chips plus a searchable thumbnail grid; clicking a grid cell toggles it without closing. */

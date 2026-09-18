@@ -10,8 +10,7 @@ namespace KnowledgeBase.Worker.FaceAnalysis;
 
 public sealed class FaceAnalysisHandler(KnowledgeBaseDbContext database, IAssetContentReader reader, IFaceAnalyzer analyzer) : IPipelineHandler
 {
-    // v2: detection runs on the EXIF-rotated image; v1 boxes on a rotated phone photo point elsewhere.
-    private const string PipelineVersion = "face-analysis/v2";
+    private const string PipelineVersion = FaceAnalysisPipeline.CurrentDetectionVersion;
 
     public JobKind Kind => JobKind.AnalyzeFaces;
 

@@ -8,6 +8,7 @@ import { Dropdown } from '../Dropdown/Dropdown'
 import { InfoHint } from '../InfoHint/InfoHint'
 import { MultiSelect } from '../MultiSelect/MultiSelect'
 import { PhotoMultiSelect } from '../MultiSelect/PhotoMultiSelect'
+import { ProgressiveImage } from '../ProgressiveImage/ProgressiveImage'
 import { Select } from '../Select/Select'
 import { usePhotoAnalysisSection } from './usePhotoAnalysisSection'
 import './PhotoAnalysisSection.css'
@@ -30,8 +31,11 @@ function CandidateThumbnail({ asset }: { asset: AssetSummary | undefined }) {
     void fetchDownloadUrl(asset.storedFileName).then(link => { if (!cancelled) setUrl(link) }).catch(() => { if (!cancelled) setUnavailable(true) })
     return () => { cancelled = true }
   }, [asset])
-  if (url) return <div className="candidate-thumbnail"><img src={url} alt={`Photo ${asset?.originalFileName ?? ''}`} /></div>
-  return <div className="candidate-thumbnail"><span>{asset && !unavailable ? 'Loading preview…' : 'Photo preview unavailable'}</span></div>
+  if (url) {
+    return <div className="candidate-thumbnail"><ProgressiveImage url={url} alt={`Photo ${asset?.originalFileName ?? ''}`} showPercent /></div>
+  }
+  const waiting = asset !== undefined && !unavailable
+  return <div className="candidate-thumbnail">{waiting ? <ProgressiveImage url={null} alt="" showPercent /> : <span>Photo preview unavailable</span>}</div>
 }
 
 /** The full photo, optionally with a box drawn on one detected face — shared by the review preview and every Known * popup.
@@ -88,7 +92,12 @@ function FullPhotoPreview({ asset, faceBounds, label, labelContent, square = fal
     return () => observer.disconnect()
   }, [url, label, sourceSize])
 
-  if (url === null) return <div className="candidate-thumbnail"><span>{asset && !unavailable ? 'Loading preview…' : 'Photo preview unavailable'}</span></div>
+  if (url === null) {
+    const waiting = asset !== undefined && !unavailable
+    return <div className={`face-frame-box${square ? ' face-frame-box-square' : ''}`}>
+      {waiting ? <ProgressiveImage url={null} alt="" showPercent /> : <span>Photo preview unavailable</span>}
+    </div>
+  }
 
   const topPercent = sourceSize === null || faceBounds === undefined ? 0 : Math.max(0, faceBounds.y / sourceSize.height * 100)
   const frameStyle = sourceSize === null || faceBounds === undefined ? undefined : {
@@ -116,7 +125,12 @@ function FullPhotoPreview({ asset, faceBounds, label, labelContent, square = fal
 
   return <div ref={boxRef} className={`face-frame-box${square ? ' face-frame-box-square' : ''}`}>
     <div ref={previewRef} className="face-frame-preview" style={innerStyle}>
-      <img src={url} alt={`${faceBounds ? 'Detected face in' : 'Photo'} ${asset?.originalFileName ?? 'photo'}`} onLoad={event => setSourceSize({ width: event.currentTarget.naturalWidth, height: event.currentTarget.naturalHeight })} />
+      <ProgressiveImage
+        url={url}
+        alt={`${faceBounds ? 'Detected face in' : 'Photo'} ${asset?.originalFileName ?? 'photo'}`}
+        showPercent
+        onImageLoad={(image) => setSourceSize({ width: image.naturalWidth, height: image.naturalHeight })}
+      />
       {frameStyle && <span className={`face-frame${labelBelow ? ' face-frame-label-below' : ''}`} style={frameStyle}>{label && <span ref={labelRef} title={label} style={{
         transform: `scale(${labelFit?.scale ?? 1})`,
         transformOrigin: labelBelow ? 'left top' : 'left bottom',
@@ -152,8 +166,15 @@ function FaceCropPreview({ asset, faceBounds, size = 144 }: { asset: AssetSummar
 
   const crop = url !== null && sourceSize !== null ? faceCrop(faceBounds, sourceSize, size) : null
   return <div className="face-crop-preview" style={{ width: size, height: size }}>
-    {url === null && <span>{asset && !unavailable ? 'Loading…' : 'Unavailable'}</span>}
-    {url !== null && <img src={url} alt="" aria-hidden="true" style={crop ?? undefined} onLoad={event => { if (sourceSize === null) setSourceSize({ width: event.currentTarget.naturalWidth, height: event.currentTarget.naturalHeight }) }} />}
+    {url === null && unavailable
+      ? <span>Unavailable</span>
+      : <ProgressiveImage
+          url={url}
+          alt=""
+          ariaHidden
+          imgStyle={crop ?? undefined}
+          onImageLoad={(image) => { if (sourceSize === null) setSourceSize({ width: image.naturalWidth, height: image.naturalHeight }) }}
+        />}
   </div>
 }
 

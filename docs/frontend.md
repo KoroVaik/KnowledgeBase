@@ -44,6 +44,27 @@ state) was kept as-is, not unified.
 
 ## Decisions
 
+### Progressive image loading — `components/ProgressiveImage`
+
+Every image in the app (FilePanel preview, all PhotoAnalysisSection previews/thumbnails,
+PhotoMultiSelect thumbs) renders through `ProgressiveImage`: the bytes are downloaded via
+XHR (`useProgressiveImage`), so the placeholder can show **real** download progress — a
+shimmering grey gradient with the percent in the middle on large images, shimmer alone on
+small thumbs (64 px crops, photo-grid cells, chips). A plain `<img>` would paint the
+half-loaded file itself; XHR is the same tool the upload path uses for request progress,
+here on the response. The finished picture arrives as an object URL and fades in — the
+half-painted state never exists. Same XHR reasoning as `putToBucket`; blob is revoked on
+unmount. State resets during render on a url change (not in the effect — oxlint
+`react(set-state-in-effect)`, same seed trick as the other fetch hooks).
+
+- Callers keep fetching their own **signed URL** (`fetchDownloadUrl`) and hand it in;
+  `null` url keeps the placeholder up while the link request is in flight.
+- `className` goes on both placeholder and image, so per-context sizing rules fit each
+  (`.candidate-thumbnail .progressive-image-loading`, the `:has` rule on
+  `.face-frame-preview` that gives it a width before the source aspect ratio is known).
+- Bucket GET must stay CORS-readable by JS (`AllowedOrigins: *` in `infra/garage/cors.json`);
+  R2 prod needs the equivalent or every image shows "Couldn't load".
+
 ### One origin, dev and prod
 
 Vite proxies `/api` → `localhost:5244` instead of CORS, so the browser sees a single
@@ -395,6 +416,11 @@ marketing `h1` and fills the row.
 
 ### Bugs / polish
 
+- [ ] **ProgressiveImage shimmer placeholder** (shimmer + real percent via XHR download, applied to
+      FilePanel preview, all PhotoAnalysisSection previews, PhotoMultiSelect thumbs): build + lint
+      pass, **browser run pending** — shimmer visible with a throttled network, percent counts up on
+      large images, fade-in on load, photo-picker grid thumbs without percent, no CORS errors on the
+      bucket GET (locally covered by `infra/garage/cors.json`; R2 prod CORS unconfirmed).
 - [ ] Following a wiki-link closes the source note (the list is an accordion) with no way
       back. Allow several expanded, or add a "back".
 - [ ] After a backend restart the page waits on the backoff (~30 s after the API already

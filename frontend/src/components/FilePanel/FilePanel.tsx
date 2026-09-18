@@ -2,6 +2,7 @@ import type { AssetSummary } from '../../api/assets'
 import { useFilePanel } from './useFilePanel'
 import { renderNoteBody } from '../../notes/renderNoteBody'
 import { DeleteNoteDialog } from '../DeleteNoteDialog/DeleteNoteDialog'
+import { ProgressiveImage } from '../ProgressiveImage/ProgressiveImage'
 import { TagChips } from '../TagChips'
 import { TagPicker } from '../TagPicker/TagPicker'
 import './FilePanel.css'
@@ -138,14 +139,18 @@ export function FilePanel({ asset, onChanged, onDeleted }: FilePanelProps) {
           {preview.status === 'unavailable' && (
             <p>Preview isn’t available for this file type yet — use Download to open it.</p>
           )}
-          {preview.status === 'loading' && <p>Loading…</p>}
           {preview.status === 'error' && (
             <p className="file-panel-error" role="alert">
               {preview.message}
             </p>
           )}
-          {preview.status === 'ready' && (
-            <img className="file-panel-image" src={preview.url} alt={asset.originalFileName} />
+          {(preview.status === 'loading' || preview.status === 'ready') && (
+            <ProgressiveImage
+              className="file-panel-image"
+              url={preview.status === 'ready' ? preview.url : null}
+              alt={asset.originalFileName}
+              showPercent
+            />
           )}
         </div>
       )}

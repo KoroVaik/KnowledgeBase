@@ -45,7 +45,9 @@ now skips an asset that already has stored face occurrences; refreshing a photo'
 
 The skip only counts faces from the current `PipelineVersion` (`face-analysis/v2`), so a detection fix
 is applied to an old photo by requeueing its `AnalyzeFaces` job: the new run supersedes the photo's
-unreviewed person candidates and leaves reviewed ones and reference faces alone. v2 detects on the
+unreviewed person candidates and leaves reviewed ones and reference faces alone. A face re-score
+re-ranks only the current version's detections for the same reason: an old version's occurrence whose
+candidates were superseded must not come back into review as a fresh proposal. v2 detects on the
 EXIF-rotated image - v1 detected on the raw sideways pixels of a phone photo, so its boxes pointed at
 the wrong part of the picture the browser shows.
 

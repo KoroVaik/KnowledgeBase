@@ -22,4 +22,5 @@
 .photo-grid-item { aspect-ratio: 1; padding: 0; overflow: hidden; background: var(--surface-2); border: 1px solid var(--border); border-radius: 6px; cursor: pointer; }
 .photo-grid-item .photo-thumb { display: block; width: 100%; height: 100%; object-fit: cover; }
 .photo-grid-item:hover, .photo-grid-item:focus-visible { border-color: var(--accent-border); }
-.photo-thumb-empty { display: block; background: var(--border); }
+/* The ProgressiveImage placeholder shares the .photo-thumb class with the loaded image. */
+.photo-thumb.progressive-image-loading { min-height: 0; }

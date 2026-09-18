@@ -39,8 +39,16 @@ public sealed class FaceRescoreHandler(KnowledgeBaseDbContext database) : IPipel
             .Select(group => group.OrderBy(asset => asset.UploadedAtUtc).ThenBy(asset => asset.Id).First().Id)
             .ToHashSet();
 
+        var sourceRuns = (await database.PhotoAnalysisRuns.ToListAsync(cancellationToken)).ToDictionary(run => run.Id);
+
+        // An occurrence of an older detection version has no open candidates - the newer run
+        // superseded them - so re-ranking it writes its stale box back into review as a fresh
+        // proposal. Only the current version's detections are live ranking subjects.
         var openOccurrences = (await database.FaceOccurrences.ToListAsync(cancellationToken))
-            .Where(occurrence => !settledOccurrenceIds.Contains(occurrence.Id) && canonicalAssetIds.Contains(occurrence.AssetId))
+            .Where(occurrence => !settledOccurrenceIds.Contains(occurrence.Id)
+                && canonicalAssetIds.Contains(occurrence.AssetId)
+                && sourceRuns.TryGetValue(occurrence.RunId, out var sourceRun)
+                && sourceRun.PipelineVersion == FaceAnalysisPipeline.CurrentDetectionVersion)
             .ToList();
         if (openOccurrences.Count == 0) return null;
 
@@ -51,7 +59,6 @@ public sealed class FaceRescoreHandler(KnowledgeBaseDbContext database) : IPipel
             .GroupBy(candidate => candidate.SubjectFaceOccurrenceId!)
             .ToDictionary(group => group.Key, group => group.OrderBy(candidate => candidate.Rank).ToList());
 
-        var sourceRuns = (await database.PhotoAnalysisRuns.ToListAsync(cancellationToken)).ToDictionary(run => run.Id);
         var now = DateTime.UtcNow;
 
         foreach (var perAsset in openOccurrences.GroupBy(occurrence => occurrence.AssetId))

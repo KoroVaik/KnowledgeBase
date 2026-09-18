@@ -1,0 +1,65 @@
+.progressive-image-loading {
+  --shimmer-sheen: rgba(255, 255, 255, 0.55);
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 100%;
+  min-height: 120px;
+  overflow: hidden;
+  background: var(--surface-2);
+  border-radius: 6px;
+}
+
+@media (prefers-color-scheme: dark) {
+  .progressive-image-loading {
+    --shimmer-sheen: rgba(255, 255, 255, 0.07);
+  }
+}
+
+/* The sheen band is wider than the box and slides across it; the box's overflow hides the ends. */
+.progressive-image-loading::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, var(--shimmer-sheen), transparent);
+  animation: progressive-image-shimmer 1.4s ease-in-out infinite;
+}
+
+@keyframes progressive-image-shimmer {
+  to {
+    transform: translateX(100%);
+  }
+}
+
+.progressive-image-percent {
+  position: relative;
+  color: var(--text-muted);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.progressive-image-failed {
+  position: relative;
+  padding: 8px;
+  color: var(--text-muted);
+  font-size: 11px;
+  text-align: center;
+}
+
+.progressive-image {
+  animation: progressive-image-fade-in 0.3s ease-out;
+}
+
+@keyframes progressive-image-fade-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .progressive-image-loading::before,
+  .progressive-image {
+    animation: none;
+  }
+}
