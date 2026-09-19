@@ -66,6 +66,7 @@ builder.Services.AddSingleton(sp =>
     return new ArcFaceEmbedder(found ?? throw new FileNotFoundException(
         $"The ArcFace embedding model was not found. Looked at: {string.Join("; ", candidates.Distinct())}.", configuredPath));
 });
+builder.Services.AddSingleton<ArcFaceModelDownloader>();
 builder.Services.AddSingleton<IFaceAnalyzer, FaceOnnxFaceAnalyzer>();
 builder.Services.AddSingleton<ISceneEmbedder, ClipSceneEmbedder>();
 builder.Services.AddScoped<IPipelineHandler, FaceAnalysisHandler>();
@@ -98,6 +99,8 @@ builder.Services.AddHttpClient(HttpChangeNotifier.ClientName, (serviceProvider, 
 builder.Services.AddSingleton<IChangeNotifier, HttpChangeNotifier>();
 
 var host = builder.Build();
+
+await host.Services.GetRequiredService<ArcFaceModelDownloader>().EnsureAsync(CancellationToken.None);
 
 // One-off analyzer smoke test, then exit before the poll loop.
 if (AnalyzeCommand.Matches(args))

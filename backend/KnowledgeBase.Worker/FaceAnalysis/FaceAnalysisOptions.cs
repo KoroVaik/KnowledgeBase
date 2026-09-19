@@ -13,4 +13,7 @@ public sealed class FaceAnalysisOptions
     // Resolved against the process directory, the app directory, or the repo layout when run via
     // `dotnet run`. In the deployed container it is an absolute path into the models volume.
     public string RecognitionModelPath { get; set; } = "models/w600k_r50.onnx";
+
+    // insightface buffalo_l bundle (~280 MB); only w600k_r50.onnx is taken out of it.
+    public string ModelDownloadUrl { get; set; } = "https://github.com/deepinsight/insightface/releases/download/v0.7/buffalo_l.zip";
 }

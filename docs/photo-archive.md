@@ -329,11 +329,10 @@ usable.
 - [ ] **Anonymous row ids are not stable.** A row's `clusterId` is new on every run, so a name typed
       into an anonymous row is lost when a regrouping lands meanwhile (the row key changes). Match new
       clusters to old ones by membership if this bites.
-- [ ] **ArcFace model on the home PC.** The worker container expects `w600k_r50.onnx` at
-      `/models/arcface/` in the `models` volume (compose already sets
-      `FaceAnalysis__RecognitionModelPath`); download instructions are in
-      [`../infra/worker/README.md`](../infra/worker/README.md). Until then face analysis fails
-      with a "model was not found" error listing the probed paths.
+- [ ] **ArcFace model auto-download.** The worker fetches `w600k_r50.onnx` from the insightface
+      `buffalo_l.zip` into `/models/arcface/` on start when it is missing
+      (`ArcFaceModelDownloader`). Built, not yet run: confirm on the first deploy that the file
+      appears and face analysis starts.
 - [ ] **Phase 2 — face-quality calibration.** Validate the detector confidence and similarity
       behaviour on a small manually labelled archive subset before introducing acceptance
       thresholds or any automatic decision. First step after the ArcFace swap: measure the
