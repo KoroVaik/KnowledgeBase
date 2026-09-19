@@ -40,33 +40,49 @@ reviewed decision is never superseded or changed by a later analysis.
 A worker that stops mid-job leaves the row in `Running`, and the next start requeues it. Detection has
 no memory of its own, so a second execution stored every face of that photo again and put it up for
 review twice - three photos in the local archive ended up with duplicate faces this way. `AnalyzeFaces`
-now skips an asset that already has stored face occurrences; refreshing a photo's identities is
-`RescoreFaces`' job, which re-ranks what is already detected instead of detecting again.
+now skips an asset that already has stored face occurrences; regrouping what is already detected is
+`ClusterFaces`' job, which detects nothing.
 
 The skip only counts faces from the current `PipelineVersion` (`face-analysis/v2`), so a detection fix
-is applied to an old photo by requeueing its `AnalyzeFaces` job: the new run supersedes the photo's
-unreviewed person candidates and leaves reviewed ones and reference faces alone. A face re-score
-re-ranks only the current version's detections for the same reason: an old version's occurrence whose
-candidates were superseded must not come back into review as a fresh proposal. v2 detects on the
+is applied to an old photo by requeueing its `AnalyzeFaces` job; the next grouping replaces the photo's
+unreviewed person candidates and leaves reviewed ones and reference faces alone. Grouping considers
+only the current version's detections for the same reason: an old version's occurrence must not come
+back into review as a fresh proposal. v2 detects on the
 EXIF-rotated image - v1 detected on the raw sideways pixels of a phone photo, so its boxes pointed at
 the wrong part of the picture the browser shows.
 
-### Face candidates cover every plausible person, and a re-score rewrites only what moved
+### Faces are reviewed as rows of people, grouped by comparing faces with each other
 
-A face proposes every person whose best confirmed reference reaches 0.25, capped at twenty, plus its
-own top guess even when that falls below the floor - dropping the top guess would take the face out of
-review altogether. The picker beside a review item shows each of those scores, so a reviewer can pick
-the third-best person without losing what the model thought of them.
+Scoring each face alone against confirmed references (the earlier `FaceCandidateRanking`) never compared
+faces with each other: with no references every face was "Unknown face", and with a few references the
+top guess was kept even below the 0.25 floor, so random approved people were suggested. Now `ClusterFaces`
+groups every open face of the archive (current detection version, with an identity, on a canonical photo,
+not settled) and the review screen shows one row per person:
 
-`Rank` records where a candidate stood when it was computed, not the current order: one face's rows can
-come from several re-scores, so the live ranking is derived from the scores.
+1. A face joins the confirmed person whose best reference scores highest, only if that reaches
+   `PersonJoinThreshold`; a below-threshold guess is never kept, and a person on the face's negative
+   list is skipped.
+2. The rest join an ignored group the same way (best cosine to the faces the user filed into it), so an
+   ignored stranger does not come back as a new row on every upload.
+3. What is left is clustered agglomeratively (average linkage on cosine, merged while the linkage
+   reaches `ClusterThreshold`). Single faces go to Unsorted.
+4. An anonymous row or ignored group gets a "Looks like" hint only when its average best score for one
+   person lies between `HintThreshold` and `PersonJoinThreshold`, never for a person any member is
+   negative for.
 
-A re-score writes a new row only for the people whose score moved by at least 0.03, and retires only the
-rows it replaced plus the people who dropped out of range. The comparison is against the stored score
-rather than the previous calculation, so a drift of one percent at a time still eventually crosses the
-threshold. Rewriting a face's whole candidate set whenever anything changed was the earlier behaviour;
-past a handful of people it turned every confirmation into a full rewrite of every open face, because a
-one-per-mille move at the bottom of the list counted as a change.
+Rows are ordered by the face's score to the person (person rows) or its average cosine to the other
+members (groups), most similar first. The three thresholds (0.45 / 0.45 / 0.30, section `FaceClustering`
+in the worker config) are raw ArcFace `w600k_r50` cosines and **unmeasured placeholders**, like the score
+calibration below.
+
+Each run writes a `FaceClusteringRun` and its `FaceCluster` rows, supersedes every undecided person
+candidate and writes one fresh candidate per open face, pointing at its cluster. `PhotoAnalysisCandidate`
+still needs a per-asset `PhotoAnalysisRun`, so each grouping writes one per photo it touches. The full
+rewrite is the simple choice at hundreds of faces. `ClusterFaces` is queued by every detection job, every
+review action (submit, delete, ignore, revoke) and the end of `MigrateFaceModels`, at most one pending
+at a time; it finishes without work while any `FingerprintAsset` or `AnalyzeFaces` job is still active,
+because the last detection job queues another. Old `RescoreFaces` rows still in the queue run the same
+grouping - nothing queues that kind any more.
 
 ### The system improves from references before it retrains models
 
@@ -89,10 +105,23 @@ keeps two identities. The comparison is embedding cosine, not box overlap: a re-
 nearly the same pixels, so the match survives a detector change, which near-identical boxes cannot
 promise.
 
-Review states settle the identity, not an occurrence: a confirmed reference face or a rejected or
-merged proposal on any occurrence of that identity closes it. A re-detection of a settled face is
-stored as evidence and never reopens review - not through detection, not through a re-score, and the
-migration pass retires open proposals on settled identities that predate identities.
+Review states attach to the identity, not an occurrence, and `FaceIdentityState` is the one place that
+answers what state an identity is in (the latest decision per identity wins):
+
+- **Settled** - the identity has a confirmed reference face (Submit). It is never grouped or shown
+  again; a re-detection is stored as evidence only.
+- **Pinned to Unsorted** - a face left unchecked when its row is submitted or ignored gets a `Rejected`
+  decision, in the same save as the row's other decisions. The face stays out of automatic
+  grouping until it is named or ignored, and if its row proposed a person, that person becomes a
+  negative for the face: never auto-joined or hinted for it again.
+- **Ignored into group X** - Ignore creates an `IgnoredFaceGroup` and writes an `Ignored` decision
+  (target = the group) per face. Ignored faces are *not* settled: the group stays reviewable and can
+  still be named.
+
+Before clustering, `Rejected`/`Merged` on a person proposal meant "close this face". The
+`AddFaceClustering` migration moves such faces (latest decision Rejected/Merged, no reference) into one
+ignored group through an `Ignored` decision on a superseded copy of the decided proposal; the old
+decision stays in the audit trail. Revoking a reference unsettles the face and queues a regrouping.
 `PersonReferenceFace` still points at the specific confirmed occurrence, so ranking keeps comparing
 against the crop the reviewer actually confirmed, and re-embedding keeps that reference's vector
 current.
@@ -105,7 +134,7 @@ worker closes the gap between stored data and current code itself: on start it c
 embeddings and canonical photos without a run of the current detection version, and if either is
 non-zero it queues a `MigrateFaceModels` job for itself. That job re-crops and re-embeds every
 stale face (references included, in place, per-photo resumable), requeues detection for the
-outdated photos, and re-scores. Detection fixes ride the same path — no separate procedure.
+outdated photos, and regroups the open faces. Detection fixes ride the same path — no separate procedure.
 
 A model swap is therefore: put the .onnx file in place, change the code, restart the worker.
 The migration is idempotent (each step touches only rows not matching current code) and
@@ -120,7 +149,8 @@ calibrated `confidence` at read time for person candidates: a logistic over the 
 `FaceAnalysis:Center` and `FaceAnalysis:Scale` (defaults 0.28 / 0.05, halfway between the expected
 same-person and different-person ranges for this embedder). The review screen shows that as the
 percent; the raw score remains in the Model evidence section. Once score distributions have been
-measured on real labelled data, the two numbers move to config - no re-run needed.
+measured on real labelled data, the two numbers move to config - no re-run needed. Since the
+cluster-based review no screen shows this percent any more (`FaceConfidenceCalibration` is unused).
 
 ### Exact duplicate bytes share one analysis
 
@@ -189,10 +219,9 @@ vector of the 112×112 crop that a 5-point similarity transform aligns onto the 
 cosines sat so close together that a confirmed face could score 37%). Every image upload queues
 `FingerprintAsset` alongside `BuildSourceNote`; the fingerprint job then queues `AnalyzeFaces`
 and `AnalyzeScenes` for the canonical asset of the duplicate group. The worker stores the face
-occurrence and top-five cosine-similarity candidates per detected face. With no confirmed
-reference faces, it creates an explicit unknown candidate so the reviewer can create a person and
-correct the candidate to them. Accepting or correcting a face candidate creates a
-`PersonReferenceFace`; a later run compares against all such references for that person.
+occurrences and their identities, then `ClusterFaces` groups them into review rows (see the
+Decision above). Submitting a row creates a `PersonReferenceFace` per face; later groupings
+compare against all such references for that person.
 
 Existing archives start with `FingerprintAsset` jobs through **Analyze unprocessed photos**. Once
 fingerprints are known, exactly one `AnalyzeFaces` job is queued per duplicate group. No source
@@ -261,10 +290,9 @@ usable.
       everything left in `Running` - including a job another worker is still executing. Harmless with one
       worker, wrong with two (the local worker and the container one already exist side by side, against
       different databases). A lease with an expiry would replace both the claim and the stuck-job reset.
-- [ ] **The picker's two grey notes are unverified.** `no reference faces` and `not ranked` were never
-      seen on screen: in the test archive every person already had a reference face, and the picker
-      only appears for low-confidence candidates, so the green end of the score colour scale was not
-      observed either. Re-check once a person without confirmed faces exists.
+- [ ] **The picker's grey notes are unverified.** The person picker is gone (cluster-based review); the
+      location picker's `no reference photos` / `score too low` notes were never seen on screen, nor the
+      green end of the score colour scale. Re-check with a location that has no confirmed photos.
 - [ ] **Compute `ContentSha256` while the upload streams to storage.** Hashing is cheap and needs no
       AI, but it goes through the FIFO job queue, so a new photo waits behind slow AI jobs before its
       analysis can even be queued. Hashing in the upload stream would leave `FingerprintAsset` needed
@@ -273,13 +301,34 @@ usable.
       bytes to `ClipImageEncoder`; if that library ignores EXIF orientation like ImageSharp does, a
       rotated phone photo gets a vector for the sideways picture and location matching suffers.
 - [ ] **Face identities — run pending.** Identity assignment at detection (`FaceIdentityMatcher`,
-      0.5 embedding cosine, one-to-one per run pair), the identity-based settled filter in detection,
-      re-score and the review list, and the migration pass that assigns identities to occurrences
+      0.5 embedding cosine, one-to-one per run pair), the identity-based settled filter (now used by
+      face grouping and the people review), and the migration pass that assigns identities to occurrences
       stored before identities existed are all in code; the build is green, nothing ran against live
       data yet. On the next worker start the gap check should queue one `MigrateFaceModels` job, which
       assigns identities and retires open proposals on settled identities; the review queue must not
       show re-detected copies of confirmed or rejected faces afterwards. The 0.5 matching cosine is
       as unmeasured as the score calibration below.
+- [ ] **Cluster-based people review - run pending.** `ClusterFaces` (worker), migration
+      `AddFaceClustering` (tables `FaceClusteringRuns`, `FaceClusters`, `IgnoredFaceGroups`, column
+      `PhotoAnalysisCandidates.FaceClusterId`, legacy Rejected/Merged into one ignored group), the
+      `people-review` API and the row-based UI are in code; build and lint are green, nothing ran live:
+      the migration was not applied, the worker never grouped, the UI was never opened. Check: apply the
+      migration (API start) and confirm the one local legacy rejection lands in an ignored group; the
+      worker start queues the first `ClusterFaces`; rows appear in the Persons subsection; Submit
+      (existing and new name) and Ignore with some faces unchecked (those land in Unsorted), Ignore and a 409 reload behave; no horizontal overflow on a phone.
+- [ ] **Face-clustering threshold calibration.** `PersonJoinThreshold`, `ClusterThreshold` and
+      `HintThreshold` are placeholders; measure same-person / different-person cosines on labelled faces
+      and set them (together with `FaceAnalysis:Center`/`Scale`).
+- [ ] **`FaceConfidenceCalibration` is unused.** The API still binds it and computes `confidence` for
+      person candidates, but no person candidate reaches `PhotoAnalysisController`'s list any more.
+      Remove it, or reuse it if people review ever shows a percent again.
+- [ ] **Audit rows grow with every regrouping.** Each `ClusterFaces` run supersedes and rewrites every
+      open person candidate, plus one `PhotoAnalysisRun` per touched photo and a set of `FaceClusters`.
+      Fine at hundreds of faces; later either write only what moved or prune superseded clustering
+      output (the candidate-to-cluster FK is `SET NULL` for that reason).
+- [ ] **Anonymous row ids are not stable.** A row's `clusterId` is new on every run, so a name typed
+      into an anonymous row is lost when a regrouping lands meanwhile (the row key changes). Match new
+      clusters to old ones by membership if this bites.
 - [ ] **ArcFace model on the home PC.** The worker container expects `w600k_r50.onnx` at
       `/models/arcface/` in the `models` volume (compose already sets
       `FaceAnalysis__RecognitionModelPath`); download instructions are in

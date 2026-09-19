@@ -10,4 +10,4 @@ public sealed class PhotoAnalysisReviewDecision
     public required DateTime DecidedAtUtc { get; init; }
 }
 
-public enum PhotoAnalysisDecisionKind { Accepted, Rejected, Corrected, Merged }
+public enum PhotoAnalysisDecisionKind { Accepted, Rejected, Corrected, Merged, Ignored }

@@ -11,7 +11,7 @@
 
 /* margin-left: auto, not justify-content: space-between on the row - this keeps the
    picker pinned to the right even when it wraps alone onto its own line (many tags). */
-.file-panel-tags-row .tag-picker {
+.file-panel-tags-row .search-picker {
   margin-left: auto;
 }
 

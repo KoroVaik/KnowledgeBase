@@ -201,7 +201,7 @@
   border-radius: 999px;
 }
 
-/* Generic error line, reused across AssetList/NotesList/TagsSection/TagPicker/
+/* Generic error line, reused across AssetList/NotesList/TagsSection/
    TagPlacementSuggestions rather than one class per section. */
 .notes-error {
   margin-bottom: 16px;

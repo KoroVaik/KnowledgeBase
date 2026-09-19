@@ -1,0 +1,27 @@
+.people-review { margin-top:12px; font-size:12px; }
+.people-review h4 { margin:0 0 6px; font-size:11px; text-transform:uppercase; color:var(--text-muted); }
+.people-review h5 { margin:10px 0 4px; font-size:11px; font-weight:600; text-transform:uppercase; color:var(--text-muted); }
+.people-review-pending { margin:0 0 6px; color:var(--text-muted); }
+.people-review-row { display:grid; gap:6px; min-width:0; padding:8px 0; border-top:1px solid var(--border); }
+.people-review-row-head { display:flex; flex-wrap:wrap; gap:6px; align-items:baseline; min-width:0; }
+.people-review-title { overflow:hidden; font-size:13px; font-weight:500; text-overflow:ellipsis; white-space:nowrap; }
+.people-review-band { display:grid; gap:4px; min-width:0; }
+.people-review-band-label { font-size:11px; color:var(--text-muted); }
+.people-review-strip { display:flex; flex-wrap:wrap; gap:8px; min-width:0; }
+.people-review-face { display:flex; flex:0 0 auto; flex-direction:column; align-items:center; gap:4px; }
+.people-review-crop { position:relative; padding:0; overflow:hidden; background:none; border:1px solid var(--border); border-radius:6px; cursor:pointer; }
+.people-review-crop:hover, .people-review-crop:focus-visible { border-color:var(--accent-border); }
+.people-review-crop .face-crop-preview { border:none; border-radius:0; }
+.people-review-keep { width:16px; height:16px; margin:0; cursor:pointer; accent-color:var(--ok); }
+.people-review-check { position:absolute; right:2px; bottom:2px; display:grid; place-items:center; width:16px; height:16px; font-size:10px; line-height:1; color:#fff; background:var(--ok); border-radius:50%; }
+.people-review-actions { display:flex; flex-wrap:wrap; gap:6px; align-items:center; min-width:0; }
+.people-review-ignore { margin-left:auto; }
+.people-review-hint { padding:1px 6px; font-size:11px; color:var(--text-muted); background:var(--surface-2); border:1px solid var(--border); border-radius:10px; cursor:pointer; }
+.people-review-hint:hover, .people-review-hint:focus-visible { color:var(--text-h); border-color:var(--accent-border); }
+.people-review-unsorted { display:grid; padding-left:12px; border-left:2px solid var(--border); }
+.people-review-unsorted .people-review-row:first-child { border-top:none; }
+.people-review-single { grid-template-columns:auto minmax(0,1fr); align-items:center; gap:10px; }
+.people-review-toggle { display:inline-flex; gap:6px; align-items:center; padding:0; font:inherit; color:inherit; text-transform:inherit; background:none; border:none; cursor:pointer; }
+.people-review-toggle:hover { color:var(--text-h); }
+.people-review-caret { transition:transform .15s ease; }
+.people-review-toggle[aria-expanded='false'] .people-review-caret { transform:rotate(-90deg); }

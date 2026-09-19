@@ -299,7 +299,7 @@
   color: var(--text-muted);
 }
 
-/* One pill for the action (the collapsed TagPicker `chip`) - the action is named once
+/* One pill for the action (the collapsed TagSearchPicker `chip`) - the action is named once
    (.tag-action-label, tinted by which action it is), options sit inside as smaller sub-chips (a
    step down from the outer pill and the tag-chip it sits next to) separated by a hairline.
    overflow: hidden clips each option's square hover

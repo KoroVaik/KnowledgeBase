@@ -46,6 +46,12 @@ public sealed class KnowledgeBaseDbContext(DbContextOptions<KnowledgeBaseDbConte
 
     public DbSet<PersonReferenceFace> PersonReferenceFaces => Set<PersonReferenceFace>();
 
+    public DbSet<FaceClusteringRun> FaceClusteringRuns => Set<FaceClusteringRun>();
+
+    public DbSet<FaceCluster> FaceClusters => Set<FaceCluster>();
+
+    public DbSet<IgnoredFaceGroup> IgnoredFaceGroups => Set<IgnoredFaceGroup>();
+
     public DbSet<VisualEmbedding> VisualEmbeddings => Set<VisualEmbedding>();
 
     public DbSet<LocationObservation> LocationObservations => Set<LocationObservation>();

@@ -15,6 +15,9 @@ public sealed class PhotoAnalysisCandidate
     public required string SignalsJson { get; init; }
     public required DateTime CreatedAtUtc { get; init; }
     public DateTime? SupersededAtUtc { get; set; }
+    // The face-clustering row this proposal was written for. Null on rows from before clustering
+    // and on location/event proposals.
+    public string? FaceClusterId { get; init; }
 }
 
 public enum PhotoAnalysisCandidateKind { Person, Location, Event }

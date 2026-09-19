@@ -3,7 +3,7 @@ import type { Tag } from '../../api/tags'
 import { notesText } from '../../format'
 import { useTagsSection } from './useTagsSection'
 import { ConfirmedTags } from './ConfirmedTags'
-import { TagPicker } from '../TagPicker/TagPicker'
+import { TagSearchPicker } from '../TagSearchPicker/TagSearchPicker'
 import { TagHierarchyTree } from '../TagHierarchyTree/TagHierarchyTree'
 import { TagHierarchyGraph } from '../TagHierarchyGraph/TagHierarchyGraph'
 import { TagPlacementSuggestions } from '../TagPlacementSuggestions/TagPlacementSuggestions'
@@ -122,7 +122,7 @@ export function TagsSection() {
         <span className="tags-count">{notesText(tag.noteCount)}</span>
 
         <span className="tags-actions">
-          <TagPicker
+          <TagSearchPicker
             source={tag}
             suggestion={suggestion}
             ariaLabel={`Merge ${tag.name} into another tag`}

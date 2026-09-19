@@ -2,7 +2,7 @@ import type { Tag } from '../../api/tags'
 import { notesText } from '../../format'
 import { TagSuggestionGraph } from '../TagSuggestionGraph/TagSuggestionGraph'
 import { TagActionsMenu } from './TagActionsMenu'
-import { TagPicker } from '../TagPicker/TagPicker'
+import { TagSearchPicker } from '../TagSearchPicker/TagSearchPicker'
 import { useTagReviewRow } from './useTagReviewRow'
 
 /** One unconfirmed tag in "To review": the mini-graph plus its own submit button, right of the
@@ -73,7 +73,7 @@ export function TagReviewRow({
               )}
             </button>
 
-            <TagPicker
+            <TagSearchPicker
               source={tag}
               suggestion={suggestion}
               ariaLabel={`Merge ${tag.name} into another tag`}
@@ -86,7 +86,7 @@ export function TagReviewRow({
         )}
 
         {suggestion === undefined && (
-          <TagPicker
+          <TagSearchPicker
             source={tag}
             disabled={disabled}
             ariaLabel={`Merge ${tag.name} into another tag`}

@@ -28,7 +28,7 @@ group-by-type: easier to find and delete everything one component owns, at the c
   the active and bin lists, private to this component).
 - `TagsSection/` - `TagsSection.tsx`, `useTagsSection.ts`, `ConfirmedTags.tsx`,
   `TagParentsControl.tsx` (both private to this component, confirmed by grep before moving).
-- `AssetList/`, `DeleteNoteDialog/`, `FilePanel/`, `LoginForm/`, `TagPicker/`,
+- `AssetList/`, `DeleteNoteDialog/`, `FilePanel/`, `LoginForm/`, `TagSearchPicker/`,
   `UploadQueueDialog/` - component + its one hook, no sub-components.
 - **Stayed flat, not co-located:**
   - `hooks/useResourceChanges.ts`, `hooks/useConnectionStatus.ts` - used by several
@@ -40,9 +40,9 @@ group-by-type: easier to find and delete everything one component owns, at the c
     domain module rather than a private one-component hook.
   - `App.tsx` + `hooks/useAppAuth.ts` - the root composition `main.tsx` mounts, not "a
     component among components".
-  - `TagPicker/` is not nested inside `TagsSection/` even though that is its only two
-    callers today (`TagsSection`'s row and `TagParentsControl`) - it is built generic on
-    purpose (see its own doc comment) for any future picker over the tag vocabulary.
+  - `SearchPicker/` and `TagSearchPicker/` are not nested inside `TagsSection/`: the tag
+    picker is used by `TagsSection`, `TagPlacementSuggestions` and `FilePanel`, and
+    `SearchPicker` underneath it is shared with the people review.
 
 No behaviour changed doing any of this - e.g. `NoteRow`'s one existing asymmetry (the active
 list shows a loading/error state for the expanded body, the bin only ever shows the ready
@@ -72,10 +72,17 @@ short on purpose; each component's own doc comment carries the usage details.
   with real download progress. Decision below.
 - **`InfoHint`** — an "i" icon tooltip on hover, keyboard focus or tap; not the native
   `title` (it waits ~1 s and never shows on touch). Doc comment in the component.
+- **`FacePreview`** — `FullPhotoPreview` (photo with a face box), `FaceCropPreview` (square
+  crop of one face) and `PhotoPopupDialog`; shared by `PhotoAnalysisSection` and
+  `PeopleReviewSection`.
 - **`TagChips`** — confirmed vs unconfirmed tag chips, shared by `NotesList` and
   `FilePanel`; flat file, no hook.
-- **`TagPicker`** — searchable tag picker over the tag vocabulary, built generic on
-  purpose; decision in [`frontend-features.md`](frontend-features.md) *Tag merge search*.
+- **`SearchPicker`** — the one searchable picker (input or collapsed chip + `Dropdown` panel,
+  sections, an "Add new …" action). It holds no data: the caller turns the typed text into
+  sections. Adapters: **`TagSearchPicker`** (`useTagSearch`, server-side tag search; decision in
+  [`frontend-features.md`](frontend-features.md) *Tag merge search*) and `PersonNamePicker`
+  in `PeopleReviewSection` (local filter over people). A new "pick one X" field is another
+  adapter, not another dropdown.
 
 ### Progressive image loading — `components/ProgressiveImage`
 
@@ -104,7 +111,7 @@ unmount. State resets during render on a url change (not in the effect — oxlin
 `components/Dropdown` owns the common trigger, outside-click / Escape closing and the
 open/close transition for floating menus. The panel stays mounted until its reverse
 transition finishes, so every consumer expands from and collapses back into its trigger
-rather than appearing or disappearing abruptly. `TagPicker` and the tag `⋯` actions menu
+rather than appearing or disappearing abruptly. `SearchPicker` and the tag `⋯` actions menu
 are its first consumers; callers supply only their trigger and panel content, plus the
 alignment edge.
 

@@ -13,13 +13,15 @@ internal static class JobKindDescriptions
         JobKind.BuildSourceNote =>
             "Reads one uploaded file with the AI model and turns it into a source note with tags.",
         JobKind.AnalyzeFaces =>
-            "Detects faces in one image and suggests matching people from confirmed reference faces.",
+            "Detects faces in one image and stores them for grouping into people.",
         JobKind.FingerprintAsset =>
             "Calculates an exact file fingerprint so duplicate images can share one face analysis.",
         JobKind.RescoreFaces =>
-            "Re-ranks people suggestions for faces nobody has reviewed yet, using the latest confirmed reference faces.",
+            "Legacy face re-score from before grouping; now regroups unreviewed faces by person.",
+        JobKind.ClusterFaces =>
+            "Groups every unreviewed face by person: joins confirmed people and ignored groups, clusters the rest.",
         JobKind.MigrateFaceModels =>
-            "Brings stored face data up to the current models — embeddings, detections and face identities — then re-ranks suggestions.",
+            "Brings stored face data up to the current models — embeddings, detections and face identities — then regroups faces.",
         JobKind.AnalyzeScenes =>
             "Generates a CLIP scene vector and proposes the most similar reviewed locations.",
         JobKind.AnalyzeSceneObservations =>

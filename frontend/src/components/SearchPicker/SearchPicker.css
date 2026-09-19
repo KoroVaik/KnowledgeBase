@@ -2,27 +2,27 @@
    Fixed px, not em: the input and the panel below sit in different font-size contexts, so
    matching em values (e.g. 11em/14em) would not actually come out to the same pixel width -
    that mismatch was the dropdown looking wider than its own input. */
-.tag-picker-input {
+.search-picker-input {
   width: 200px;
   cursor: text;
 }
 
-/* The collapsed `chip` variant reuses .tag-action-chip/.tag-action-chip-merge (TagsSection.css),
-   which already set a real border - only reset the browser's own <button> chrome (background,
-   padding, font) that a <span> never had in the first place. */
-.tag-picker-chip {
+/* The collapsed `chip` variant takes its border from the caller's chip class (e.g.
+   .tag-action-chip) - only reset the browser's own <button> chrome (background, padding, font)
+   that a <span> never had in the first place. */
+.search-picker-chip {
   padding: 0;
   font: inherit;
   cursor: pointer;
   background: none;
 }
 
-.tag-picker-chip:disabled {
+.search-picker-chip:disabled {
   cursor: not-allowed;
   opacity: 0.5;
 }
 
-.tag-action-chip.tag-picker-chip-icon {
+.search-picker-chip.search-picker-chip-icon {
   box-sizing: border-box;
   display: inline-flex;
   justify-content: center;
@@ -35,24 +35,24 @@
   line-height: normal;
 }
 
-.tag-picker-chip-icon .tag-picker-chevron {
+.search-picker-chip-icon .search-picker-chevron {
   padding: 0;
   font-size: 13px;
   line-height: 1;
 }
 
-.tag-picker-chevron {
+.search-picker-chevron {
   padding: 0 8px 0 2px;
   color: var(--text-muted);
   font-size: 9px;
 }
 
-.tag-picker-panel {
+.search-picker-panel {
   box-sizing: border-box;
   width: 200px;
 }
 
-.tag-picker-panel > .tag-picker-input {
+.search-picker-panel > .search-picker-input {
   width: 100%;
 }
 
@@ -60,7 +60,7 @@
    to a fixed px value that is inherited literally, too tall for this smaller font-size (see
    the same note on .chip-compact in TagChips.css). "normal" would depend on the font's own
    metrics instead of scaling with font-size, so it is pinned to the root's own 145% ratio. */
-.tag-picker-heading {
+.search-picker-heading {
   margin: 6px 8px 2px;
   font-size: 11px;
   line-height: 1.45;
@@ -70,20 +70,20 @@
   color: var(--text-muted);
 }
 
-.tag-picker-heading:first-child {
+.search-picker-panel > div:first-child > .search-picker-heading {
   margin-top: 2px;
 }
 
-.tag-picker-results {
+.search-picker-results {
   margin: 0;
   padding: 0;
   list-style: none;
 }
 
-.tag-picker-results button {
+.search-picker-results button {
   display: block;
   width: 100%;
-  padding: 6px 8px;
+  padding: 3px 8px;
   border: 0;
   border-radius: 4px;
   text-align: left;
@@ -95,22 +95,22 @@
   background: transparent;
 }
 
-/* The pipeline's semantic pick, one accent tone lighter than the plain-text spelling
-   matches below it - the two need to read apart at a glance, not just by heading. */
-.tag-picker-suggested button {
+/* A ranked suggestion, one accent tone lighter than the plain matches below it - the two need
+   to read apart at a glance, not just by heading. */
+.search-picker-accent button {
   color: var(--accent);
 }
 
-.tag-picker-results button:hover {
+.search-picker-results button:hover {
   color: var(--text-h);
   background: var(--surface-hover);
 }
 
-.tags-row .tag-picker-add {
+.search-picker-add {
   display: block;
   width: 100%;
   margin-top: 2px;
-  padding: 6px 8px;
+  padding: 3px 8px;
   border: 1px solid transparent;
   border-radius: 4px;
   text-align: left;
@@ -122,19 +122,19 @@
   background: var(--ok-bg);
 }
 
-.tags-row .tag-picker-add:hover:not(:disabled) {
+.search-picker-add:hover:not(:disabled) {
   border-color: var(--ok);
   background: var(--ok-bg);
 }
 
-.tag-picker-error {
+.search-picker-error {
   margin: 6px 4px 2px;
   font-size: 12px;
   line-height: 1.45;
   color: var(--danger);
 }
 
-.tag-picker-empty {
+.search-picker-empty {
   margin: 6px 4px 2px;
   font-size: 12px;
   line-height: 1.45;

@@ -14,13 +14,19 @@ public enum JobKind
     FingerprintAsset,
 
     // Re-score stored faces against the confirmed reference set after it changed. Detects nothing
-    // and reads no file; AssetId and Payload unused.
+    // and reads no file; AssetId and Payload unused. Superseded by ClusterFaces: the value stays
+    // because old rows exist in the database, and they run the clustering handler.
     RescoreFaces,
+
+    // Groups every open face of the archive into review rows: joins confirmed people and ignored
+    // groups, clusters the rest. Runs once per batch (skips while detection jobs are active).
+    // Detects nothing and reads no file; AssetId and Payload unused.
+    ClusterFaces,
 
     // One self-healing model migration: re-embeds faces stored by an older embedder, assigns face
     // identities to occurrences without one, requeues detection for photos analysed by an older
-    // pipeline version, then re-scores. AssetId and Payload unused; the worker enqueues it itself
-    // on start when the check finds any gap.
+    // pipeline version, then regroups faces. AssetId and Payload unused; the worker enqueues it
+    // itself on start when the check finds any gap.
     MigrateFaceModels,
 
     // Generate a CLIP scene vector and propose reviewed location candidates.

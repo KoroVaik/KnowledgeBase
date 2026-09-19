@@ -1,6 +1,6 @@
 import type { Tag, TagParentSuggestions } from '../../api/tags'
 import { TagSuggestionGraph } from '../TagSuggestionGraph/TagSuggestionGraph'
-import { TagPicker } from '../TagPicker/TagPicker'
+import { TagSearchPicker } from '../TagSearchPicker/TagSearchPicker'
 import { useTagPlacementRow } from './useTagPlacementRow'
 
 /** One confirmed tag with a pending placement guess. Same staged-decision shape as
@@ -60,7 +60,7 @@ export function TagPlacementRow({
       </button>
 
       <span className="tags-actions">
-        <TagPicker
+        <TagSearchPicker
           source={tag}
           ariaLabel={`Merge ${tag.name} into another tag`}
           disabled={disabled}

@@ -199,12 +199,12 @@ rows; fixed by budgeting the confidence word's width too, then browser-verified 
 toggle - it replaces a tag, it does not add a parent/child edge, so it does not belong inside
 the hierarchy diagram.
 
-### Tag merge search — `TagPicker`
+### Tag merge search — `TagSearchPicker`
 
 The "merge into" picker in `TagsSection` used to be a plain `<select>` of every tag,
 ordered by note count — unusable once the vocabulary passes a hundred entries, and it
 could not surface a match that was not yet confirmed (see *Tag review* in
-[`database.md`](database.md)). `TagPicker.tsx` replaces it: a text input, debounced
+[`database.md`](database.md)). `TagSearchPicker` (on the shared `SearchPicker`) replaces it: a text input, debounced
 (200 ms), calling `GET /api/tags?query=&excludeId=` — ranking happens on the backend, the
 component just renders what comes back (top 8). Built with no dependency on the merge
 flow specifically (`onPick(tag)`, `excludeId`), so a future manual "add a tag to this
@@ -214,8 +214,8 @@ components inventory in [`frontend.md`](frontend.md).
 For an **unconfirmed** tag that already carries an AI suggestion (`suggestedMergeIntoId`),
 `TagsSection`'s row skips the picker entirely and renders `TagMergeOptions` instead — one
 button per candidate (the suggestion, then confirmed tags close in spelling), fetched once,
-no search box, no click-to-open. A tag with no suggestion falls back to `TagPicker` — there
-is nothing to make explicit yet. Confirmed tags always keep `TagPicker`; a search box still
+no search box, no click-to-open. A tag with no suggestion falls back to `TagSearchPicker` — there
+is nothing to make explicit yet. Confirmed tags always keep `TagSearchPicker`; a search box still
 earns its place there since there is no AI guess to shortcut.
 
 ### Jobs section — worker status
@@ -250,9 +250,29 @@ earns its place there since there is no AI guess to shortcut.
 They are live archive records, not placeholder UI: a person or location can be created directly,
 and an event can be created with an optional date/location plus selected people and existing image
 assets. Unreviewed AI candidates appear in these same contextual subsections rather than a
-separate generic review page. Each shows its source photo, candidate rank and raw score; the
-reviewer can expand the immutable model evidence and accept, reject, or correct it to a canonical
-record. The section is empty until a worker writes candidates.
+separate generic review page. Each location/event candidate shows its source photo, candidate rank
+and raw score; the reviewer can expand the immutable model evidence and accept, reject, or correct it
+to a canonical record. The section is empty until a worker writes candidates.
+
+Faces are not reviewed one by one. Between the Persons "Add" form and *Known Persons* sits
+`PeopleReviewSection` (own folder, `usePeopleReview` hook, reads `GET /api/photo-analysis/people-review`)
+with one row per person: confirmed people with new faces, then anonymous groups (largest first), then
+one *Unsorted faces* row (a regular row, its single faces indented under it - not a separate heading), then Ignored groups (collapsed by default, saved per user). A row is a wrapping
+strip of 64 px crops; a confirmed person's row has two labelled strips, one above the other: *Approved
+faces* (up to three most typical confirmed faces, chosen by the API as the highest average similarity to
+the person's other confirmed faces, with a small green check in the corner) and *New suggested faces*.
+New faces have a checkbox under them, checked by default. Nothing is removed on the spot - **Submit person** / **Ignore** send the
+checked faces and the unchecked ones together, and the unchecked ones move to Unsorted in the same save
+(no half-applied row if the call fails). Unsorted faces have no checkbox - one face, nothing to uncheck. Clicking a crop opens the full-photo popup with
+the face box. Rows without a person have a **Select person name** picker (`PersonNamePicker`, an adapter over the
+shared `SearchPicker` - same panel as the tag picker): focusing it lists up to 10 existing people (by name), typing narrows them to names containing the text, plus a
+last "Add new name "…"" option (hidden on an exact match, so no duplicate). Picking either files the
+checked faces immediately - there is no separate Submit on these rows; confirmed-person rows keep
+**Submit person**. Anonymous and unsorted rows also have **Ignore**. A grey "Looks like: Name" chip fills
+the picker and focuses it, so the suggestion is one more click. A 409 reloads the list; "Grouping faces…" shows while grouping
+or detection jobs are active; SSE `photo-analysis` refreshes it. `FullPhotoPreview`, `FaceCropPreview`
+and `PhotoPopupDialog` moved to the shared `components/FacePreview/` so Known * and people review use the
+same code. Semantics and thresholds: [`photo-archive.md`](photo-archive.md).
 
 Each subsection ends with a collapsible **Known …** subsection instead of a bare list of every
 record: *Known Persons* shows each person's confirmed reference faces (click for the full photo,
@@ -281,6 +301,11 @@ details to create it, attach the chosen photos to an existing event, or reject t
 card is absent when the archive has no group above the clustering threshold.
 
 ## Open
+- [ ] **`TagPicker` → `SearchPicker` + `TagSearchPicker` — run pending.** Build + lint green. Not
+      seen in the browser: the five tag pickers (merge chip, icon chip, FilePanel "Add tag…",
+      placement row) look and behave as before. Two deliberate changes to check: picking an
+      option now closes the panel, and "Add new tag" has its green look everywhere (it was
+      scoped to `.tags-row`, so FilePanel's was unstyled).
 
 - [ ] **Local dev connection resilience.** During a photo-analysis browser check the first session
       request briefly returned HTTP 502 and Vite HMR could not open its WebSocket; retry recovered
@@ -390,7 +415,7 @@ card is absent when the archive has no group above the clustering threshold.
       and the review UI are the items below.
 - [ ] Tag review UI in `TagsSection`: every tag listed, "To review" block for unconfirmed
       ones — explicit "→ «candidate»" merge buttons (`TagMergeOptions`) when there is an AI
-      suggestion, a searchable "Merge into…" (`TagPicker`) as fallback when there is none —
+      suggestion, a searchable "Merge into…" (`TagSearchPicker`) as fallback when there is none —
       both ask before merging, Confirm, Synthesise (≥2 notes), Delete (asks first for a
       confirmed tag). "Suggest merges" head button queues the `GroupTags` job (see
       *Synthesis pipeline* in [`ai-pipeline.md`](ai-pipeline.md)). Build + lint pass,

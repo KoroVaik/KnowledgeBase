@@ -3,6 +3,7 @@ using KnowledgeBase.Core.Ai;
 using KnowledgeBase.Core.FaceAnalysis;
 using KnowledgeBase.Core.Persistence;
 using KnowledgeBase.Core.Pipeline;
+using KnowledgeBase.Core.Pipeline.FaceAnalysis;
 using KnowledgeBase.Core.Storage;
 using Microsoft.EntityFrameworkCore;
 
@@ -23,6 +24,9 @@ public sealed class FaceAnalysisHandler(KnowledgeBaseDbContext database, IAssetC
             ?? throw new InvalidOperationException($"Asset {assetId} no longer exists.");
         if (ProcessableContent.Classify(asset.ContentType, asset.OriginalFileName) is not ContentKind.Image)
             throw new SkippableContentException("Face analysis only applies to image assets.");
+        // Queued before any skip: the skip path saves it too, and a ClusterFaces job that ran while
+        // this one was pending deferred to it, so the last detection job must always leave one behind.
+        await ClusterFacesQueue.EnqueueAsync(database, cancellationToken);
         if (asset.ContentSha256 is not null)
         {
             var canonicalAssetId = await database.Assets
@@ -36,8 +40,8 @@ public sealed class FaceAnalysisHandler(KnowledgeBaseDbContext database, IAssetC
 
         // A job left Running by a stopped worker is requeued on the next start, and detection has no
         // memory of its own: running it twice would store every face of this photo a second time and
-        // put it up for review twice. Re-ranking against new references is RescoreFaces' job. Only
-        // faces from this pipeline version count, so a requeue after a detection fix detects again.
+        // put it up for review twice. Only faces from this pipeline version count, so a requeue after
+        // a detection fix detects again.
         if (await (from occurrence in database.FaceOccurrences
                    join earlierRun in database.PhotoAnalysisRuns on occurrence.RunId equals earlierRun.Id
                    where occurrence.AssetId == asset.Id && earlierRun.PipelineVersion == PipelineVersion
@@ -46,11 +50,6 @@ public sealed class FaceAnalysisHandler(KnowledgeBaseDbContext database, IAssetC
 
         var faces = await analyzer.AnalyzeAsync(await reader.ReadBytesAsync(asset.StoredFileName, cancellationToken), cancellationToken);
         var now = DateTime.UtcNow;
-        await database.PhotoAnalysisCandidates
-            .Where(candidate => candidate.Kind == PhotoAnalysisCandidateKind.Person && candidate.SubjectAssetId == asset.Id
-                && candidate.SupersededAtUtc == null
-                && !database.PhotoAnalysisReviewDecisions.Any(decision => decision.CandidateId == candidate.Id))
-            .ExecuteUpdateAsync(update => update.SetProperty(candidate => candidate.SupersededAtUtc, now), cancellationToken);
         var run = new PhotoAnalysisRun
         {
             Id = Guid.NewGuid().ToString("N"), AssetId = asset.Id, PipelineVersion = PipelineVersion,
@@ -58,18 +57,11 @@ public sealed class FaceAnalysisHandler(KnowledgeBaseDbContext database, IAssetC
         };
         database.PhotoAnalysisRuns.Add(run);
 
-        var references = await (
-            from reference in database.PersonReferenceFaces
-            join occurrence in database.FaceOccurrences on reference.FaceOccurrenceId equals occurrence.Id
-            join person in database.People on reference.PersonId equals person.Id
-            select new PersonReferenceEmbedding(person.Id, person.Name, occurrence.Id, occurrence.Embedding)).ToListAsync(cancellationToken);
-
         var earlierFaces = (await database.FaceOccurrences
             .Where(occurrence => occurrence.AssetId == asset.Id && occurrence.IdentityId != null)
             .ToListAsync(cancellationToken))
             .Select(occurrence => new FaceForIdentityMatching(occurrence.Id, occurrence.RunId, occurrence.IdentityId, occurrence.Embedding))
             .ToList();
-        var settledIdentityIds = await FaceIdentityState.SettledIdsAsync(database, cancellationToken);
 
         var occurrences = faces.Select(face => new FaceOccurrence
         {
@@ -91,11 +83,6 @@ public sealed class FaceAnalysisHandler(KnowledgeBaseDbContext database, IAssetC
             }
             occurrence.IdentityId = identityId;
             database.FaceOccurrences.Add(occurrence);
-            // A settled identity is a face the reviewer already disposed of (a reference or a
-            // rejection on any of its occurrences): a re-detection of it is stored as evidence
-            // but never reopened for review.
-            if (!settledIdentityIds.Contains(occurrence.IdentityId))
-                database.PhotoAnalysisCandidates.AddRange(FaceCandidateRanking.For(run.Id, occurrence, references, now));
         }
 
         return null;

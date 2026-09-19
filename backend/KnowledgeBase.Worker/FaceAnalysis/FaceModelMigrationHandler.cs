@@ -14,7 +14,7 @@ namespace KnowledgeBase.Worker.FaceAnalysis;
 // One idempotent migration pass, repeated model swaps included: re-embeds every face whose
 // stored EmbeddingModelKey is not the current embedder, assigns face identities to occurrences
 // still without one, requeues detection for photos whose stored detections come from an older
-// pipeline version, retires proposals on already-settled identities, and re-scores what moved.
+// pipeline version, retires proposals on already-settled identities, and regroups the open faces.
 // The worker enqueues it itself on start (FaceModelMigrationQueue) whenever the gap check finds
 // anything.
 public sealed class FaceModelMigrationHandler(
@@ -33,7 +33,7 @@ public sealed class FaceModelMigrationHandler(
         await AssignFaceIdentitiesAsync(cancellationToken);
         await RequeueOutdatedDetectionsAsync(cancellationToken);
         await SupersedeSettledIdentityProposalsAsync(cancellationToken);
-        if (await FaceRescoreQueue.EnqueueAsync(database, cancellationToken)) await database.SaveChangesAsync(cancellationToken);
+        if (await ClusterFacesQueue.EnqueueAsync(database, cancellationToken)) await database.SaveChangesAsync(cancellationToken);
         return null;
     }
 
@@ -134,7 +134,8 @@ public sealed class FaceModelMigrationHandler(
     // those proposals are retired instead of sitting in review forever.
     private async Task SupersedeSettledIdentityProposalsAsync(CancellationToken cancellationToken)
     {
-        var settledIdentityIds = await FaceIdentityState.SettledIdsAsync(database, cancellationToken);
+        // A List: EF reliably turns List.Contains into SQL; an interface-typed set is not guaranteed to translate.
+        var settledIdentityIds = (await FaceIdentityState.SettledIdsAsync(database, cancellationToken)).ToList();
         if (settledIdentityIds.Count == 0) return;
         var stale = await (
             from candidate in database.PhotoAnalysisCandidates

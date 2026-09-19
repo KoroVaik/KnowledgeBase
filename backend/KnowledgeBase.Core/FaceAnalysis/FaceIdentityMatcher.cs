@@ -26,7 +26,7 @@ public static class FaceIdentityMatcher
         {
             if (target.IdentityId is null || target.RunId == newcomer.RunId) continue;
             if (newcomer.Embedding.Length != target.Embedding.Length) continue;
-            var score = FaceCandidateRanking.CosineSimilarity(newcomer.Embedding, target.Embedding);
+            var score = FaceEmbeddingMath.CosineSimilarity(newcomer.Embedding, target.Embedding);
             if (score >= MinimumCosine) pairs.Add((newcomer.Id, target.Id, target.IdentityId, score));
         }
 

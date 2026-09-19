@@ -41,8 +41,11 @@ Deploy order: **API first** (applies the migration to Neon), then restart the wo
 | `Locations` (`Location`) | User-curated physical or visual places. `(Name, Kind)` is unique so a visual scene may coexist with a physical place of the same name. |
 | `ArchiveEvents` / `ArchiveEventPeople` / `ArchiveEventPhotos` | User-curated events, optionally located and dated, with explicit person and asset links. Deleting an asset only removes its join row; the event remains. |
 | `PhotoAnalysisRuns` | One completed model execution for an asset, with pipeline, model and configuration provenance. |
-| `PhotoAnalysisCandidates` | Ranked person/location/event proposal. The proposed target is deliberately an id without an FK so historical model evidence survives a later canonical merge or deletion. `SignalsJson` stores the raw score breakdown; nullable `SupersededAtUtc` hides only an unreviewed older proposal after a fresh location run. |
-| `PhotoAnalysisReviewDecisions` | One immutable human outcome for a candidate: accepted, rejected, corrected, or merged, optionally with the chosen canonical target. |
+| `PhotoAnalysisCandidates` | Ranked person/location/event proposal. The proposed target is deliberately an id without an FK so historical model evidence survives a later canonical merge or deletion. `SignalsJson` stores the raw score breakdown; nullable `SupersededAtUtc` hides only an unreviewed older proposal after a fresh run. Nullable `FaceClusterId` (FK `SET NULL`, indexed) points a person candidate at the face-grouping row it was written for. |
+| `PhotoAnalysisReviewDecisions` | One immutable human outcome for a candidate: accepted, rejected, corrected, merged, or ignored (person faces only; the chosen target is then an `IgnoredFaceGroups` id), optionally with the chosen canonical target. |
+| `FaceClusteringRuns` | One global face-grouping execution: pipeline version, hash of the three thresholds, completion time. The review screen reads the latest one. |
+| `FaceClusters` | Temporary output of one grouping run (FK to the run, CASCADE): `Kind` Person / Anonymous / Unsorted / Ignored, `PersonId?`, `IgnoredGroupId?` (FK `SET NULL`), `HintPersonId?` / `HintScore?`. Person ids carry no FK, like candidate targets. |
+| `IgnoredFaceGroups` | A stable user record of faces the user ignored (`Id`, `CreatedAtUtc`). Membership is derived: the latest decision per face identity is `Ignored` with this group as target. Migration `AddFaceClustering` put the legacy rejected/merged faces into one such group. |
 | `FaceOccurrences` | One model-detected face in a photo-analysis run: bounding rectangle, five landmarks, detection score and 512-value embedding. Nullable `IdentityId` links it to the physical face it belongs to (null only until the worker's migration pass assigns one). |
 | `FaceIdentities` | One physical face on one photo, stable across detection versions: every occurrence a re-detection stores for that face points at the same row, so settled review states follow the face instead of any single occurrence. |
 | `PersonReferenceFaces` | A canonical person explicitly linked to one face occurrence by an accepting or correcting human decision. This is the reference set for later similarity rankings. |
@@ -71,7 +74,7 @@ SET NULL (target); `Notes → Assets` (`SourceAssetId`) SET NULL; `NoteTags → 
   name) instead of the busiest-first default. Plain text ranking, not the model's call —
   it ranks a human's typing for a pick list, it does not decide a "correct" merge (that
   stays `SuggestedMergeIntoId`, below). `excludeId` drops one tag (the one being merged)
-  from the results. See `TagPicker` in [`frontend-features.md`](frontend-features.md).
+  from the results. See `TagSearchPicker` in [`frontend-features.md`](frontend-features.md).
 - `POST /api/tags/suggest-merges` queues a `GroupTags` job (see *Synthesis pipeline* in
   [`ai-pipeline.md`](ai-pipeline.md)) that re-runs the closest-matching-tag call over
   **every** unconfirmed tag in one pass, not only ones invented in the same run as a
@@ -180,12 +183,12 @@ UTC as local time. Fixed with a value converter in the model; **not needed in Po
 - [ ] **Tag review (confirm / merge / delete).** Done in code (design in *Tag review*
       above, migration `AddTagMergeSuggestion`); build + lint pass. **Run pending**:
       migration on local DB, the three endpoints, a fresh upload producing a suggestion.
-- [ ] **Tag search + batch grouping.** `GET /api/tags?query=` ranking, `TagPicker`, and
+- [ ] **Tag search + batch grouping.** `GET /api/tags?query=` ranking, `TagSearchPicker`, and
       the `GroupTags` job behind `POST /api/tags/suggest-merges` are done in code (Core
       builds clean; Api/Worker not rebuilt this session — a dev instance of each was
       running and locking the output). **Run pending**: the migration-free `GroupTags`
       job end to end (needs ≥1 confirmed + ≥1 unconfirmed tag), the search endpoint's
-      ranking with a real 100+-tag vocabulary, `TagPicker` in the browser.
+      ranking with a real 100+-tag vocabulary, `TagSearchPicker` in the browser.
 - [ ] **Re-verify deleted tags later.** `DELETE /api/tags/{id}` removes the row outright (an
       unconfirmed tag in "To review" even without a confirm prompt), so a wrongly declined tag
       is gone for good. Owner wants a way to revisit declined tags; the shape is undecided

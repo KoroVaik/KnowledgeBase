@@ -87,9 +87,18 @@ images and PDFs. Remove it once the worker has its first integration test.
 `AnalyzeFaces` is queued alongside `BuildSourceNote` for every image, but each asset may have one
 job of **each** kind rather than one job total. This means face analysis can be retried without
 replacing a note, and it runs even while Ollama is unavailable. `FaceAnalysisHandler` uses the
-local FaceONNX detector and embedder, writes archive evidence, and sends a `photo-analysis` change
-hint instead of a note change. A confirmed Person review creates the reference vector used on a
-later run; the worker never directly identifies a person as fact.
+local FaceONNX detector and ArcFace embedder, stores face occurrences and identities (no person
+candidates), queues `ClusterFaces`, and sends a `photo-analysis` change hint instead of a note
+change. A confirmed Person review creates the reference vector used by later groupings; the worker
+never directly identifies a person as fact.
+
+`ClusterFaces` groups every open face of the archive into review rows - joins confirmed people and
+ignored groups, clusters the rest (thresholds in the `FaceClustering` config section, validated on
+start) - and rewrites the open person candidates. At most one waits in the queue; it finishes
+without work while a `FingerprintAsset` or `AnalyzeFaces` job is active, since the last detection
+job queues another. A worker start also queues one when faces exist but no grouping has ever run.
+`RescoreFaces` is no longer queued; leftover rows run the same grouping. Details in
+[`photo-archive.md`](photo-archive.md).
 
 `FingerprintAsset` runs before a new image's face job and records a SHA-256 of its stored bytes.
 Only the oldest image with that hash queues `AnalyzeFaces`; copies are kept but skipped. The batch

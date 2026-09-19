@@ -6,7 +6,7 @@ const DEBOUNCE_MS = 200
 const SEARCH_LIMIT = 8
 const SPELLING_LIMIT = 5
 
-interface UseTagPickerOptions {
+interface UseTagSearchOptions {
   /** The tag this picker is choosing a match *for* (merge target search, spelling-close
    *  suggestions on open). Omit for a plain "pick any tag" use, e.g. adding one to a note. */
   source?: Tag
@@ -16,9 +16,9 @@ interface UseTagPickerOptions {
   onPick: (tag: Tag) => void
 }
 
-/** State behind TagPicker: the open panel's two ranked sections (suggestion + similar
+/** State behind TagSearchPicker: the open panel's two ranked sections (suggestion + similar
  *  spelling, closed input) or a live text search, plus "Add new tag" when nothing matches. */
-export function useTagPicker({ source, suggestion, excludeIds, onPick }: UseTagPickerOptions) {
+export function useTagSearch({ source, suggestion, excludeIds, onPick }: UseTagSearchOptions) {
   const [text, setText] = useState('')
   const [open, setOpen] = useState(false)
   const [spelling, setSpelling] = useState<Tag[]>([])

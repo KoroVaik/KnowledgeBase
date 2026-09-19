@@ -112,7 +112,7 @@ public sealed class PipelineWorker(
 
             var changeEvent = note is not null
                 ? new ChangeEvent(ChangeResources.Notes, ChangeActions.Created, note.Id)
-                : job.Kind is JobKind.AnalyzeFaces or JobKind.RescoreFaces or JobKind.MigrateFaceModels or JobKind.FingerprintAsset or JobKind.AnalyzeScenes or JobKind.AnalyzeSceneObservations or JobKind.AnalyzeEventCandidates
+                : IsPhotoAnalysis(job.Kind)
                     ? new ChangeEvent(ChangeResources.PhotoAnalysis, ChangeActions.Updated)
                     : new ChangeEvent(ChangeResources.Notes, ChangeActions.Updated);
 
@@ -133,7 +133,7 @@ public sealed class PipelineWorker(
             // Otherwise a job with nothing to do (e.g. no tag left to place) leaves the UI
             // waiting forever - it only ever hears about the Done path below.
             services.GetRequiredService<IChangeNotifier>()
-                .Publish(job.Kind is JobKind.AnalyzeFaces or JobKind.RescoreFaces or JobKind.MigrateFaceModels or JobKind.FingerprintAsset or JobKind.AnalyzeScenes or JobKind.AnalyzeSceneObservations or JobKind.AnalyzeEventCandidates
+                .Publish(IsPhotoAnalysis(job.Kind)
                     ? new ChangeEvent(ChangeResources.PhotoAnalysis, ChangeActions.Updated)
                     : new ChangeEvent(ChangeResources.Notes, ChangeActions.Updated));
         }
@@ -157,7 +157,7 @@ public sealed class PipelineWorker(
             if (giveUp)
             {
                 services.GetRequiredService<IChangeNotifier>()
-                    .Publish(job.Kind is JobKind.AnalyzeFaces or JobKind.RescoreFaces or JobKind.FingerprintAsset or JobKind.AnalyzeScenes or JobKind.AnalyzeSceneObservations or JobKind.AnalyzeEventCandidates
+                    .Publish(IsPhotoAnalysis(job.Kind)
                         ? new ChangeEvent(ChangeResources.PhotoAnalysis, ChangeActions.Updated)
                         : new ChangeEvent(ChangeResources.Notes, ChangeActions.Updated));
             }
@@ -165,6 +165,10 @@ public sealed class PipelineWorker(
 
         return true;
     }
+
+    private static bool IsPhotoAnalysis(JobKind kind) =>
+        kind is JobKind.AnalyzeFaces or JobKind.RescoreFaces or JobKind.ClusterFaces or JobKind.MigrateFaceModels
+            or JobKind.FingerprintAsset or JobKind.AnalyzeScenes or JobKind.AnalyzeSceneObservations or JobKind.AnalyzeEventCandidates;
 
     private static Task<ProcessingJob?> ClaimAsync(
         KnowledgeBaseDbContext database,

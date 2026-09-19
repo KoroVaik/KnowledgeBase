@@ -73,3 +73,36 @@ export const revokeLocationPhoto = (locationId: string, assetId: string) =>
   remove(`locations/${locationId}/reference-photos/${assetId}`, 'Could not revoke this location photo')
 export const detachEventPhoto = (eventId: string, assetId: string) =>
   remove(`events/${eventId}/photos/${assetId}`, 'Could not remove this photo from the event')
+
+// score is the raw cosine that orders a row: to the person for a person row, to the other members for a group.
+export interface PeopleReviewFace { candidateId: string; faceOccurrenceId: string; assetId: string; faceBounds: FaceBounds; score: number }
+export interface PeopleReviewHint { personId: string; name: string; score: number }
+export interface PeopleReviewPersonRow { personId: string; name: string; referenceFaces: PersonReferenceFace[]; referenceFaceCount: number; faces: PeopleReviewFace[] }
+export interface PeopleReviewAnonymousRow { clusterId: string; hint: PeopleReviewHint | null; faces: PeopleReviewFace[] }
+export interface PeopleReviewIgnoredGroup { groupId: string; hint: PeopleReviewHint | null; faces: PeopleReviewFace[] }
+export interface PeopleReview { clusteringPending: boolean; personRows: PeopleReviewPersonRow[]; anonymousRows: PeopleReviewAnonymousRow[]; unsorted: PeopleReviewFace[]; ignoredGroups: PeopleReviewIgnoredGroup[] }
+
+/** The faces changed on the server since the list was loaded - the caller reloads instead of retrying. */
+export class PeopleReviewConflictError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'PeopleReviewConflictError'
+  }
+}
+
+export async function fetchPeopleReview(): Promise<PeopleReview> {
+  const response = await apiFetch('/api/photo-analysis/people-review')
+  if (!response.ok) throw new Error(await readErrorMessage(response, 'Could not load people review'))
+  return await response.json() as PeopleReview
+}
+
+async function postPeopleReview(path: string, body: unknown, failure: string): Promise<void> {
+  const response = await apiFetch(`/api/photo-analysis/people-review/${path}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) })
+  if (response.status === 409) throw new PeopleReviewConflictError(await readErrorMessage(response, failure))
+  if (!response.ok) throw new Error(await readErrorMessage(response, failure))
+}
+
+export const submitPeopleReviewRow = (body: { candidateIds: string[]; removedCandidateIds: string[]; personId: string | null; name: string | null }) =>
+  postPeopleReview('submit', body, 'Could not save this person')
+export const ignorePeopleReviewRow = (body: { candidateIds: string[]; removedCandidateIds: string[] }) =>
+  postPeopleReview('ignore', body, 'Could not ignore these faces')

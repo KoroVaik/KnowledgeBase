@@ -24,13 +24,52 @@ internal sealed class PhotoAnalysisCandidateConfiguration : IEntityTypeConfigura
         builder.Property(candidate => candidate.SubjectFaceOccurrenceId).HasMaxLength(32);
         builder.Property(candidate => candidate.ProposedTargetId).HasMaxLength(32); builder.Property(candidate => candidate.ProposedLabel).HasMaxLength(200);
         builder.Property(candidate => candidate.Kind).HasConversion<string>().HasMaxLength(16); builder.Property(candidate => candidate.SignalsJson).HasColumnType("jsonb");
+        builder.Property(candidate => candidate.FaceClusterId).HasMaxLength(32);
         // Not unique: revoking a confirmation re-opens the original proposal as a new row with the
         // same run/face/kind/rank, while the decided original stays in the audit trail.
         builder.HasIndex(candidate => new { candidate.RunId, candidate.SubjectFaceOccurrenceId, candidate.Kind, candidate.Rank });
         builder.HasIndex(candidate => new { candidate.Kind, candidate.SubjectAssetId, candidate.SupersededAtUtc });
+        builder.HasIndex(candidate => candidate.FaceClusterId);
         builder.HasOne<PhotoAnalysisRun>().WithMany().HasForeignKey(candidate => candidate.RunId).OnDelete(DeleteBehavior.Cascade);
         builder.HasOne<AssetRecord>().WithMany().HasForeignKey(candidate => candidate.SubjectAssetId).OnDelete(DeleteBehavior.Cascade);
         builder.HasOne<FaceOccurrence>().WithMany().HasForeignKey(candidate => candidate.SubjectFaceOccurrenceId).OnDelete(DeleteBehavior.SetNull);
+        // SetNull, never Cascade: a cluster is a temporary algorithm output, the candidate is
+        // audit history and must outlive any cleanup that removes old clustering runs.
+        builder.HasOne<FaceCluster>().WithMany().HasForeignKey(candidate => candidate.FaceClusterId).OnDelete(DeleteBehavior.SetNull);
+    }
+}
+
+internal sealed class FaceClusteringRunConfiguration : IEntityTypeConfiguration<FaceClusteringRun>
+{
+    public void Configure(EntityTypeBuilder<FaceClusteringRun> builder)
+    {
+        builder.HasKey(run => run.Id); builder.Property(run => run.Id).HasMaxLength(32);
+        builder.Property(run => run.PipelineVersion).HasMaxLength(100); builder.Property(run => run.ConfigurationHash).HasMaxLength(128);
+        builder.HasIndex(run => run.CompletedAtUtc);
+    }
+}
+
+internal sealed class FaceClusterConfiguration : IEntityTypeConfiguration<FaceCluster>
+{
+    public void Configure(EntityTypeBuilder<FaceCluster> builder)
+    {
+        builder.HasKey(cluster => cluster.Id); builder.Property(cluster => cluster.Id).HasMaxLength(32);
+        builder.Property(cluster => cluster.RunId).HasMaxLength(32);
+        builder.Property(cluster => cluster.Kind).HasConversion<string>().HasMaxLength(16);
+        builder.Property(cluster => cluster.PersonId).HasMaxLength(32); builder.Property(cluster => cluster.HintPersonId).HasMaxLength(32);
+        builder.Property(cluster => cluster.IgnoredGroupId).HasMaxLength(32);
+        builder.HasIndex(cluster => new { cluster.RunId, cluster.Kind });
+        builder.HasOne<FaceClusteringRun>().WithMany().HasForeignKey(cluster => cluster.RunId).OnDelete(DeleteBehavior.Cascade);
+        builder.HasOne<IgnoredFaceGroup>().WithMany().HasForeignKey(cluster => cluster.IgnoredGroupId).OnDelete(DeleteBehavior.SetNull);
+    }
+}
+
+internal sealed class IgnoredFaceGroupConfiguration : IEntityTypeConfiguration<IgnoredFaceGroup>
+{
+    public void Configure(EntityTypeBuilder<IgnoredFaceGroup> builder)
+    {
+        builder.HasKey(group => group.Id); builder.Property(group => group.Id).HasMaxLength(32);
+        builder.HasIndex(group => group.CreatedAtUtc);
     }
 }
 

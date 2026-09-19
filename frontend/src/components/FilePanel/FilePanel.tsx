@@ -4,7 +4,7 @@ import { renderNoteBody } from '../../notes/renderNoteBody'
 import { DeleteNoteDialog } from '../DeleteNoteDialog/DeleteNoteDialog'
 import { ProgressiveImage } from '../ProgressiveImage/ProgressiveImage'
 import { TagChips } from '../TagChips'
-import { TagPicker } from '../TagPicker/TagPicker'
+import { TagSearchPicker } from '../TagSearchPicker/TagSearchPicker'
 import './FilePanel.css'
 
 interface FilePanelProps {
@@ -109,7 +109,7 @@ export function FilePanel({ asset, onChanged, onDeleted }: FilePanelProps) {
                   ) : (
                     <p className="tags-empty">No tags yet.</p>
                   )}
-                  <TagPicker
+                  <TagSearchPicker
                     ariaLabel="Add a tag to this note"
                     placeholder="Add tag…"
                     disabled={addingTag}
