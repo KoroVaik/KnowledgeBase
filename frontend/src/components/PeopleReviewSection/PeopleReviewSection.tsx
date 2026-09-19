@@ -101,7 +101,9 @@ export function PeopleReviewSection({ people, assetsById }: { people: Person[]; 
           <FaceStrip faces={row.faces} title={row.name} assetsById={assetsById} onOpen={open} review={review} />
         </div>
         <div className="people-review-actions">
-          <button type="button" className="btn btn-xs btn-primary" disabled={review.isBusy(rowKey) || review.checkedCount(row.faces) === 0} onClick={() => review.submitToPerson(rowKey, row.faces, row.personId)}>Submit person</button>
+          {review.checkedCount(row.faces) === 0
+            ? <button type="button" className="btn btn-xs btn-danger" disabled={review.isBusy(rowKey)} title="Send these faces to Ignored" onClick={() => review.rejectAll(rowKey, row.faces)}>Reject</button>
+            : <button type="button" className="btn btn-xs btn-primary" disabled={review.isBusy(rowKey)} onClick={() => review.submitToPerson(rowKey, row.faces, row.personId)}>Submit person</button>}
         </div>
       </article>
     })}

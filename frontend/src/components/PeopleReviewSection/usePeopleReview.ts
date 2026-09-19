@@ -89,5 +89,7 @@ export function usePeopleReview() {
       void runRowAction(rowKey, () => submitPeopleReviewRow({ ...split(faces), personId: null, name: name.trim() })),
     ignore: (rowKey: string, faces: PeopleReviewFace[]) =>
       void runRowAction(rowKey, () => ignorePeopleReviewRow(split(faces))),
+    rejectAll: (rowKey: string, faces: PeopleReviewFace[]) =>
+      void runRowAction(rowKey, () => ignorePeopleReviewRow({ candidateIds: faces.map(face => face.candidateId), removedCandidateIds: [] })),
   }
 }
