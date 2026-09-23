@@ -14,6 +14,10 @@ internal static class JobKindDescriptions
             "Reads one uploaded file with the AI model and turns it into a source note with tags.",
         JobKind.AnalyzeFaces =>
             "Detects faces in one image and stores them for grouping into people.",
+        JobKind.CompareFaceDetectors =>
+            "Compares three face detectors on one photo, separately from person suggestions.",
+        JobKind.CompareFaceRecognizers =>
+            "Runs three face recognizers over detected faces, separately from person suggestions.",
         JobKind.FingerprintAsset =>
             "Calculates an exact file fingerprint so duplicate images can share one face analysis.",
         JobKind.RescoreFaces =>

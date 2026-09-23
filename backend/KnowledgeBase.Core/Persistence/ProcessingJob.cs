@@ -24,6 +24,8 @@ public sealed class ProcessingJob
 
     public string? Error { get; set; }
 
+    public string? DiagnosticContext { get; set; }
+
     public static ProcessingJob Queue(string assetId, JobKind kind = JobKind.BuildSourceNote) => new()
     {
         Id = Guid.NewGuid().ToString("N"),

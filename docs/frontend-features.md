@@ -36,9 +36,9 @@ context: the connection is one per tab regardless of who is mounted.
 - `apiFetch` in `api/http.ts` turns a `fetch` rejection into `ApiUnreachableError`.
   `fetch` rejects only when there was no response at all, and its message differs per
   engine — "Failed to fetch" must not reach the user.
-- `reloadToken` after the user's own upload sits alongside the stream: it refreshes the
-  list without waiting for the round-trip and covers a down stream. Cost: two GETs after
-  your own upload. Remove if the stream proves reliable.
+- Upload notifications and SSE both refresh the listing, including when the stream is down.
+  Asset reads share a 200 ms window and one request in flight; a change during that request
+  schedules one trailing refresh. Pointer activity no longer cancels offline SSE backoff.
 
 ### Markdown + wiki-links
 
@@ -65,7 +65,10 @@ context: the connection is one per tab regardless of who is mounted.
 - The queue closes itself when no row is left waiting on the user (`every` on an empty
   list is true). A `blocked` row is removed by an explicit `Dismiss`, not by the popup
   vanishing — otherwise the reason is missed.
-- Upload **all at once**, no pool: single-user, a batch is tens of files, not thousands.
+- At most four bucket PUTs run at once, across additions and retries. Signing and confirmation
+  use batches of up to 50 items, collected for 20 ms. Each file keeps its progress and result;
+  a failed confirmation retries the same uploaded key without sending the bytes again.
+  Supersedes the previous all-at-once decision (2026-09-23).
 - Uploads start straight from `add`/`uploadNow`, **not from an effect**: StrictMode
   double-runs effects in dev and the second run would upload every file twice.
 - ESC is blocked (event `cancel` + `preventDefault`) while any `PUT` is in flight. Click
@@ -220,10 +223,10 @@ earns its place there since there is no AI guess to shortcut.
 
 ### Jobs section — worker status
 
-`JobsSection` lists jobs the pipeline has queued or is running, via `GET /api/jobs`
+`JobsSection` lists jobs the pipeline has queued or is running, via `GET /api/jobs/summary`
 ([backend.md](backend.md)). Kept simple on purpose:
 
-- **Continuous polling (5 s), not SSE.** The worker flips `Pending` → `Running` → `Done`
+- **Continuous polling, five seconds after the preceding request completes.** The worker flips `Pending` → `Running` → `Done`
   entirely inside its own process with no ping to the API in between (only a finished note
   triggers one, see *Worker → API bridge* in [`worker.md`](worker.md)), so an event-based
   refresh would miss the states this section exists to show. Same reasoning as `NotesList`'s
@@ -239,15 +242,16 @@ earns its place there since there is no AI guess to shortcut.
   the label (hover, keyboard focus, or tap — mobile Safari does not focus a tapped button, so
   tap toggles explicit state). Not the native `title`: it waits ~1 s and never shows on touch.
   Labels themselves still live in `KIND_LABELS`.
-- **Failed jobs get their own block** under the active list (`GET /api/jobs/failed`), each with
+- **Failed jobs get their own block** under the active list (the same summary response), each with
   **Retry**, plus **Retry all**. Retry is always a human decision, never automatic: until the
   cause is fixed a job just fails three times again. Skipped jobs are not offered — the same
   input cannot succeed. Jobs of a deleted file vanish with it (cascade), so none show here.
 
 ### Photo analysis catalogue
 
-`PhotoAnalysisSection` is a card with three nested subsections: Persons, Locations and Events.
-They are live archive records, not placeholder UI: a person or location can be created directly,
+`PhotoAnalysisSection` is a card with two experiment subsections and three archive subsections:
+face detector comparison, face recognizer comparison, Persons, Locations and Events. The archive
+subsections are live records, not placeholder UI: a person or location can be created directly,
 and an event can be created with an optional date/location plus selected people and existing image
 assets. Unreviewed AI candidates appear in these same contextual subsections rather than a
 separate generic review page. Each location/event candidate shows its source photo, candidate rank
@@ -300,7 +304,33 @@ and expandable clustering evidence. The reviewer can uncheck photos, enter the c
 details to create it, attach the chosen photos to an existing event, or reject the proposal. The
 card is absent when the archive has no group above the clustering threshold.
 
+### Browser diagnostics
+
+Uploads, HTTP/XHR, reload initiators, SSE and browser failures produce bounded structured diagnostics. The collector transport has its own rate/backoff limits and never logs itself. See [observability.md](observability.md).
+
 ## Open
+
+- [ ] Verify request reduction with all 16 sections open and an active SSE subscriber:
+      single and batch upload, cold/warm previews, expiry, partial failures, retry and reconnect.
+      Implementation is present; runtime checks and tests were explicitly skipped on 2026-09-23.
+
+- [ ] Verify the observability integration in the running application; runtime checks and iteration 2 request reduction are tracked in [observability.md](observability.md).
+
+- [ ] **Face detector comparison UI.** The Photo analysis subsection has a single-photo picker,
+      paged run history that hides fully reviewed photos by default (with a **Show reviewed**
+      checkbox), one shared photo with one grouped frame per candidate face and coloured
+      model numbers, compact disagreement cards, per-model false-positive correction, hover linkage,
+      and shared all-model missed-face controls. Detections are accepted by default; navigation
+      finishes the current photo's review. An invalid photo can be excluded and later restored
+      without deleting its model output. Build/lint pass; browser verification of queue/results,
+      group merging, review persistence, popups and narrow screens is pending. Domain rules:
+      [`photo-archive.md`](photo-archive.md).
+- [ ] **Face recognizer comparison UI.** The Photo analysis subsection independently shows an
+      **Analyze X photos** action for faces missing a model result, runs three recognizers without
+      changing person suggestions, and uses confirmed ownership only as optional automatic ground truth
+      for F1/precision/recall, thresholds and selected disagreement pairs. Build/lint pass; browser
+      verification after the migrations and a worker run is pending. Domain rules:
+      [`photo-archive.md`](photo-archive.md).
 - [ ] **`TagPicker` → `SearchPicker` + `TagSearchPicker` — run pending.** Build + lint green. Not
       seen in the browser: the five tag pickers (merge chip, icon chip, FilePanel "Add tag…",
       placement row) look and behave as before. Two deliberate changes to check: picking an

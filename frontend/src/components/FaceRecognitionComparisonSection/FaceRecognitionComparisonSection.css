@@ -1,0 +1,24 @@
+.recognition-comparison-content { display:grid; gap:14px; min-width:0; }
+.recognition-comparison-content p { margin:0; }
+.recognition-comparison-controls, .recognition-comparison-history, .recognition-run-head { display:flex; gap:10px; align-items:center; flex-wrap:wrap; min-width:0; }
+.recognition-comparison-controls small, .recognition-run-head > span, .recognition-model-meta, .recognition-evidence-list > p { color:var(--text-muted); font-size:12px; line-height:1.5; }
+.recognition-comparison-history .select-trigger { max-width:100%; }
+.recognition-comparison-history .select-trigger > span:first-child { white-space:normal; overflow-wrap:anywhere; }
+.recognition-run-head { justify-content:space-between; overflow-wrap:anywhere; }
+.recognition-models { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; align-items:start; }
+.recognition-model { display:grid; gap:10px; min-width:0; padding:14px; border:1px solid var(--border); border-radius:10px; background:var(--surface); }
+.recognition-model h4, .recognition-evidence-list h4 { margin:0; font-size:14px; line-height:1.4; }
+.recognition-model details { min-width:0; font-size:12px; }
+.recognition-model pre { overflow-wrap:anywhere; white-space:pre-wrap; font-size:11px; }
+.recognition-metrics { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; margin:0; }
+.recognition-metrics > div { padding:8px; border-radius:6px; background:var(--surface-2); }
+.recognition-metrics dt { color:var(--text-muted); font-size:10px; text-transform:uppercase; letter-spacing:.05em; }
+.recognition-metrics dd { margin:3px 0 0; font-size:15px; font-weight:600; }
+.recognition-evidence-list { display:grid; gap:10px; }
+.recognition-evidence { display:grid; grid-template-columns:auto minmax(0,1fr); gap:12px; align-items:center; padding:10px; border:1px solid var(--border); border-radius:8px; background:var(--surface); }
+.recognition-evidence-faces { display:flex; align-items:center; gap:6px; }
+.recognition-evidence-scores { display:grid; gap:4px; margin-top:6px; font-size:12px; }
+.recognition-score-correct { color:var(--text-muted); }
+.recognition-score-wrong { color:var(--danger); font-weight:600; }
+@media (max-width:1050px) { .recognition-models { grid-template-columns:1fr; } }
+@media (max-width:600px) { .recognition-comparison-controls .btn { width:100%; min-height:44px; } .recognition-evidence { grid-template-columns:1fr; } }

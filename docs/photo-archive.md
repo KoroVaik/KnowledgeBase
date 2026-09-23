@@ -10,6 +10,51 @@ generation is deliberately deferred until that data is reliable.
 
 ## Decisions
 
+### Detector comparisons are separate experiments
+
+The **Face detector comparison** subsection runs YOLOv5s-face (the current FaceONNX adapter),
+SCRFD-10GF and YuNet 2023mar on one selected original. `CompareFaceDetectors` stores a new
+`FaceComparisonRun`, three `FaceComparisonResults` and their `FaceComparisonDetections`; it never
+creates occurrences, embeddings, identities, references or person candidates. Old experiments remain
+in history. Each completed model is saved separately so an interrupted job can resume; a model error
+is shown independently rather than reported as zero detections.
+
+The same EXIF-oriented image reaches all models. Boxes and five landmarks use original-image pixels.
+Raw model scores are not calibrated probabilities or comparable accuracy measures. Geometry warnings
+do not filter the outputs: false detections must remain visible for evaluation. Every detection is
+initially treated as a face; the reviewer corrects individual false positives (including duplicate
+boxes) or rejects an entire candidate group. Using a navigation arrow marks the current photo
+reviewed, independently of its detection labels. The right arrow finishes the final photo too.
+The queue hides reviewed and invalid photos unless **Show reviewed** is enabled. A missed-face
+count is increased only when a face was missed by all models; misses by individual models are
+inferred from approved groups. Per-photo precision/recall appear after the photo is reviewed;
+an empty denominator is undefined, not 100%. These editable experimental labels do not affect people.
+
+Timing is the median of three warm CPU runs (two inference threads), including preprocessing and
+postprocessing, excluding download, image decode and session creation. Input size is 640x640;
+model-specific thresholds, score semantics, adapter version and downloaded model SHA-256 are retained.
+SCRFD and YuNet are lazily downloaded from pinned upstream sources into the worker's models cache.
+The source adapters are InsightFace v0.7 `scrfd.py` and OpenCV `face_detect.cpp`; their model licensing
+remains the upstream licensing (InsightFace pretrained weights: non-commercial research).
+
+### Recognition comparisons analyze detected faces independently
+
+The **Face recognizer comparison** subsection runs the current ArcFace R50, ArcFace
+MobileFaceNet and FaceONNX ResNet27 over every face from the current detection for each photo. It
+never runs detection and never changes occurrences, references, clusters or person suggestions.
+Each model's embedding is stored per occurrence, so the next `CompareFaceRecognizers` run skips
+faces it has already processed and the button can show how many photos still need analysis.
+When a photo has several face occurrences, the worker loads its source image once and uses it
+for every face on that photo. A failed run stays in history; starting another run picks up faces
+that still lack embeddings.
+Confirmed, non-partial person references are only optional ground truth: if there are enough of
+them, the run also stores a per-model threshold and confusion matrix calculated from same-person
+and different-person pairs. The threshold maximizes F1 on that archive-specific labelled set and
+remains an experiment result, not a production matching rule. The screen automatically shows only
+up to 24 labelled pairs where the models disagree, misclassify, or sit closest to their thresholds;
+no extra labelling is required. MobileFaceNet is lazily downloaded from InsightFace `buffalo_sc`
+and checksum-verified; the weights retain InsightFace's upstream non-commercial-research licence.
+
 ### Canonical archive records are separate from AI output
 
 `Person`, `Location`, and `Event` are stable, user-curated records. An AI cluster or
@@ -286,6 +331,17 @@ usable.
 
 ## Open
 
+- [ ] **Face detector comparison — UI verification and calibration pending.** Builds, lint and six
+      geometry/NMS tests pass. Local database review confirms 15 completed runs with results and saved
+      review labels/missed counts. Browser checks of history, model failures, popups and mobile layout
+      remain pending. A local threshold sweep on the same Garage originals recovered SCRFD's marked
+      shadowed-face miss at score 0.4466 (default threshold 0.5); threshold 0.4 produced 30 boxes matching
+      YOLO's 30 non-rejected boxes, without its known background box. YuNet's threshold 0.9 produced
+      18 boxes, versus 27 at 0.7. Labels are incomplete and box agreement is not ground truth; validate
+      thresholds on more labelled photos, including negative examples, before production changes.
+- [ ] **Run face-recognizer comparison on the local archive.** The independent, incremental experiment
+      is built; apply the migrations, start the worker, then inspect the stored embeddings and, where
+      enough confirmed faces exist, the automatic thresholds.
 - [ ] **The job queue has no lease.** A claim is a plain status write, and a starting worker requeues
       everything left in `Running` - including a job another worker is still executing. Harmless with one
       worker, wrong with two (the local worker and the container one already exist side by side, against

@@ -10,6 +10,10 @@ public enum JobKind
     // Detect faces and create identity candidates. It does not call Ollama.
     AnalyzeFaces,
 
+    CompareFaceDetectors,
+
+    CompareFaceRecognizers,
+
     // Calculates an exact byte fingerprint before face analysis chooses one duplicate representative.
     FingerprintAsset,
 

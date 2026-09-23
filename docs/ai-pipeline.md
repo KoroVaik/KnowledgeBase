@@ -9,7 +9,9 @@ the [worker process](worker.md).
 Uploaded file → `AssetRecord` row → `ProcessingJobs` row (queued in the same
 `SaveChanges` as the asset row, one transaction). The worker polls the queue, pulls the
 bytes from the bucket **directly** (it is server-side and has the key — no presigned URL),
-picks the extractor for the content kind, feeds the text/image to the model, writes
+for text and PDF files (and photos only when the API feature flag
+`Features:ImageSourceNotes:Enabled` is enabled)
+picks the extractor and feeds the content to the model, writes
 `Note` + `NoteLink` back to Postgres in one `SaveChanges`, then pings the API for SSE.
 
 The note body is a `text` column with an appended `## Related` section listing the
@@ -26,7 +28,8 @@ attempts, `Skipped`/`Failed`, SSE — and dispatches to `PipelineHandlerSelector
 adds it (+ links, tags) to the `DbContext`; the worker's final `SaveChanges` commits note
 and job status together.
 
-- `BuildSourceNote` → `SourceNoteHandler` (the file → note flow; `AssetId` set, no payload).
+- `BuildSourceNote` → `SourceNoteHandler` (the text/PDF → note flow; the API optionally queues
+  image notes through `Features:ImageSourceNotes:Enabled`; `AssetId` set, no payload).
 - `BuildSynthesis` → `SynthesisHandler` (merge notes; `AssetId` null, payload =
   `SynthesisJobPayload { TargetKind, GroupLabel, InputNoteIds }`).
 - `GroupTags` → `TagGroupingHandler` (batch tag-merge suggestions; no `AssetId`, no

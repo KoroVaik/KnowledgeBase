@@ -178,7 +178,20 @@ and returns `DateTime` with `Kind.Unspecified` — no `Z` in the JSON, so the br
 UTC as local time. Fixed with a value converter in the model; **not needed in Postgres**
 (`timestamp with time zone`). Remove the converter if you see it and it is dead.
 
+### Queue diagnostic context
+
+`ProcessingJobs.DiagnosticContext` is nullable bounded JSON text carrying upload/session identifiers and the W3C trace parent across worker restarts. Migration `AddJobDiagnosticContext` adds only this column; old jobs remain valid. See [observability.md](observability.md).
+
 ## Open
+
+- [ ] Verify the observability integration in the running application; runtime checks and iteration 2 request reduction are tracked in [observability.md](observability.md).
+
+- [ ] Apply the face-comparison migrations through API startup and verify their histories. The detector
+      experiment uses `FaceComparisonRuns` / `Results` / `Detections`; the recognizer experiment uses
+      `FaceRecognitionComparisonRuns` / `Results` / `Embeddings` / `Pairs` / `Scores`; `AddPartialFaceOccurrence`
+      flags edge-cropped faces. `AddFaceComparisonSkip` excludes an unusable detector-comparison
+      run from its metrics without removing its raw output. Migrations are generated and inspected,
+      not applied to the live database.
 
 - [ ] **Tag review (confirm / merge / delete).** Done in code (design in *Tag review*
       above, migration `AddTagMergeSuggestion`); build + lint pass. **Run pending**:

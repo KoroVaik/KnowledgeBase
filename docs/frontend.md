@@ -93,12 +93,14 @@ shimmering grey gradient with the percent in the middle on large images, shimmer
 small thumbs (64 px crops, photo-grid cells, chips). A plain `<img>` would paint the
 half-loaded file itself; XHR is the same tool the upload path uses for request progress,
 here on the response. The finished picture arrives as an object URL and fades in — the
-half-painted state never exists. Same XHR reasoning as `putToBucket`; blob is revoked on
-unmount. State resets during render on a url change (not in the effect — oxlint
-`react(set-state-in-effect)`, same seed trick as the other fetch hooks).
+half-painted state never exists. The shared image cache owns each XHR and object URL;
+components subscribe through `useSyncExternalStore`. Multiple crops of one photo share progress
+and downloaded bytes. Unused images are evicted by count/byte limits, and object URLs are revoked
+on eviction, deletion or session reset. See [storage-and-caching.md](storage-and-caching.md).
 
-- Callers keep fetching their own **signed URL** (`fetchDownloadUrl`) and hand it in;
-  `null` url keeps the placeholder up while the link request is in flight.
+- `fetchDownloadUrl` shares requests by stored file name, batches cache misses and respects
+  `expiresAtUtc`. `useAssetPreview` depends on the file identity rather than a freshly allocated
+  asset object. A `null` URL keeps the placeholder up while the link request is in flight.
 - `className` goes on both placeholder and image, so per-context sizing rules fit each
   (`.candidate-thumbnail .progressive-image-loading`, the `:has` rule on
   `.face-frame-preview` that gives it a width before the source aspect ratio is known).

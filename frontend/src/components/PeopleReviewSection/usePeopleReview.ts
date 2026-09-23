@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState } from 'react'
+import { requestContext, withRequestContext } from '../../diagnostics/diagnostics'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { fetchPeopleReview, ignorePeopleReviewRow, submitPeopleReviewRow } from '../../api/photoAnalysis'
 import type { PeopleReview, PeopleReviewFace } from '../../api/photoAnalysis'
 import { useResourceChanges } from '../../hooks/useResourceChanges'
@@ -24,16 +25,20 @@ export function usePeopleReview() {
   const [busyRows, setBusyRows] = useState<ReadonlySet<string>>(new Set())
   const [names, setNames] = useState<Record<string, string>>({})
 
-  const reload = useCallback(() => {
+  const latestReload = useRef(0)
+  const reload = useCallback(() => withRequestContext(requestContext('PeopleReviewSection'), () => {
+    const revision = ++latestReload.current
     void fetchPeopleReview()
       .then(next => {
+        if (revision !== latestReload.current) return
+        setError(null)
         setReview(next)
         const present = faceIds(next)
         setUncheckedIds(current => new Set([...current].filter(id => present.has(id))))
       })
-      .catch((err: unknown) => setError(errorMessage(err)))
-  }, [])
-  useEffect(reload, [reload])
+      .catch((err: unknown) => { if (revision === latestReload.current) setError(errorMessage(err)) })
+  }), [])
+  useEffect(() => withRequestContext({ trigger: 'mount' }, reload), [reload])
   useResourceChanges('photo-analysis', reload)
 
   function setBusy(rowKey: string, busy: boolean) {

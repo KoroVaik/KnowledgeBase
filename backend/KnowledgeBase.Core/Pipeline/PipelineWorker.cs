@@ -1,4 +1,6 @@
 using KnowledgeBase.Core.Ai;
+using KnowledgeBase.Core.Observability;
+using System.Diagnostics;
 using KnowledgeBase.Core.Persistence;
 using KnowledgeBase.Core.RealTime;
 using Microsoft.EntityFrameworkCore;
@@ -76,6 +78,13 @@ public sealed class PipelineWorker(
             return false;
         }
 
+        var diagnostic = JobTraceContext.Read(job.DiagnosticContext);
+        using var operation = OperationContext.Push(diagnostic.Operation with { JobId = job.Id });
+        using var activity = OperationContext.StartActivity("pipeline.job", diagnostic.TraceParent);
+        using var jobScope = logger.BeginScope(new Dictionary<string, object?>
+        { ["JobId"] = job.Id, ["JobKind"] = job.Kind.ToString(), ["AssetId"] = job.AssetId, ["Attempt"] = job.Attempts + 1, ["ParentJobId"] = diagnostic.Operation.JobId });
+        var started = Stopwatch.GetTimestamp();
+        logger.LogInformation("Job started after {QueueWaitMs} ms", (DateTime.UtcNow - job.CreatedAtUtc).TotalMilliseconds);
         var handler = services.GetRequiredService<PipelineHandlerSelector>().For(job.Kind);
 
         if (handler.RequiresContentAnalyzer)
@@ -110,6 +119,7 @@ public sealed class PipelineWorker(
             // or nothing.
             await database.SaveChangesAsync(cancellationToken);
 
+            logger.LogInformation("Job completed in {DurationMs} ms", Stopwatch.GetElapsedTime(started).TotalMilliseconds);
             var changeEvent = note is not null
                 ? new ChangeEvent(ChangeResources.Notes, ChangeActions.Created, note.Id)
                 : IsPhotoAnalysis(job.Kind)
@@ -137,7 +147,12 @@ public sealed class PipelineWorker(
                     ? new ChangeEvent(ChangeResources.PhotoAnalysis, ChangeActions.Updated)
                     : new ChangeEvent(ChangeResources.Notes, ChangeActions.Updated));
         }
-        catch (Exception error) when (error is not OperationCanceledException)
+        catch (OperationCanceledException)
+        {
+            logger.LogInformation("Job cancelled after {DurationMs} ms", Stopwatch.GetElapsedTime(started).TotalMilliseconds);
+            throw;
+        }
+        catch (Exception error)
         {
             var giveUp = job.Attempts >= _options.MaxAttempts;
 
@@ -163,11 +178,12 @@ public sealed class PipelineWorker(
             }
         }
 
+        logger.LogInformation("Job attempt ended with {Status} in {DurationMs} ms", job.Status, Stopwatch.GetElapsedTime(started).TotalMilliseconds);
         return true;
     }
 
     private static bool IsPhotoAnalysis(JobKind kind) =>
-        kind is JobKind.AnalyzeFaces or JobKind.RescoreFaces or JobKind.ClusterFaces or JobKind.MigrateFaceModels
+        kind is JobKind.AnalyzeFaces or JobKind.CompareFaceDetectors or JobKind.CompareFaceRecognizers or JobKind.RescoreFaces or JobKind.ClusterFaces or JobKind.MigrateFaceModels
             or JobKind.FingerprintAsset or JobKind.AnalyzeScenes or JobKind.AnalyzeSceneObservations or JobKind.AnalyzeEventCandidates;
 
     private static Task<ProcessingJob?> ClaimAsync(

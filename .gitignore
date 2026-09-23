@@ -13,3 +13,7 @@ infra/worker/worker.env
 
 # The ArcFace embedding model (174 MB) — downloaded once, lives on the home PC's models volume.
 backend/KnowledgeBase.Worker/models/
+
+# Structured diagnostic logs and local collector secrets.
+**/logs/
+infra/observability/.env

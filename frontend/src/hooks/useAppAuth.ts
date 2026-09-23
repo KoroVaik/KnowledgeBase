@@ -1,3 +1,4 @@
+import { clearAssetCaches } from '../api/assets'
 import { useEffect, useRef, useState } from 'react'
 import { fetchCurrentUser, logout } from '../api/auth'
 import type { CurrentUser } from '../api/auth'
@@ -102,6 +103,7 @@ export function useAppAuth() {
       .then((user) => {
         if (!cancelled && user === null) {
           stopPreferences()
+          clearAssetCaches()
           setAuth({ status: 'anonymous', message: 'Your session has expired. Please sign in again.' })
         }
       })
@@ -125,6 +127,7 @@ export function useAppAuth() {
       await logout()
     } finally {
       stopPreferences()
+      clearAssetCaches()
       setAuth({ status: 'anonymous' })
     }
   }
@@ -177,12 +180,17 @@ function useReconnectCountdown(reconnectAt: number | null, observedAt: number): 
 
 /** Preferences start here, not in an effect: an effect runs after the signed-in page has
  *  already rendered once with every section at its default. */
+let cacheUserId: string | undefined
+
 function sessionState(user: CurrentUser | null): AuthState {
   if (user === null) {
     stopPreferences()
+    clearAssetCaches()
     return { status: 'anonymous' }
   }
 
+  if (cacheUserId !== user.id) clearAssetCaches()
+  cacheUserId = user.id
   startPreferences(user.id)
   return { status: 'authenticated', user }
 }

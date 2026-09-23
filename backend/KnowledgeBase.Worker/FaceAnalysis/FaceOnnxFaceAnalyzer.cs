@@ -18,7 +18,7 @@ public sealed class FaceOnnxFaceAnalyzer(ArcFaceEmbedder embedder, IOptions<Face
 
     public string ModelKey => $"FaceONNX 4.1.1.3: YOLOv5s-face + {EmbeddingModelKey}";
 
-    public string ConfigurationHash => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes($"{ModelKey}|{_options.DetectionThreshold}|{_options.ConfidenceThreshold}|{_options.NonMaximumSuppressionThreshold}")));
+    public string ConfigurationHash => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes($"{ModelKey}|{_options.DetectionThreshold}|{_options.ConfidenceThreshold}|{_options.NonMaximumSuppressionThreshold}|face-geometry-v1")));
 
     public void Dispose() => embedder.Dispose();
 
@@ -35,10 +35,15 @@ public sealed class FaceOnnxFaceAnalyzer(ArcFaceEmbedder embedder, IOptions<Face
         var faces = detector.Forward(pixels).Select(face =>
         {
             var landmarks = face.Points.All.Select(point => new FaceLandmark(point.X, point.Y)).ToList();
-            return new DetectedFace(
-                face.Rectangle.X, face.Rectangle.Y, face.Rectangle.Width, face.Rectangle.Height, face.Score,
-                landmarks, embedder.Embed(image, landmarks));
-        }).ToList();
+            var detection = new ComparisonDetection(
+                new ComparisonBounds(face.Rectangle.X, face.Rectangle.Y, face.Rectangle.Width, face.Rectangle.Height),
+                face.Score, landmarks.Select(point => new ComparisonLandmark(point.X, point.Y)).ToList());
+            return (face, landmarks, detection);
+        }).Where(result => FaceComparisonQuality.IsViableForRecognition(result.detection, image.Width, image.Height))
+          .Select(result => new DetectedFace(
+              result.face.Rectangle.X, result.face.Rectangle.Y, result.face.Rectangle.Width, result.face.Rectangle.Height,
+              result.face.Score, result.landmarks, embedder.Embed(image, result.landmarks),
+              FaceComparisonQuality.IsPartial(result.detection, image.Width, image.Height))).ToList();
 
         return Task.FromResult<IReadOnlyList<DetectedFace>>(faces);
     }

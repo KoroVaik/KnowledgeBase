@@ -23,8 +23,11 @@ public static class MiddlewarePipeline
         app.UseDefaultFiles();
         app.UseStaticFiles();
 
+        app.UseRouting();
+        app.UseMiddleware<KnowledgeBase.Api.Infrastructure.Observability.RequestLoggingMiddleware>();
         app.UseAuthentication();
         app.UseAuthorization();
+        app.UseRateLimiter();
 
         return app;
     }

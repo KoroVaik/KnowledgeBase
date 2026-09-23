@@ -1,3 +1,4 @@
+import { requestContext, withRequestContext } from '../../diagnostics/diagnostics'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { fetchLastCompleted } from '../../api/jobs'
 import { fetchNotes } from '../../api/notes'
@@ -50,7 +51,7 @@ export function useTagsSection() {
     queuedRef.current = queued
   }, [queued])
 
-  const reload = useCallback(() => {
+  const reload = useCallback(() => withRequestContext(requestContext('TagsSection'), () => {
     const reloadId = ++latestReload.current
     const previous = stateRef.current
     const finishedLabels = queuedRef.current
@@ -79,9 +80,9 @@ export function useTagsSection() {
           current.status === 'ready' ? current : { status: 'error', message: messageOf(err) },
         )
       })
-  }, [])
+  }), [])
 
-  useEffect(reload, [reload])
+  useEffect(() => withRequestContext({ trigger: 'mount' }, reload), [reload])
   useResourceChanges('notes', reload)
   useEffect(() => () => window.clearTimeout(noticeTimer.current), [])
 

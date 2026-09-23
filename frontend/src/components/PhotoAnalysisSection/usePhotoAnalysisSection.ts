@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState } from 'react'
+import { requestContext, withRequestContext } from '../../diagnostics/diagnostics'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { createArchiveEvent, createEventCandidateReviewDecision, createLocation, createPerson, createReviewDecision, createSceneObservationReviewDecision, detachEventPhoto, fetchPhotoAnalysis, queueEventAnalysis, queueFaceAnalysis, queueSceneAnalysis, queueSceneObservations, revokeLocationPhoto, revokeReferenceFace } from '../../api/photoAnalysis'
 import type { PhotoAnalysis } from '../../api/photoAnalysis'
 import { fetchAssets } from '../../api/assets'
@@ -9,11 +10,19 @@ export function usePhotoAnalysisSection() {
   const [data, setData] = useState<PhotoAnalysis | null>(null)
   const [assets, setAssets] = useState<AssetSummary[]>([])
   const [error, setError] = useState<string | null>(null)
-  const reload = useCallback(() => {
-    void Promise.all([fetchPhotoAnalysis(), fetchAssets()]).then(([analysis, allAssets]) => { setData(analysis); setAssets(allAssets) }).catch((err: unknown) => setError(err instanceof Error ? err.message : 'Unexpected error'))
-  }, [])
-  useEffect(reload, [reload])
+  const latestReload = useRef(0)
+  const reload = useCallback(() => withRequestContext(requestContext('PhotoAnalysisSection'), () => {
+    const revision = ++latestReload.current
+    void Promise.all([fetchPhotoAnalysis(), fetchAssets()]).then(([analysis, allAssets]) => {
+      if (revision !== latestReload.current) return
+      setData(analysis); setAssets(allAssets); setError(null)
+    }).catch((err: unknown) => {
+      if (revision === latestReload.current) setError(err instanceof Error ? err.message : 'Unexpected error')
+    })
+  }), [])
+  useEffect(() => withRequestContext({ trigger: 'mount' }, reload), [reload])
   useResourceChanges('photo-analysis', reload)
+  useResourceChanges('assets', reload)
 
   async function save(action: () => Promise<unknown>) { setError(null); try { await action(); reload() } catch (err) { setError(err instanceof Error ? err.message : 'Unexpected error') } }
   return {

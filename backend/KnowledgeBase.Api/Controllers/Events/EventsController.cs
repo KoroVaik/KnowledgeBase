@@ -14,7 +14,7 @@ namespace KnowledgeBase.Api.Controllers.Events;
 [ApiController]
 [Route("api/[controller]")]
 [Authorize]
-public sealed class EventsController(IChangeNotifier notifier, IOptions<EventsOptions> options) : ControllerBase
+public sealed class EventsController(IChangeNotifier notifier, IOptions<EventsOptions> options, ILogger<EventsController> logger) : ControllerBase
 {
     private readonly EventsOptions _options = options.Value;
 
@@ -47,6 +47,7 @@ public sealed class EventsController(IChangeNotifier notifier, IOptions<EventsOp
         HttpContext.Features.Get<IHttpResponseBodyFeature>()?.DisableBuffering();
 
         using var subscription = _notifier.Subscribe();
+        logger.LogInformation("SSE connection opened {ConnectionId}", HttpContext.TraceIdentifier);
 
         // Flush headers now so the browser reports the stream open before the first change.
         await Response.Body.FlushAsync(cancellationToken);
@@ -65,8 +66,11 @@ public sealed class EventsController(IChangeNotifier notifier, IOptions<EventsOp
         }
         catch (OperationCanceledException)
         {
-            // Tab closed or connection died - the normal way out. A write to a dead socket
-            // lands here too, cleaning up a client that vanished silently.
+            // Disconnecting a stream is a normal cancellation.
+        }
+        finally
+        {
+            logger.LogInformation("SSE connection closed {ConnectionId}", HttpContext.TraceIdentifier);
         }
     }
 
@@ -96,6 +100,8 @@ public sealed class EventsController(IChangeNotifier notifier, IOptions<EventsOp
             return Unauthorized();
         }
 
+        using var operation = KnowledgeBase.Core.Observability.OperationContext.Push(change.Context);
+        logger.LogInformation("Change event {EventId} {Resource} {Action} received", change.EventId, change.Resource, change.Action);
         _notifier.Publish(change);
 
         return NoContent();
@@ -130,6 +136,7 @@ public sealed class EventsController(IChangeNotifier notifier, IOptions<EventsOp
 
         while (subscription.Reader.TryRead(out var change))
         {
+            logger.LogDebug("SSE event {EventId} {Resource} delivered to {ConnectionId}", change.EventId, change.Resource, HttpContext.TraceIdentifier);
             await Response.WriteAsync(
                 $"data: {JsonSerializer.Serialize(change, EventJson)}\n\n",
                 cancellationToken);

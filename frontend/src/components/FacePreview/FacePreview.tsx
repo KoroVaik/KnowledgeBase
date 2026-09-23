@@ -1,29 +1,32 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import type { FaceBounds } from '../../api/photoAnalysis'
-import { fetchDownloadUrl } from '../../api/assets'
+import { useAssetPreview } from '../../hooks/useAssetPreview'
 import type { AssetSummary } from '../../api/assets'
 import { ProgressiveImage } from '../ProgressiveImage/ProgressiveImage'
 import './FacePreview.css'
+
+export interface FaceOverlay {
+  id: string
+  bounds: FaceBounds
+  landmarks: { x: number; y: number }[]
+  label: string
+  labelParts?: { text: string; color: string }[]
+  isFace?: boolean | null
+}
 
 /** The full photo, optionally with a box drawn on one detected face — shared by the review preview and every Known * popup.
     The outer frame box letterboxes the photo: the inner box always carries the source aspect ratio,
     so the %-positioned face frame maps onto the visible image rather than the bars around it, and a
     square frame holds its shape instead of letting a portrait photo stretch the review row. */
-export function FullPhotoPreview({ asset, faceBounds, label, labelContent, square = false }: { asset: AssetSummary | undefined; faceBounds?: FaceBounds; label?: string; labelContent?: ReactNode; square?: boolean }) {
-  const [url, setUrl] = useState<string | null>(null)
-  const [unavailable, setUnavailable] = useState(false)
+export function FullPhotoPreview({ asset, faceBounds, label, labelContent, square = false, overlays, highlightedOverlayId, onOverlayHover, maxHeightVh = 68 }: { asset: AssetSummary | undefined; faceBounds?: FaceBounds; label?: string; labelContent?: ReactNode; square?: boolean; overlays?: FaceOverlay[]; highlightedOverlayId?: string; onOverlayHover?: (id: string | null) => void; maxHeightVh?: number }) {
+  const { url, unavailable } = useAssetPreview(asset?.storedFileName, asset?.id, 'FacePreview')
   const [sourceSize, setSourceSize] = useState<{ width: number; height: number } | null>(null)
   const [boxWidth, setBoxWidth] = useState<number | null>(null)
   const boxRef = useRef<HTMLDivElement>(null)
   const previewRef = useRef<HTMLDivElement>(null)
   const labelRef = useRef<HTMLSpanElement>(null)
   const [labelFit, setLabelFit] = useState<{ scale: number; clampPx: number } | null>(null)
-  useEffect(() => {
-    if (asset === undefined) return
-    let cancelled = false
-    void fetchDownloadUrl(asset.storedFileName).then(link => { if (!cancelled) setUrl(link) }).catch(() => { if (!cancelled) setUnavailable(true) })
-    return () => { cancelled = true }
-  }, [asset])
+
 
   // A non-square frame (the popup) has no CSS-definite height, so its fit is measured in pixels:
   // the width comes from the dialog, the height cap from the viewport.
@@ -37,7 +40,7 @@ export function FullPhotoPreview({ asset, faceBounds, label, labelContent, squar
     observer.observe(box)
     window.addEventListener('resize', measure)
     return () => { observer.disconnect(); window.removeEventListener('resize', measure) }
-  }, [square, url])
+  }, [square, url, maxHeightVh])
 
   // The label hangs off the face box with white-space:nowrap, so a long name overflows the
   // photo: shrink it (floor at 72%, then ellipsis) to whatever fits between its edge and the
@@ -85,7 +88,7 @@ export function FullPhotoPreview({ asset, faceBounds, label, labelContent, squar
         height: `${Math.min(100, sourceSize.height / sourceSize.width * 100)}%`,
       }
     } else if (boxWidth !== null) {
-      const width = Math.min(boxWidth, window.innerHeight * 0.68 * sourceSize.width / sourceSize.height)
+      const width = Math.min(boxWidth, window.innerHeight * maxHeightVh / 100 * sourceSize.width / sourceSize.height)
       innerStyle = { width: `${width}px`, height: `${width * sourceSize.height / sourceSize.width}px` }
     }
   }
@@ -98,6 +101,15 @@ export function FullPhotoPreview({ asset, faceBounds, label, labelContent, squar
         showPercent
         onImageLoad={(image) => setSourceSize({ width: image.naturalWidth, height: image.naturalHeight })}
       />
+      {sourceSize && overlays && <svg className="face-overlays" viewBox={`0 0 ${sourceSize.width} ${sourceSize.height}`} aria-label="Detected face boxes and landmarks">
+        {overlays.map(face => <g key={face.id} onMouseEnter={() => onOverlayHover?.(face.id)} onMouseLeave={() => onOverlayHover?.(null)}
+          className={`${face.isFace === false ? 'face-overlay-rejected' : face.isFace === true ? 'face-overlay-confirmed' : ''}${highlightedOverlayId === face.id ? ' face-overlay-highlighted' : ''}${onOverlayHover ? ' face-overlay-interactive' : ''}`}>
+          <title>{face.label}</title>
+          <rect x={face.bounds.x} y={face.bounds.y} width={Math.max(0, face.bounds.width)} height={Math.max(0, face.bounds.height)} />
+          <text x={Math.max(0, Math.min(sourceSize.width - 20, face.bounds.x))} y={Math.max(14, face.bounds.y - 4)} fontSize={Math.max(12, sourceSize.width / 45)}>{face.labelParts?.map((part, index) => <tspan key={index} fill={part.color}>{part.text}</tspan>) ?? face.label}</text>
+          {face.landmarks.map((point, index) => <circle key={index} cx={point.x} cy={point.y} r={Math.max(1.5, sourceSize.width / 350)} />)}
+        </g>)}
+      </svg>}
       {frameStyle && <span className={`face-frame${labelBelow ? ' face-frame-label-below' : ''}`} style={frameStyle}>{label && <span ref={labelRef} title={label} style={{
         transform: `scale(${labelFit?.scale ?? 1})`,
         transformOrigin: labelBelow ? 'left top' : 'left bottom',
@@ -110,8 +122,8 @@ export function FullPhotoPreview({ asset, faceBounds, label, labelContent, squar
 }
 
 function faceCrop(bounds: FaceBounds, source: { width: number; height: number }, size = 144) {
-  const faceWidth = Math.min(bounds.width, source.width)
-  const faceHeight = Math.min(bounds.height, source.height)
+  const faceWidth = Math.max(1, Math.min(bounds.width, source.width))
+  const faceHeight = Math.max(1, Math.min(bounds.height, source.height))
   const side = Math.min(Math.max(faceWidth, faceHeight) * 1.3, source.width, source.height)
   const centerX = Math.min(Math.max(bounds.x + bounds.width / 2, side / 2), source.width - side / 2)
   const centerY = Math.min(Math.max(bounds.y + bounds.height / 2, side / 2), source.height - side / 2)
@@ -121,15 +133,9 @@ function faceCrop(bounds: FaceBounds, source: { width: number; height: number },
 
 /** A tight square crop around one detected face, loaded from the full photo (no server-side thumbnail). */
 export function FaceCropPreview({ asset, faceBounds, size = 144 }: { asset: AssetSummary | undefined; faceBounds: FaceBounds; size?: number }) {
-  const [url, setUrl] = useState<string | null>(null)
-  const [unavailable, setUnavailable] = useState(false)
+  const { url, unavailable } = useAssetPreview(asset?.storedFileName, asset?.id, 'FacePreview')
   const [sourceSize, setSourceSize] = useState<{ width: number; height: number } | null>(null)
-  useEffect(() => {
-    if (asset === undefined) return
-    let cancelled = false
-    void fetchDownloadUrl(asset.storedFileName).then(link => { if (!cancelled) setUrl(link) }).catch(() => { if (!cancelled) setUnavailable(true) })
-    return () => { cancelled = true }
-  }, [asset])
+
 
   const crop = url !== null && sourceSize !== null ? faceCrop(faceBounds, sourceSize, size) : null
   return <div className="face-crop-preview" style={{ width: size, height: size }}>
@@ -140,13 +146,13 @@ export function FaceCropPreview({ asset, faceBounds, size = 144 }: { asset: Asse
           alt=""
           ariaHidden
           imgStyle={crop ?? undefined}
-          onImageLoad={(image) => { if (sourceSize === null) setSourceSize({ width: image.naturalWidth, height: image.naturalHeight }) }}
+          onImageLoad={(image) => setSourceSize({ width: image.naturalWidth, height: image.naturalHeight })}
         />}
   </div>
 }
 
 /** One opened photo: whose record it belongs to, which photo, and what revoking it means. */
-export interface PhotoPopupTarget { title: string; assetId: string; faceBounds?: FaceBounds; onRevoke?: () => void }
+export interface PhotoPopupTarget { title: string; assetId: string; faceBounds?: FaceBounds; overlays?: FaceOverlay[]; onRevoke?: () => void }
 
 export function PhotoPopupDialog({ target, assetsById, onClose }: { target: PhotoPopupTarget | null; assetsById: Map<string, AssetSummary>; onClose: () => void }) {
   const dialogRef = useRef<HTMLDialogElement>(null)
@@ -161,7 +167,7 @@ export function PhotoPopupDialog({ target, assetsById, onClose }: { target: Phot
   return <dialog ref={dialogRef} className="confirm-dialog face-popup-dialog" aria-labelledby="face-popup-title" onCancel={onClose} onClose={onClose}>
     {target !== null && <>
       <h3 id="face-popup-title">{target.title}{asset && <span className="face-popup-filename"> ({asset.originalFileName})</span>}</h3>
-      <FullPhotoPreview asset={asset} faceBounds={target.faceBounds} />
+      <FullPhotoPreview key={target.assetId} asset={asset} faceBounds={target.faceBounds} overlays={target.overlays} />
       <div className="confirm-actions">{target.onRevoke !== undefined && <button type="button" className="btn btn-lg" onClick={() => { target.onRevoke?.(); onClose() }}>Revoke</button>}<button type="button" className="btn btn-lg" onClick={onClose}>Close</button></div>
     </>}
   </dialog>

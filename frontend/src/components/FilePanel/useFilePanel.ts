@@ -77,7 +77,7 @@ export function useFilePanel(
     let cancelled = false
 
     // The signed URL expires in minutes; that is fine for a preview open right now.
-    void fetchDownloadUrl(asset.storedFileName)
+    void fetchDownloadUrl(asset.storedFileName, { source: 'FilePanel', trigger: 'preview', assetId: asset.id })
       .then((url) => {
         if (!cancelled) {
           setPreview({ status: 'ready', url })
@@ -92,7 +92,7 @@ export function useFilePanel(
     return () => {
       cancelled = true
     }
-  }, [image, asset.storedFileName])
+  }, [image, asset.storedFileName, asset.id])
 
   async function handleProcess() {
     setActionError(null)

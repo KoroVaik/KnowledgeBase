@@ -1,5 +1,6 @@
+import { requestContext, withRequestContext } from '../../diagnostics/diagnostics'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { fetchActiveJobs, fetchFailedJobs, retryAllFailedJobs, retryJob } from '../../api/jobs'
+import { fetchJobsSummary, retryAllFailedJobs, retryJob } from '../../api/jobs'
 import type { ActiveJob, FailedJob } from '../../api/jobs'
 
 export type JobsState =
@@ -20,11 +21,11 @@ export function useJobsSection() {
   const [retrying, setRetrying] = useState<string | null>(null)
   const [retryError, setRetryError] = useState<string | null>(null)
 
-  const reload = useCallback(() => {
+  const reload = useCallback(() => withRequestContext(requestContext('JobsSection'), () => {
     const reloadId = ++latestReload.current
 
-    Promise.all([fetchActiveJobs(), fetchFailedJobs()])
-      .then(([jobs, failed]) => {
+    return fetchJobsSummary()
+      .then(({ jobs, failed }) => {
         if (reloadId === latestReload.current) {
           setState({ status: 'ready', jobs, failed })
         }
@@ -39,12 +40,17 @@ export function useJobsSection() {
           current.status === 'ready' ? current : { status: 'error', message: messageOf(error) },
         )
       })
-  }, [])
+  }), [])
 
   useEffect(() => {
-    reload()
-    const timer = window.setInterval(reload, POLL_MS)
-    return () => window.clearInterval(timer)
+    let stopped = false
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const poll = async (trigger: string) => {
+      await withRequestContext({ trigger }, reload)
+      if (!stopped) timer = setTimeout(() => void poll('poll'), POLL_MS)
+    }
+    void poll('mount')
+    return () => { stopped = true; clearTimeout(timer) }
   }, [reload])
 
   const retry = useCallback(

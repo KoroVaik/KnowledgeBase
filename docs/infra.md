@@ -188,7 +188,13 @@ Both green on GitHub.
 See [`../CLAUDE.md`](../CLAUDE.md) → "Running locally". Three-to-four processes: Postgres
 in Docker, API, worker (as needed), frontend.
 
+### Diagnostic log storage
+
+JSON logs go to stdout and rotating files; the worker has a persistent `worker-logs` volume. Optional local Seq uses `infra/observability`; production needs its own reachable ingestion address. See [observability.md](observability.md).
+
 ## Open
+
+- [ ] Verify the observability integration in the running application; runtime checks and iteration 2 request reduction are tracked in [observability.md](observability.md).
 
 - [ ] **Orphan sweep.** A bucket object whose `confirm` never arrived stays forever and
       is invisible to the API. Needs a bucket lifecycle rule or a command reconciling the

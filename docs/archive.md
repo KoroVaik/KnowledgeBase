@@ -363,4 +363,8 @@ not just compiled.
   `.photo-analysis .photo-analysis-subsection { margin: 0 }` silently overriding the bleed — now
   `margin-block: 0`. Page inset also trimmed (`.app` 32→16 px). Verified in the browser: card and
   panel levels share near-one left edge, no horizontal scroll.
+- Invalid face detections: geometry and five-landmark checks now reject impossible candidates before
+  embedding and grouping; a real edge-cropped face is retained as `Partial`. Verified by the regression
+  tests for the original false background strip and partial-face handling.
 
+- 2026-09-23: Observability unit checks verified bounded browser delivery, redaction, HTTP compatibility, persisted job correlation and EF snapshot consistency; live upload/SSE/Seq checks remain open.

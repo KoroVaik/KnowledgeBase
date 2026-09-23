@@ -14,6 +14,7 @@ history**. Load only what the task touches.
 | [`photo-archive.md`](photo-archive.md) | touching people, photo locations, event clustering, or archive review | archive-domain rules and phased foundation plan |
 | [`database.md`](database.md) | touching EF model or migrations | schema, migration ownership, soft-delete, indexes |
 | [`storage-and-caching.md`](storage-and-caching.md) | adding any new kind of state, touching preferences, cache headers or signed links | where each piece of state lives, what survives a deploy, what is cached |
+| [`observability.md`](observability.md) | diagnosing request storms, uploads, worker jobs or logging | log fields, correlation, bounded delivery, retention, collector setup and next iteration |
 | [`infra.md`](infra.md) | deploying, or touching `infra/` | Render, Neon, R2, Garage, CI, Docker, env vars |
 | [`archive.md`](archive.md) | only if you need the history of a done thing | one-line log of completed + verified work |
 | [`learning.md`](learning.md) | never (it is the owner's study queue, in Ukrainian) | — |

@@ -80,3 +80,9 @@ export async function retryAllFailedJobs(): Promise<void> {
     throw new Error(await readErrorMessage(response, 'Could not retry the failed jobs'))
   }
 }
+
+export async function fetchJobsSummary(): Promise<{ jobs: ActiveJob[]; failed: FailedJob[] }> {
+  const response = await apiFetch('/api/jobs/summary')
+  if (!response.ok) throw new Error(await readErrorMessage(response, 'Could not load the jobs'))
+  return await response.json() as { jobs: ActiveJob[]; failed: FailedJob[] }
+}

@@ -1,3 +1,4 @@
+import { requestContext, withRequestContext } from '../../diagnostics/diagnostics'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   deleteNote,
@@ -40,7 +41,7 @@ export function useNotesList() {
   const latestReload = useRef(0)
   const latestBody = useRef(0)
 
-  const reload = useCallback(() => {
+  const reload = useCallback(() => withRequestContext(requestContext('NotesList'), () => {
     const reloadId = ++latestReload.current
 
     // Source notes now live under their file in the Files section; this list is the rest.
@@ -63,9 +64,9 @@ export function useNotesList() {
           current.status === 'ready' ? current : { status: 'error', message: messageOf(error) },
         )
       })
-  }, [])
+  }), [])
 
-  useEffect(reload, [reload])
+  useEffect(() => withRequestContext({ trigger: 'mount' }, reload), [reload])
 
   useResourceChanges('notes', reload)
 
@@ -74,7 +75,7 @@ export function useNotesList() {
       return
     }
 
-    const timer = window.setInterval(reload, 4000)
+    const timer = window.setInterval(() => withRequestContext({ trigger: 'poll' }, reload), 4000)
     return () => window.clearInterval(timer)
   }, [reprocessing, reload])
 

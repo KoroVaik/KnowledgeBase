@@ -35,6 +35,7 @@ package "KnowledgeBase.Core.Persistence" {
       StartedAtUtc : DateTime?
       CompletedAtUtc : DateTime?
       Error : string?
+      DiagnosticContext : string?
     }
 
     enum JobKind {

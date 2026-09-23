@@ -51,13 +51,20 @@ request.
 |---|---|---|
 | Browser HTTP cache | Vite build output (`assets/index-<hash>.js/css`) | Safe to cache forever: a new build means new file names. |
 | Browser HTTP cache | `index.html` | Served by `UseStaticFiles` with no `Cache-Control`, so the browser may use a stale copy after a deploy (see Open). |
-| Browser HTTP cache | Images from the bucket | Effectively **not** cached: every mount asks for a new signed URL, and a different query string is a different cache entry. |
-| Signed bucket links | `GET` / `PUT` URLs | Live `Storage:S3:LinkLifetime` (default 5 min). Requested on click / on mount, never stored. |
+| Browser memory | Image blobs/object URLs | Shared by bucket object path, including in-flight XHR; four GETs at a time. Unused entries are limited to 64 images / 64 MiB. Visible subscribers retain their images until released. |
+| Signed bucket links | `GET` / `PUT` URLs | Live `Storage:S3:LinkLifetime` (default 5 min). GET links are cached in memory, up to 512 entries, with a 30-second expiry margin. PUT links belong to their upload attempt. |
 | SSE stream | `/api/events` | `Cache-Control: no-cache`. An event is only a hint: the client re-reads the collection. |
 | Server | — | No server-side cache. Every API read goes to Postgres. |
 | Client data | lists, notes | No client-side data cache (no TanStack Query yet — frontend Open). Each section fetches on mount and on SSE hints. |
 
 ## Decisions
+
+- **Preview sharing and request coordination** (2026-09-23): memory only, cleared on logout,
+  session loss or user change. Deletion clears the corresponding link and image; pending old
+  results cannot refill cleared caches. No new server-state library or persistent browser cache.
+- An expired bucket GET (401/403) renews its signed link once. Completed blobs can remain
+  visible after link expiry; a cache miss needs a valid link. Active image memory is additional
+  to the bounded unused cache and depends on the photos currently rendered.
 
 - **UI settings on the server, not only in `localStorage`** (2026-09-18). `localStorage` is one
   browser only: another device, a private window, cleared site data, and Safari's 7-day
@@ -69,13 +76,19 @@ request.
 - **Upsert in one SQL statement** (`INSERT … ON CONFLICT`): two quick toggles of one key would
   race a read-then-write.
 
+### Diagnostic storage
+
+Operational logs use bounded browser/process buffers, rotating JSON files and optional Seq, with explicit retention. They are disposable diagnostics, not domain state stored in Postgres. Only the job correlation context is persisted with `ProcessingJobs`. See [observability.md](observability.md).
+
 ## Open
+
+- [ ] Verify the observability integration in the running application; runtime checks and iteration 2 request reduction are tracked in [observability.md](observability.md).
 
 - [ ] `index.html` has no `Cache-Control: no-cache`: after a deploy a browser can keep running
       the previous build until a hard reload. Set it for `index.html` only (hashed assets can
       stay cacheable).
-- [ ] Photo thumbnails re-download on every mount: a fresh signed URL each time defeats the
-      HTTP cache. Options: cache the URL client-side until shortly before `expiresAtUtc`, or
-      longer-lived links for thumbnails.
+- [ ] Verify preview cache reuse, expiry recovery, bounded unused memory, delete/logout
+      invalidation and request coalescing under load. Implementation added; runtime checks skipped
+      at the owner's request on 2026-09-23.
 - [ ] More settings to move onto `usePreference`: the Notes bin toggle, Hierarchy Tree/Graph
       view, collapsed nodes in the tag tree.

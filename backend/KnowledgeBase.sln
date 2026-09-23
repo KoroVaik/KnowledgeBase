@@ -1,4 +1,4 @@
-﻿
+
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.0.31903.59
@@ -9,13 +9,12 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "KnowledgeBase.Api", "Knowle
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "KnowledgeBase.Worker", "KnowledgeBase.Worker\KnowledgeBase.Worker.csproj", "{870ABB6F-34B4-4382-B2D7-12B4E3EA0049}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "KnowledgeBase.Tests", "KnowledgeBase.Tests\KnowledgeBase.Tests.csproj", "{E1ADBC72-FDAD-4F5F-A11D-CED014A87FC1}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
 		Release|Any CPU = Release|Any CPU
-	EndGlobalSection
-	GlobalSection(SolutionProperties) = preSolution
-		HideSolutionNode = FALSE
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
 		{4EA2CF6B-E2E9-435E-8888-C5C637C4435C}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
@@ -30,5 +29,12 @@ Global
 		{870ABB6F-34B4-4382-B2D7-12B4E3EA0049}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{870ABB6F-34B4-4382-B2D7-12B4E3EA0049}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{870ABB6F-34B4-4382-B2D7-12B4E3EA0049}.Release|Any CPU.Build.0 = Release|Any CPU
+		{E1ADBC72-FDAD-4F5F-A11D-CED014A87FC1}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{E1ADBC72-FDAD-4F5F-A11D-CED014A87FC1}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{E1ADBC72-FDAD-4F5F-A11D-CED014A87FC1}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{E1ADBC72-FDAD-4F5F-A11D-CED014A87FC1}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
 	EndGlobalSection
 EndGlobal

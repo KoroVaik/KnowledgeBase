@@ -17,14 +17,18 @@ services:
       # Docker Desktop routes host.docker.internal to host loopback services, so this
       # reaches a native Ollama bound to 127.0.0.1 with no host-side change.
       Ai__Ollama__BaseUrl: http://host.docker.internal:11434
+      Observability__LogDirectory: /logs
       VisualAnalysis__ModelDirectory: /models/clip
       FaceAnalysis__RecognitionModelPath: /models/arcface/w600k_r50.onnx
+      FaceComparison__ModelDirectory: /models/face-comparison
     # Keeps the downloaded CLIP model across image rebuilds.
     volumes:
       - models:/models
+      - worker-logs:/logs
     # A no-op on Docker Desktop (host.docker.internal is built in); needed on native Linux.
     extra_hosts:
       - "host.docker.internal:host-gateway"
 
 volumes:
   models:
+  worker-logs:

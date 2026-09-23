@@ -5,5 +5,5 @@ namespace KnowledgeBase.Worker.FaceAnalysis;
 // that reads or re-scores detections must count only the current version's rows.
 public static class FaceAnalysisPipeline
 {
-    public const string CurrentDetectionVersion = "face-analysis/v2";
+    public const string CurrentDetectionVersion = "face-analysis/v4";
 }

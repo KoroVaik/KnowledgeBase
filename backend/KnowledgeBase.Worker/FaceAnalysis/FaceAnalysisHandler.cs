@@ -58,7 +58,7 @@ public sealed class FaceAnalysisHandler(KnowledgeBaseDbContext database, IAssetC
         database.PhotoAnalysisRuns.Add(run);
 
         var earlierFaces = (await database.FaceOccurrences
-            .Where(occurrence => occurrence.AssetId == asset.Id && occurrence.IdentityId != null)
+            .Where(occurrence => occurrence.AssetId == asset.Id && occurrence.IdentityId != null && !occurrence.IsPartial)
             .ToListAsync(cancellationToken))
             .Select(occurrence => new FaceForIdentityMatching(occurrence.Id, occurrence.RunId, occurrence.IdentityId, occurrence.Embedding))
             .ToList();
@@ -67,11 +67,12 @@ public sealed class FaceAnalysisHandler(KnowledgeBaseDbContext database, IAssetC
         {
             Id = Guid.NewGuid().ToString("N"), RunId = run.Id, AssetId = asset.Id,
             X = face.X, Y = face.Y, Width = face.Width, Height = face.Height,
-            DetectionScore = face.DetectionScore, LandmarksJson = JsonSerializer.Serialize(face.Landmarks),
+            DetectionScore = face.DetectionScore, IsPartial = face.IsPartial, LandmarksJson = JsonSerializer.Serialize(face.Landmarks),
             Embedding = face.Embedding, EmbeddingModelKey = analyzer.EmbeddingModelKey, CreatedAtUtc = now
         }).ToList();
         var inheritedIdentities = FaceIdentityMatcher.MatchAgainstAssigned(
-            occurrences.Select(occurrence => new FaceForIdentityMatching(occurrence.Id, occurrence.RunId, null, occurrence.Embedding)).ToList(),
+            occurrences.Where(occurrence => !occurrence.IsPartial)
+                .Select(occurrence => new FaceForIdentityMatching(occurrence.Id, occurrence.RunId, null, occurrence.Embedding)).ToList(),
             earlierFaces);
 
         foreach (var occurrence in occurrences)

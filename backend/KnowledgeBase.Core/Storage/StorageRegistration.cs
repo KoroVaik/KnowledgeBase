@@ -1,6 +1,7 @@
 using Amazon.Runtime;
 using Amazon.S3;
 using Microsoft.Extensions.Options;
+using KnowledgeBase.Core.Observability;
 
 namespace KnowledgeBase.Core.Storage;
 
@@ -45,9 +46,11 @@ public static class StorageRegistration
                 config);
         });
 
-        services.AddSingleton<IAssetStorage, S3AssetStorage>();
+        services.AddSingleton<S3AssetStorage>();
+        services.AddSingleton<IAssetStorage, LoggedAssetStorage>();
         services.AddSingleton<IAssetLinkSigner, S3AssetLinkSigner>();
-        services.AddSingleton<IAssetContentReader, S3AssetContentReader>();
+        services.AddSingleton<S3AssetContentReader>();
+        services.AddSingleton<IAssetContentReader, LoggedAssetContentReader>();
 
         return services;
     }

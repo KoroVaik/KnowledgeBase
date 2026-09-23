@@ -84,9 +84,38 @@ images and PDFs. Remove it once the worker has its first integration test.
 
 ### Face analysis is a separate local pipeline job
 
-`AnalyzeFaces` is queued alongside `BuildSourceNote` for every image, but each asset may have one
-job of **each** kind rather than one job total. This means face analysis can be retried without
-replacing a note, and it runs even while Ollama is unavailable. `FaceAnalysisHandler` uses the
+`CompareFaceDetectors` is an independent experiment job linked by `FaceComparisonRun.JobId`
+(the job's `AssetId` is null so history can keep several runs of one photo). It uses no ArcFace
+embeddings or Ollama. `FaceComparison:ModelDirectory` defaults to the local application-data model
+cache; Docker sets `/models/face-comparison` on the persistent volume. SCRFD/YuNet thresholds default
+to 0.5/0.9 and NMS to 0.4; YOLO uses the current `FaceAnalysis` settings. Models download on first use
+and are verified by SHA-256 before loading. Completed model outputs survive a job retry.
+
+`CompareFaceRecognizers` is a separate archive-wide experiment. It runs ArcFace R50, ArcFace
+MobileFaceNet and FaceONNX ResNet27 over every current detected face that is missing any model
+embedding, then retains the embeddings so later runs process only new detections. Confirmed,
+non-partial person references are optional ground truth: when enough exist, the run also scores
+same-person and different-person pairs automatically. It changes no person suggestion. The run
+retains metrics plus at most 24 model disagreements or near-threshold pairs for explanation.
+MobileFaceNet is lazily downloaded to
+`FaceRecognitionComparison:ModelDirectory` and checksum-verified.
+
+For inference without a host, queue or database:
+`dotnet run --project backend/KnowledgeBase.Worker --no-launch-profile -- compare-faces <image>`.
+This command uses default comparison settings and prints one JSON result per model.
+
+For a local folder of test images, `dotnet run --project backend/KnowledgeBase.Worker --no-launch-profile -- compare-face-pack <folder> [output-folder]`
+runs nine named configurations: current and stricter YOLO, SCRFD at 0.7/0.5/0.4, and YuNet at
+0.9/0.8/0.7/0.5. It creates `results.json`, `detections.csv`, `summary.csv` and a README in a
+timestamped `results/` subfolder by default. The command starts no host and does not access the
+database, Garage, the queue or the photo archive.
+
+After changing only the local review layout, `dotnet run --project backend/KnowledgeBase.Worker --no-launch-profile -- compare-face-report <results.json>` regenerates `report.html` from the existing output in seconds; it never runs model inference.
+
+`AnalyzeFaces` is queued for every image through `FingerprintAsset`. The API controls whether it also
+queues `BuildSourceNote` for an image, and marks already-pending image-to-note jobs `Skipped` when that
+feature is disabled; the worker has no setting or branch for it. Face analysis can be retried
+independently and runs even while Ollama is unavailable. `FaceAnalysisHandler` uses the
 local FaceONNX detector and ArcFace embedder, stores face occurrences and identities (no person
 candidates), queues `ClusterFaces`, and sends a `photo-analysis` change hint instead of a note
 change. A confirmed Person review creates the reference vector used by later groupings; the worker
@@ -131,7 +160,16 @@ temporary `EventClusters`; the raw per-pair signals are stored as JSON. The hand
 one reviewable candidate per cluster and supersedes only earlier unreviewed candidates. It never
 creates or changes an `ArchiveEvent`.
 
+### Job and dependency diagnostics
+
+Each attempt restores its saved trace/upload context and records outcome, duration, dependencies and its SSE event identity. See [observability.md](observability.md).
+
 ## Open
+
+- [ ] Verify the observability integration in the running application; runtime checks and iteration 2 request reduction are tracked in [observability.md](observability.md).
+
+- [ ] Run the persisted detector comparison end to end after API migration and worker restart;
+      standalone inference is verified, queue/resume/SSE against the application are pending.
 
 - [ ] Shared Rider run configs in `backend/.run/` (in git, not `.idea`):
       `Frontend (vite)` + two compounds (`Local: API + Worker`, `Local: full stack`).

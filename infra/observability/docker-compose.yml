@@ -1,0 +1,22 @@
+name: knowledgebase-observability
+
+services:
+  seq:
+    image: datalust/seq:2026.1
+    restart: unless-stopped
+    environment:
+      ACCEPT_EULA: Y
+      SEQ_FIRSTRUN_ADMINPASSWORDHASH: ${SEQ_ADMIN_PASSWORD_HASH:?Set SEQ_ADMIN_PASSWORD_HASH in .env}
+    ports:
+      - "127.0.0.1:5340:80"
+      - "127.0.0.1:5341:5341"
+    volumes:
+      - seq-data:/data
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  seq-data:

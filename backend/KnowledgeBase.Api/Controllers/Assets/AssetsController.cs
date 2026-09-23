@@ -1,4 +1,5 @@
 using KnowledgeBase.Api.Controllers.Assets.Contracts;
+using KnowledgeBase.Api.Controllers.Notes.Configuration;
 using KnowledgeBase.Core.Persistence;
 using KnowledgeBase.Core.Pipeline;
 using KnowledgeBase.Core.RealTime;
@@ -7,6 +8,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
+using Npgsql;
 
 namespace KnowledgeBase.Api.Controllers.Assets;
 
@@ -18,18 +20,21 @@ namespace KnowledgeBase.Api.Controllers.Assets;
 [Route("api/[controller]")]
 [Authorize]
 [Produces("application/json")]
-public sealed class AssetsController(
+public sealed partial class AssetsController(
     IAssetStorage storage,
     KnowledgeBaseDbContext database,
     IChangeNotifier notifier,
     IOptions<StorageOptions> options,
-    IAssetLinkSigner signer)
+    IOptions<ImageSourceNotesOptions> imageSourceNotes,
+    IAssetLinkSigner signer,
+    ILogger<AssetsController> logger)
     : ControllerBase
 {
     private readonly IAssetStorage _storage = storage;
     private readonly KnowledgeBaseDbContext _database = database;
     private readonly IChangeNotifier _notifier = notifier;
     private readonly StorageOptions _options = options.Value;
+    private readonly ImageSourceNotesOptions _imageSourceNotes = imageSourceNotes.Value;
     private readonly IAssetLinkSigner _signer = signer;
 
     /// <summary>Lists every stored file, newest first, with its job state and note id.</summary>
@@ -134,6 +139,9 @@ public sealed class AssetsController(
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     public IActionResult UploadLink([FromBody] UploadLinkRequest request)
     {
+        if (request.FileName?.Length > 255 || request.ContentType?.Length > 255)
+            return BadRequest(new { error = "File name or content type is too long." });
+
         if (request.SizeBytes <= 0)
         {
             return BadRequest(new { error = "File is empty." });
@@ -157,22 +165,27 @@ public sealed class AssetsController(
     /// <response code="400">The object is empty or over the size limit; it has been removed.</response>
     /// <response code="401">No session, or it has expired.</response>
     /// <response code="404">No such object in the bucket.</response>
-    /// <response code="409">This key was already confirmed.</response>
+    /// <response code="200">This key was already confirmed; returns the existing row.</response>
     [HttpPost("{fileName}/confirm")]
     [ProducesResponseType(typeof(UploadedAssetResponse), StatusCodes.Status201Created)]
+    [ProducesResponseType(typeof(UploadedAssetResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    [ProducesResponseType(StatusCodes.Status409Conflict)]
     public async Task<IActionResult> ConfirmUpload(
         string fileName,
         [FromBody] ConfirmUploadRequest request,
         CancellationToken cancellationToken)
     {
-        // A retried confirm must not leave two rows on one object.
-        if (await FindAsync(fileName, cancellationToken) is not null)
+        if (!AssetFileName.IsSafe(fileName) || fileName.Length > 64
+            || !Guid.TryParseExact(AssetFileName.IdOf(fileName), "N", out _)
+            || request.OriginalFileName?.Length > 255 || request.ContentType?.Length > 255)
+            return BadRequest(new { error = "Invalid file metadata." });
+
+        var existing = await FindAsync(fileName, cancellationToken);
+        if (existing is not null)
         {
-            return Conflict(new { error = "This file has already been confirmed." });
+            return Ok(UploadResponse(existing));
         }
 
         var stored = await _storage.GetAsync(fileName, cancellationToken);
@@ -204,25 +217,32 @@ public sealed class AssetsController(
         _database.Assets.Add(record);
 
         // Same SaveChanges as the asset row, so job and file commit together.
-        if (ProcessableContent.Classify(record.ContentType, record.OriginalFileName) is not null)
+        var kind = ProcessableContent.Classify(record.ContentType, record.OriginalFileName);
+        if (kind is ContentKind.Text or ContentKind.Pdf
+            || _imageSourceNotes.Enabled && kind is ContentKind.Image)
         {
             _database.ProcessingJobs.Add(ProcessingJob.Queue(record.Id));
-
-            if (ProcessableContent.Classify(record.ContentType, record.OriginalFileName) is ContentKind.Image)
-            {
-                _database.ProcessingJobs.Add(ProcessingJob.Queue(record.Id, JobKind.FingerprintAsset));
-            }
         }
 
-        await _database.SaveChangesAsync(CancellationToken.None);
+        if (kind is ContentKind.Image)
+        {
+            _database.ProcessingJobs.Add(ProcessingJob.Queue(record.Id, JobKind.FingerprintAsset));
+        }
 
-        var response = new UploadedAssetResponse(
-            record.Id,
-            record.StoredFileName,
-            record.OriginalFileName,
-            record.ContentType,
-            record.SizeBytes,
-            record.UploadedAtUtc);
+        try
+        {
+            await _database.SaveChangesAsync(CancellationToken.None);
+        }
+        catch (DbUpdateException exception) when (exception.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation })
+        {
+            // SaveChanges rolls back the file and all its jobs together. A concurrent
+            // confirmation may have won the unique asset key on another API instance.
+            _database.ChangeTracker.Clear();
+            existing = await FindAsync(fileName, cancellationToken);
+            if (existing is null) throw;
+            return Ok(UploadResponse(existing));
+        }
+        var response = UploadResponse(record);
 
         _notifier.Publish(new ChangeEvent(ChangeResources.Assets, ChangeActions.Created, fileName));
 
@@ -298,11 +318,26 @@ public sealed class AssetsController(
             return Conflict(new { error = "The pipeline does not handle this kind of file." });
         }
 
-        var queued = await ProcessingQueue.EnsurePendingAsync(_database, record.Id, JobKind.BuildSourceNote, cancellationToken);
-        if (ProcessableContent.Classify(record.ContentType, record.OriginalFileName) is ContentKind.Image)
+        var kind = ProcessableContent.Classify(record.ContentType, record.OriginalFileName);
+        if (kind is ContentKind.Image)
         {
-            queued |= await ProcessingQueue.EnsurePendingAsync(_database, record.Id, JobKind.FingerprintAsset, cancellationToken);
+            var queuedImageJob = await ProcessingQueue.EnsurePendingAsync(_database, record.Id, JobKind.FingerprintAsset, cancellationToken);
+            if (_imageSourceNotes.Enabled)
+            {
+                queuedImageJob |= await ProcessingQueue.EnsurePendingAsync(_database, record.Id, JobKind.BuildSourceNote, cancellationToken);
+            }
+
+            if (!queuedImageJob)
+            {
+                return Conflict(new { error = "This photo is already queued." });
+            }
+
+            await _database.SaveChangesAsync(CancellationToken.None);
+            _notifier.Publish(new ChangeEvent(ChangeResources.Assets, ChangeActions.Updated, fileName));
+            return Accepted();
         }
+
+        var queued = await ProcessingQueue.EnsurePendingAsync(_database, record.Id, JobKind.BuildSourceNote, cancellationToken);
 
         if (!queued)
         {
@@ -315,6 +350,10 @@ public sealed class AssetsController(
 
         return Accepted();
     }
+
+    private static UploadedAssetResponse UploadResponse(AssetRecord record) => new(
+        record.Id, record.StoredFileName, record.OriginalFileName, record.ContentType,
+        record.SizeBytes, record.UploadedAtUtc);
 
     private Task<AssetRecord?> FindAsync(string fileName, CancellationToken cancellationToken) =>
         _database.Assets.FirstOrDefaultAsync(asset => asset.StoredFileName == fileName, cancellationToken);

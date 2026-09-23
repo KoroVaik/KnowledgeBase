@@ -176,7 +176,40 @@ Fix when it matters: restore `PasswordHasher<T>`, hash in config (`Auth:Password
 the `hash-password` CLI command, constant-time comparison. (Deferred knowingly — do not
 re-raise every task.)
 
+### Structured request and browser diagnostics
+
+Serilog request records, bounded authenticated browser ingestion, and queue context persistence are described in [observability.md](observability.md). No application payload bodies are logged.
+
+### Bounded asset batches and combined job status
+
+The frontend uses `POST /api/assets/download-links`, `/upload-links` and `/confirm-batch`.
+Each accepts `{ items: [{ id, request, uploadBatchId?, traceParent? }] }`, with 1�50 items,
+unique item ids and a 128 KiB body limit. Responses contain `{ id, status, value, error }`
+per item; an HTTP 200 envelope can contain individual failures. Structurally invalid envelopes
+are rejected as a whole. Download signing loads metadata in one query and limits bucket HEADs
+to four concurrently; missing bucket objects still return an item-level 404.
+
+Confirmation is idempotent by stored file name, including concurrent API instances. The unique
+asset key and the atomic file/job SaveChanges prevent duplicate rows and jobs. A retry returns
+200 with the existing row; a new confirmation returns 201. Batches commit items independently,
+so successfully confirmed files remain available if another item fails. Per-item upload ids and
+trace parents continue into queued jobs and SSE. The older single-item routes remain available.
+
+`GET /api/jobs/summary` returns `{ jobs, failed }` from one database read, retaining the existing
+ordering and fields. The frontend polls it five seconds after the preceding read completes.
+
 ## Open
+
+- [ ] Verify batch endpoint limits, partial failures, concurrent confirmation retries and jobs
+      summary against the running API. Implemented; tests/runtime checks skipped by request on 2026-09-23.
+
+- [ ] Verify the observability integration in the running application; runtime checks and iteration 2 request reduction are tracked in [observability.md](observability.md).
+
+- [ ] **Detector comparison API integration.** Verify authenticated
+      `GET/POST /api/photo-analysis/face-comparisons`, `GET /{id}`,
+      `PUT /detections/{id}/review` and `PUT /results/{id}/missed-faces` after migration.
+      History pages hold 20 runs; repeated requests reuse an existing pending/running comparison
+      when found. Review labels are experimental and never change person suggestions.
 
 - [ ] Input-model validation (FluentValidation in `Controllers/<feature>/Validators/`).
       Nothing to validate yet — `LoginRequest` has one field. Relevant once note creation
@@ -190,9 +223,9 @@ re-raise every task.)
       alive and just does not recognise us.) Partly a
       [`frontend-features.md`](frontend-features.md) item.
 - [ ] Remove the dead `Features__*` env vars from Render — `Features__DirectAssetAccessEnabled`
-      and now `Features__GoogleSignInEnabled` (the whole `Features` section is gone from
-      code). ASP.NET ignores unknown keys, so this is cleanup, not a blocker; Google stays
-      on because `Auth__Google__*` are still set.
+      and `Features__GoogleSignInEnabled`. The `Features` section is now used only by
+      `Features__ImageSourceNotes__Enabled`; ASP.NET ignores unknown keys, so this is cleanup,
+      not a blocker; Google stays on because `Auth__Google__*` are still set.
 - [ ] xUnit + `WebApplicationFactory` integration tests — see [`../CLAUDE.md`] and the
       Tests section of [`archive.md`](archive.md). `IAssetStorage` is now swappable for a
       fake via `WithWebHostBuilder`.

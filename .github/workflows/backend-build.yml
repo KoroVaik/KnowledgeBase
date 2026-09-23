@@ -1,6 +1,6 @@
 name: Backend build
 
-# A reusable workflow: only builds. Backend CI calls it for checks, Worker CD calls it
+# A reusable workflow: builds and tests. Backend CI calls it for checks, Worker CD calls it
 # as the gate its deploy waits on.
 on:
   workflow_call:
@@ -23,7 +23,9 @@ jobs:
         with:
           dotnet-version: '8.0.x'
 
-      # Building the solution covers all three projects (Api, Core, Worker).
+      # Building the solution covers Api, Core, Worker and their tests.
       - run: dotnet restore KnowledgeBase.sln
 
       - run: dotnet build KnowledgeBase.sln -c Release --no-restore
+
+      - run: dotnet test KnowledgeBase.Tests/KnowledgeBase.Tests.csproj -c Release --no-build

@@ -1,4 +1,5 @@
 using KnowledgeBase.Api.Controllers.Notes.Contracts;
+using KnowledgeBase.Api.Controllers.Notes.Configuration;
 using KnowledgeBase.Api.Controllers.Tags;
 using KnowledgeBase.Core.Notes;
 using KnowledgeBase.Core.Persistence;
@@ -8,6 +9,7 @@ using KnowledgeBase.Core.Storage;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 
 namespace KnowledgeBase.Api.Controllers.Notes;
 
@@ -19,11 +21,13 @@ namespace KnowledgeBase.Api.Controllers.Notes;
 public sealed class NotesController(
     KnowledgeBaseDbContext database,
     IAssetStorage storage,
-    IChangeNotifier notifier) : ControllerBase
+    IChangeNotifier notifier,
+    IOptions<ImageSourceNotesOptions> imageSourceNotes) : ControllerBase
 {
     private readonly KnowledgeBaseDbContext _database = database;
     private readonly IAssetStorage _storage = storage;
     private readonly IChangeNotifier _notifier = notifier;
+    private readonly ImageSourceNotesOptions _imageSourceNotes = imageSourceNotes.Value;
 
     /// <summary>
     /// Lists notes, newest first, no body. <c>kind</c> may repeat (<c>?kind=Synthesis&amp;kind=Index</c>)
@@ -360,6 +364,13 @@ public sealed class NotesController(
         if (asset is null)
         {
             return Conflict(new { error = "The file this note was made from is gone." });
+        }
+
+        var kind = ProcessableContent.Classify(asset.ContentType, asset.OriginalFileName);
+        if (kind is not (ContentKind.Text or ContentKind.Pdf)
+            && !(_imageSourceNotes.Enabled && kind is ContentKind.Image))
+        {
+            return Conflict(new { error = "Image-to-note analysis is disabled." });
         }
 
         if (!await ProcessingQueue.EnsurePendingAsync(_database, assetId, JobKind.BuildSourceNote, cancellationToken))

@@ -20,6 +20,7 @@ public sealed record DetectedFace(
     int Height,
     double DetectionScore,
     IReadOnlyList<FaceLandmark> Landmarks,
-    float[] Embedding);
+    float[] Embedding,
+    bool IsPartial);
 
 public sealed record FaceLandmark(float X, float Y);

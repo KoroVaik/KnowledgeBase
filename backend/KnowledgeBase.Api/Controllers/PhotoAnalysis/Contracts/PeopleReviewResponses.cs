@@ -22,7 +22,7 @@ public sealed record PeopleReviewHintResponse(string PersonId, string Name, doub
 
 // Score is the in-row order score (raw cosine): to the person for a person row, to the other
 // members for a group, zero for an unsorted face.
-public sealed record PeopleReviewFaceResponse(string CandidateId, string FaceOccurrenceId, string AssetId, FaceBoundsResponse FaceBounds, double Score);
+public sealed record PeopleReviewFaceResponse(string CandidateId, string FaceOccurrenceId, string AssetId, FaceBoundsResponse FaceBounds, double Score, bool IsPartial);
 
 public sealed record SubmitPeopleReviewRequest(IReadOnlyList<string>? CandidateIds, IReadOnlyList<string>? RemovedCandidateIds, string? PersonId, string? Name);
 

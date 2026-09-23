@@ -1,3 +1,4 @@
+import { requestContext, withRequestContext } from '../../diagnostics/diagnostics'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { deleteAsset, fetchAssets } from '../../api/assets'
 import type { AssetSummary } from '../../api/assets'
@@ -73,7 +74,7 @@ export function useAssetList(reloadToken: number) {
   // The change stream fires reloads too, so two can be in flight - only the newest writes state.
   const latestReload = useRef(0)
 
-  const reload = useCallback(() => {
+  const reload = useCallback(() => withRequestContext(requestContext('AssetList'), () => {
     const reloadId = ++latestReload.current
 
     // Leave the current rows on screen, don't flash "Loading…" on every upload.
@@ -93,9 +94,9 @@ export function useAssetList(reloadToken: number) {
           current.status === 'ready' ? current : { status: 'error', message: messageOf(error) },
         )
       })
-  }, [])
+  }), [])
 
-  useEffect(reload, [reload, reloadToken])
+  useEffect(() => withRequestContext({ trigger: reloadToken === 0 ? 'mount' : 'upload' }, reload), [reload, reloadToken])
 
   useResourceChanges('assets', reload)
 
@@ -111,7 +112,7 @@ export function useAssetList(reloadToken: number) {
       return
     }
 
-    const timer = window.setInterval(reload, 4000)
+    const timer = window.setInterval(() => withRequestContext({ trigger: 'poll' }, reload), 4000)
     return () => window.clearInterval(timer)
   }, [hasActiveJob, reload])
 

@@ -75,7 +75,7 @@ export const detachEventPhoto = (eventId: string, assetId: string) =>
   remove(`events/${eventId}/photos/${assetId}`, 'Could not remove this photo from the event')
 
 // score is the raw cosine that orders a row: to the person for a person row, to the other members for a group.
-export interface PeopleReviewFace { candidateId: string; faceOccurrenceId: string; assetId: string; faceBounds: FaceBounds; score: number }
+export interface PeopleReviewFace { candidateId: string; faceOccurrenceId: string; assetId: string; faceBounds: FaceBounds; score: number; isPartial: boolean }
 export interface PeopleReviewHint { personId: string; name: string; score: number }
 export interface PeopleReviewPersonRow { personId: string; name: string; referenceFaces: PersonReferenceFace[]; referenceFaceCount: number; faces: PeopleReviewFace[] }
 export interface PeopleReviewAnonymousRow { clusterId: string; hint: PeopleReviewHint | null; faces: PeopleReviewFace[] }

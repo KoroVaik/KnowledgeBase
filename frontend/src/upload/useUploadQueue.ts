@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useReducer, useRef } from 'react'
 import { uploadAsset } from '../api/assets'
+import { diagnosticId, record } from '../diagnostics/diagnostics'
 import { classify } from './classify'
 import type { UploadLimits, UploadProblem } from './classify'
 
@@ -111,11 +112,16 @@ export function useUploadQueue(limits: UploadLimits, onUploaded: () => void) {
     onUploadedRef.current = onUploaded
   })
 
-  // Every file at once, no pool (single-user, tens of files). Launched here, not from an
-  // effect: StrictMode runs effects twice in dev and would upload each file a second time.
+  const activeUploads = useRef(new Set<string>())
+  const reloadTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+  useEffect(() => () => { if (reloadTimer.current !== undefined) clearTimeout(reloadTimer.current) }, [])
   const uploadNow = useCallback(
     (targets: QueuedItem[]) => {
+      const uploadBatchId = diagnosticId()
+      record('upload.batch-started', { uploadBatchId, count: targets.length })
       for (const target of targets) {
+        if (activeUploads.current.has(target.id) || target.state.status === 'done' || target.state.status === 'blocked') continue
+        activeUploads.current.add(target.id)
         dispatch({ type: 'started', id: target.id })
 
         void uploadAsset(target.file, (phase, fraction) => {
@@ -126,16 +132,19 @@ export function useUploadQueue(limits: UploadLimits, onUploaded: () => void) {
           } else {
             startCreep(target.id)
           }
-        })
+        }, { uploadBatchId })
           .then(() => {
             stopCreep(target.id)
             dispatch({ type: 'succeeded', id: target.id })
-            onUploadedRef.current()
+            if (reloadTimer.current === undefined) reloadTimer.current = setTimeout(() => {
+              reloadTimer.current = undefined
+              onUploadedRef.current()
+            }, 20)
           })
           .catch((error: unknown) => {
             stopCreep(target.id)
             dispatch({ type: 'failed', id: target.id, message: messageOf(error) })
-          })
+          }).finally(() => activeUploads.current.delete(target.id))
       }
     },
     [startCreep, stopCreep],

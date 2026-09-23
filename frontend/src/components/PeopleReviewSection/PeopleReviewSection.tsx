@@ -29,6 +29,7 @@ function FaceStrip({ confirmed = [], faces, title, assetsById, onOpen, review }:
     {faces.map(face => <div key={face.candidateId} className="people-review-face">
       <button type="button" className="people-review-crop" aria-label={`View full photo for ${title}`} onClick={() => onOpen(title, face.assetId, face.faceBounds)}>
         <FaceCropPreview asset={assetsById.get(face.assetId)} faceBounds={face.faceBounds} size={CROP_SIZE} />
+        {face.isPartial && <span className="people-review-partial">Partial</span>}
       </button>
       {review && <input type="checkbox" className="people-review-keep" checked={review.isChecked(face.candidateId)} onChange={() => review.toggleFace(face.candidateId)}
         aria-label="Belongs to this person" title="Unchecked faces move to Unsorted on submit" />}

@@ -1,6 +1,7 @@
 using System.Net.Http.Json;
 using KnowledgeBase.Core.RealTime;
 using Microsoft.Extensions.Options;
+using KnowledgeBase.Core.Observability;
 
 namespace KnowledgeBase.Worker;
 
@@ -29,6 +30,8 @@ public sealed class HttpChangeNotifier(
 
     private async Task SendAsync(ChangeEvent change)
     {
+        using var operation = OperationContext.Push(change.Context);
+        using var activity = OperationContext.StartActivity("events.publish", change.TraceParent);
         try
         {
             using var client = clientFactory.CreateClient(ClientName);
@@ -38,7 +41,9 @@ public sealed class HttpChangeNotifier(
             };
             request.Headers.Add("X-Ingest-Token", _options.IngestToken);
 
-            var response = await client.SendAsync(request);
+            using var response = await client.SendAsync(request);
+            logger.LogInformation("Change event {EventId} {Resource} {Action} delivered with {StatusCode}",
+                change.EventId, change.Resource, change.Action, (int)response.StatusCode);
 
             if (!response.IsSuccessStatusCode)
             {

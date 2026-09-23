@@ -14,6 +14,7 @@ internal sealed class ProcessingJobConfiguration : IEntityTypeConfiguration<Proc
         builder.Property(job => job.AssetId).HasMaxLength(32);
         builder.Property(job => job.Status).HasConversion<string>().HasMaxLength(16);
         builder.Property(job => job.Error).HasMaxLength(2000);
+        builder.Property(job => job.DiagnosticContext).HasMaxLength(2000);
 
         // One job of each kind per asset: source-note and face analysis may run independently.
         // Aggregation jobs have no asset, so the constraint only covers the rows that carry one.

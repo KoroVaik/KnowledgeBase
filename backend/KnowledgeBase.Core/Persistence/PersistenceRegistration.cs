@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using KnowledgeBase.Core.Observability;
 
 namespace KnowledgeBase.Core.Persistence;
 
@@ -20,9 +21,10 @@ public static class PersistenceRegistration
         }
 
         // Scoped: a DbContext is not thread-safe, so it lives one HTTP request long.
-        services.AddDbContext<KnowledgeBaseDbContext>(options =>
+        services.AddDbContext<KnowledgeBaseDbContext>((provider, options) =>
             // The managed DB sleeps when idle; without retries the request that wakes it fails.
-            options.UseNpgsql(connectionString, npgsql => npgsql.EnableRetryOnFailure()));
+            options.UseNpgsql(connectionString, npgsql => npgsql.EnableRetryOnFailure())
+                .AddInterceptors(provider.GetRequiredService<JobContextInterceptor>(), provider.GetRequiredService<DatabaseTimingInterceptor>()));
 
         return services;
     }

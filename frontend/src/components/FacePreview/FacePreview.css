@@ -18,3 +18,13 @@
 .face-popup-dialog { width:720px; }
 .face-popup-dialog .face-frame-box { border-radius:8px; }
 .face-popup-filename { color:var(--text-muted); font-size:0.75em; font-weight:400; }
+.face-overlays { position:absolute; inset:0; width:100%; height:100%; overflow:hidden; }
+.face-overlays g { color:#ffdd55; }
+.face-overlays .face-overlay-confirmed { color:#4ade80; }
+.face-overlays .face-overlay-rejected { color:#fb7185; }
+.face-overlays rect { fill:none; stroke:currentColor; stroke-width:2; vector-effect:non-scaling-stroke; }
+.face-overlays circle { fill:currentColor; stroke:#111; stroke-width:0.5; vector-effect:non-scaling-stroke; }
+.face-overlays text { fill:currentColor; stroke:#111; stroke-width:2; paint-order:stroke; font-weight:700; }
+.face-overlays .face-overlay-highlighted { color:#22c55e; }
+.face-overlays .face-overlay-highlighted rect { stroke-width:4; fill:#22c55e22; }
+.face-overlays .face-overlay-interactive { cursor:pointer; }

@@ -39,6 +39,7 @@ public sealed class ClusterFacesHandler(KnowledgeBaseDbContext database, IOption
             from reference in database.PersonReferenceFaces
             join occurrence in database.FaceOccurrences on reference.FaceOccurrenceId equals occurrence.Id
             join person in database.People on reference.PersonId equals person.Id
+            where !occurrence.IsPartial
             select new PersonReferenceEmbedding(person.Id, person.Name, occurrence.Id, occurrence.Embedding)).ToListAsync(cancellationToken);
 
         var canonicalAssetIds = (await database.Assets.ToListAsync(cancellationToken))
@@ -70,6 +71,10 @@ public sealed class ClusterFacesHandler(KnowledgeBaseDbContext database, IOption
             .FirstOrDefault();
         openOccurrences = openOccurrences.Where(occurrence => occurrence.Embedding.Length == embeddingLength).ToList();
         references = references.Where(reference => reference.Embedding.Length == embeddingLength).ToList();
+        // A crop at a photo edge is a real face, but its embedding should not automatically join a
+        // person or train future suggestions. It is still emitted as an explicitly marked Unsorted row.
+        var partialOccurrences = openOccurrences.Where(occurrence => occurrence.IsPartial).ToList();
+        openOccurrences = openOccurrences.Where(occurrence => !occurrence.IsPartial).ToList();
 
         var result = FaceClustering.Run(
             openOccurrences.Select(occurrence => new FaceClusteringFace(occurrence.IdentityId!, occurrence.Embedding)).ToList(),
@@ -125,8 +130,13 @@ public sealed class ClusterFacesHandler(KnowledgeBaseDbContext database, IOption
             var cluster = AddCluster(FaceClusterKind.Unsorted);
             placements.AddRange(result.UnsortedIdentityIds.Select(identityId => new Placement(identityId, cluster, 1, null, null)));
         }
+        if (partialOccurrences.Count > 0)
+        {
+            var cluster = AddCluster(FaceClusterKind.Unsorted);
+            placements.AddRange(partialOccurrences.Select(occurrence => new Placement(occurrence.IdentityId!, cluster, 1, null, null)));
+        }
 
-        var occurrenceByIdentity = openOccurrences.ToDictionary(occurrence => occurrence.IdentityId!);
+        var occurrenceByIdentity = openOccurrences.Concat(partialOccurrences).ToDictionary(occurrence => occurrence.IdentityId!);
         var runIdByAsset = new Dictionary<string, string>();
         foreach (var rowGroup in placements.GroupBy(placement => placement.Cluster.Id))
         {

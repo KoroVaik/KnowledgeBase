@@ -1,8 +1,14 @@
+import { record } from '../diagnostics/diagnostics'
+import type { RequestContext } from '../diagnostics/diagnostics'
+
 /** Mirrors ChangeEvent in backend Core/RealTime. */
 export interface ResourceChange {
   resource: string
   action: string
   id: string | null
+  eventId?: string
+  traceParent?: string
+  context?: RequestContext
 }
 
 /** `null` = the stream just (re)connected; re-read the collection, nothing was queued. */
@@ -102,6 +108,7 @@ function sync() {
 }
 
 function open() {
+  record('sse.connecting')
   const nextSource = new EventSource('/api/events')
   source = nextSource
   setConnection(status, null)
@@ -126,6 +133,7 @@ function open() {
     clearTimer(connectingTimer)
     connectingTimer = undefined
     reopenDelayMs = REOPEN_MIN_MS
+    record('sse.opened')
     setConnection('online', null)
 
     // Not on the first connection: a component loads its own data on mount.
@@ -142,7 +150,9 @@ function open() {
     }
 
     try {
-      dispatch(JSON.parse(event.data) as ResourceChange)
+      const change = JSON.parse(event.data) as ResourceChange
+      record('sse.received', { eventId: change.eventId, resource: change.resource, action: change.action, uploadId: change.context?.uploadId, uploadBatchId: change.context?.uploadBatchId, jobId: change.context?.jobId })
+      dispatch(change)
     } catch {
       // A truncated frame is not worth dropping the stream.
     }
@@ -160,6 +170,7 @@ function open() {
 }
 
 function close() {
+  if (source !== null) record('sse.closed', { trigger: 'pause' })
   const currentSource = source
   source = null
   currentSource?.close()
@@ -172,7 +183,8 @@ function close() {
 }
 
 // A returning tab should not sit out a retry scheduled while it was in the background.
-function retryNow() {
+function retryNow(trigger = 'activity') {
+  record('sse.retry-now', { trigger }, 'debug')
   clearTimer(reopenTimer)
   reopenTimer = undefined
   reopenDelayMs = REOPEN_MIN_MS
@@ -192,7 +204,7 @@ function retryNow() {
 /** Cancels the scheduled wait and immediately opens a fresh stream. */
 export function reconnectNow() {
   if (status === 'offline') {
-    retryNow()
+    retryNow('manual')
   }
 }
 
@@ -213,6 +225,7 @@ function reopenLater(failedSource: EventSource) {
   }
 
   const delayMs = reopenDelayMs
+  record('sse.retry', { delayMs }, 'warning')
   const nextReconnectAt = Date.now() + delayMs
 
   reopenTimer = window.setTimeout(() => {
@@ -250,7 +263,7 @@ function startWatchingTab() {
 
     if (document.visibilityState === 'visible') {
       markActive()
-      retryNow()
+      retryNow('visibility')
     } else {
       hiddenTimer = window.setTimeout(sync, HIDDEN_GRACE_MS)
     }
@@ -268,9 +281,7 @@ function markActive() {
   clearTimer(idleTimer)
   idleTimer = window.setTimeout(sync, IDLE_LIMIT_MS)
 
-  if (status === 'offline' && reopenTimer !== undefined) {
-    retryNow()
-  } else if (source === null) {
+  if (source === null) {
     sync()
   }
 }

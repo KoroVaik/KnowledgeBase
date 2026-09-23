@@ -49,6 +49,28 @@ public sealed class JobsController(KnowledgeBaseDbContext database, IChangeNotif
         return Ok(jobs);
     }
 
+    /// <summary>Returns active and failed jobs together for the five-second status refresh.</summary>
+    [HttpGet("summary")]
+    [ProducesResponseType(typeof(JobsSummaryResponse), StatusCodes.Status200OK)]
+    public async Task<IActionResult> Summary(CancellationToken cancellationToken)
+    {
+        var rows = await (
+            from job in _database.ProcessingJobs.AsNoTracking()
+            where job.Status == ProcessingStatus.Pending || job.Status == ProcessingStatus.Running || job.Status == ProcessingStatus.Failed
+            join asset in _database.Assets on job.AssetId equals asset.Id into assetJoin
+            from asset in assetJoin.DefaultIfEmpty()
+            select new { Job = job, AssetFileName = asset != null ? asset.OriginalFileName : null })
+            .ToListAsync(cancellationToken);
+        var active = rows.Where(row => row.Job.Status != ProcessingStatus.Failed).OrderBy(row => row.Job.CreatedAtUtc)
+            .Select(row => new ActiveJobResponse(row.Job.Id, row.Job.Kind.ToString(), JobKindDescriptions.For(row.Job.Kind),
+                row.Job.Status.ToString(), row.Job.AssetId, row.AssetFileName, row.Job.CreatedAtUtc,
+                row.Job.StartedAtUtc, row.Job.Attempts, row.Job.Error)).ToArray();
+        var failed = rows.Where(row => row.Job.Status == ProcessingStatus.Failed).OrderByDescending(row => row.Job.CompletedAtUtc)
+            .Select(row => new FailedJobResponse(row.Job.Id, row.Job.Kind.ToString(), JobKindDescriptions.For(row.Job.Kind),
+                row.Job.AssetId, row.AssetFileName, row.Job.CreatedAtUtc, row.Job.CompletedAtUtc, row.Job.Attempts, row.Job.Error)).ToArray();
+        return Ok(new JobsSummaryResponse(active, failed));
+    }
+
     /// <summary>
     /// When a job of any of the given kinds last finished. <c>Skipped</c> counts as a finished run
     /// (the job had nothing to do); <c>Failed</c> does not.
