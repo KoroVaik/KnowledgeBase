@@ -13,6 +13,9 @@ public sealed class FaceOccurrence
     // A real face that touches a photo edge. It remains reviewable, but should not become a
     // reference face or influence automatic person matching until a later policy permits it.
     public required bool IsPartial { get; init; }
+    // Feature verification: true when a secondary detector (SCRFD) could not confirm facial
+    // features on the crop. Kept reviewable in Unsorted, but excluded from auto-matching.
+    public required bool NeedsReview { get; init; }
     public required string LandmarksJson { get; init; }
     // Re-embeddable: an embedder swap rewrites both fields in place instead of re-detecting.
     public required float[] Embedding { get; set; }

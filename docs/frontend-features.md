@@ -267,7 +267,7 @@ faces* (up to three most typical confirmed faces, chosen by the API as the highe
 the person's other confirmed faces, with a small green check in the corner) and *New suggested faces*.
 New faces have a checkbox under them, checked by default. Nothing is removed on the spot - **Submit person** / **Ignore** send the
 checked faces and the unchecked ones together, and the unchecked ones move to Unsorted in the same save
-(no half-applied row if the call fails). Unsorted faces have no checkbox - one face, nothing to uncheck. Clicking a crop opens the full-photo popup with
+(no half-applied row if the call fails). Unsorted faces have no checkbox - one face, nothing to uncheck. Crops touching the photo edge show a yellow **Partial** badge; detections unconfirmed by secondary SCRFD verification show an orange **Needs review** badge. Clicking a crop opens the full-photo popup with
 the face box. Rows without a person have a **Select person name** picker (`PersonNamePicker`, an adapter over the
 shared `SearchPicker` - same panel as the tag picker): focusing it lists up to 10 existing people (by name), typing narrows them to names containing the text, plus a
 last "Add new name "…"" option (hidden on an exact match, so no duplicate). Picking either files the

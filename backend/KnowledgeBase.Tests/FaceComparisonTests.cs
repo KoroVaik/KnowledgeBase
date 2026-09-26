@@ -88,6 +88,16 @@ public sealed class FaceComparisonTests
         Assert.Equal(valid, Assert.Single(result));
     }
 
+    [Fact]
+    public void DetectedFaceDefaultsNeedsReviewToFalseAndAllowsTrue()
+    {
+        var face = new DetectedFace(10, 20, 50, 60, 0.95, [new(20, 30)], [0.1f, 0.2f], false);
+        Assert.False(face.NeedsReview);
+
+        var flagged = face with { NeedsReview = true };
+        Assert.True(flagged.NeedsReview);
+    }
+
     private static ComparisonDetection Detection(float x, float y, float width, float height, double score) =>
         new(new(x, y, width, height), score, [new(20, 30), new(50, 30), new(35, 45), new(25, 60), new(45, 60)]);
 }

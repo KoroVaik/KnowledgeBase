@@ -21,6 +21,7 @@ public sealed record DetectedFace(
     double DetectionScore,
     IReadOnlyList<FaceLandmark> Landmarks,
     float[] Embedding,
-    bool IsPartial);
+    bool IsPartial,
+    bool NeedsReview = false);
 
 public sealed record FaceLandmark(float X, float Y);

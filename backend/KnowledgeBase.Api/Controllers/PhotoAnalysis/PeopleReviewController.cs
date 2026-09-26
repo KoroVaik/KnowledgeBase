@@ -64,7 +64,7 @@ public sealed class PeopleReviewController(KnowledgeBaseDbContext database, ICha
                 {
                     var occurrence = occurrences[candidate.SubjectFaceOccurrenceId!];
                     return new PeopleReviewFaceResponse(candidate.Id, occurrence.Id, occurrence.AssetId,
-                        new FaceBoundsResponse(occurrence.X, occurrence.Y, occurrence.Width, occurrence.Height), candidate.Score, occurrence.IsPartial);
+                        new FaceBoundsResponse(occurrence.X, occurrence.Y, occurrence.Width, occurrence.Height), candidate.Score, occurrence.IsPartial, occurrence.NeedsReview);
                 })
                 .ToList());
 
@@ -168,8 +168,8 @@ public sealed class PeopleReviewController(KnowledgeBaseDbContext database, ICha
         var occurrenceIds = candidates.Select(candidate => candidate.SubjectFaceOccurrenceId!).ToList();
         if (await database.PersonReferenceFaces.AnyAsync(reference => occurrenceIds.Contains(reference.FaceOccurrenceId), cancellationToken))
             return Conflict(new { error = "One of these faces is already confirmed. Reload and try again." });
-        var partialOccurrenceIds = (await database.FaceOccurrences
-            .Where(occurrence => occurrenceIds.Contains(occurrence.Id) && occurrence.IsPartial)
+        var unreferenceableOccurrenceIds = (await database.FaceOccurrences
+            .Where(occurrence => occurrenceIds.Contains(occurrence.Id) && (occurrence.IsPartial || occurrence.NeedsReview))
             .Select(occurrence => occurrence.Id)
             .ToListAsync(cancellationToken)).ToHashSet();
 
@@ -183,7 +183,7 @@ public sealed class PeopleReviewController(KnowledgeBaseDbContext database, ICha
                 ChosenTargetId = person.Id, DecidedAtUtc = now
             };
             database.PhotoAnalysisReviewDecisions.Add(decision);
-            if (!partialOccurrenceIds.Contains(candidate.SubjectFaceOccurrenceId!)) database.PersonReferenceFaces.Add(new PersonReferenceFace
+            if (!unreferenceableOccurrenceIds.Contains(candidate.SubjectFaceOccurrenceId!)) database.PersonReferenceFaces.Add(new PersonReferenceFace
             {
                 PersonId = person.Id, FaceOccurrenceId = candidate.SubjectFaceOccurrenceId!,
                 SourceDecisionId = decision.Id, ConfirmedAtUtc = now

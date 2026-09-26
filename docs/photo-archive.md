@@ -98,6 +98,14 @@ back into review as a fresh proposal. v2 detects on the
 EXIF-rotated image - v1 detected on the raw sideways pixels of a phone photo, so its boxes pointed at
 the wrong part of the picture the browser shows.
 
+### Featureless-face routing via secondary detector (SCRFD)
+
+Faces that are only blurred blobs, silhouettes, or background noise must not join persons or pollute
+person reference vectors. `AnalyzeFaces` verifies every detection by running SCRFD (0.5) on a 2x-padded
+crop. If SCRFD fails to confirm the face, `NeedsReview` is set to `true`. Unconfirmed faces remain stored
+and reviewable in Unsorted (with an orange badge in People Review), but never join confirmed persons or
+form clusters automatically, and do not become `PersonReferenceFaces` when manually confirmed.
+
 ### Faces are reviewed as rows of people, grouped by comparing faces with each other
 
 Scoring each face alone against confirmed references (the earlier `FaceCandidateRanking`) never compared
@@ -341,19 +349,10 @@ usable.
       YOLO's 30 non-rejected boxes, without its known background box. YuNet's threshold 0.9 produced
       18 boxes, versus 27 at 0.7. Labels are incomplete and box agreement is not ground truth; validate
       thresholds on more labelled photos, including negative examples, before production changes.
-- [ ] **Featureless-face filter after detection.** Faces that are only a blurred blob or silhouette
-      (no visible eyes/nose/mouth) must not reach recognition; cropped (partial) faces stay. On the
-      112-photo review (2026-09-24) both YOLO and SCRFD confidently detected such faces (a faded school
-      photo, blurred concert faces), so detector choice cannot solve it; a plain Laplacian sharpness
-      score on the crop overlapped heavily between blobs and real faces. Idea: a second, feature-level
-      check on each face crop - the five landmarks' confidence/geometry (eyes, nose, mouth corners), a
-      face-crop re-detection by a second model, or a face-quality model (e.g. MagFace/CR-FIQA-style
-      score, or the ArcFace embedding norm) - with a threshold calibrated on labelled blobs vs real
-      faces from the comparison set. Keep the face stored but mark it unusable for recognition.
-      Measured offline on the 49 Wikimedia photos: re-running SCRFD (0.5) on each YOLO face crop
-      (box padded to 2x) rejected all 6 YOLO false positives and most blobs, but also roughly 40 real
-      profile/occluded faces out of 384 - usable as a routing signal (confirmed -> automatic path,
-      rejected -> manual review), not as a hard delete.
+- [ ] **Featureless-face filter after detection — live verification pending.** Implemented routing signal:
+      re-running SCRFD (0.5) on each YOLO 2x-padded crop sets `NeedsReview = true` on unconfirmed detections,
+      excluding them from auto-clustering/reference faces and routing to Unsorted with an orange badge in People Review.
+      Migration `AddNeedsReviewToFaceOccurrence` added. Verify in running worker and UI.
 - [ ] **Run face-recognizer comparison on the local archive.** The independent, incremental experiment
       is built; apply the migrations, start the worker, then inspect the stored embeddings and, where
       enough confirmed faces exist, the automatic thresholds.
