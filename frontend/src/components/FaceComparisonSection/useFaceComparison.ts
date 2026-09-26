@@ -1,12 +1,11 @@
 import { requestContext } from '../../diagnostics/diagnostics'
 import type { RequestContext } from '../../diagnostics/diagnostics'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { createComparison, fetchComparison, fetchComparisonHistory, reviewDetection, reviewComparisonDetections, setComparisonMissedFaces, setComparisonReviewed, setComparisonSkipped, setMissedFaces } from '../../api/faceComparisons'
+import { createAllComparisons, fetchComparison, fetchComparisonHistory, reviewDetection, reviewComparisonDetections, setComparisonMissedFaces, setComparisonReviewed, setComparisonSkipped, setMissedFaces } from '../../api/faceComparisons'
 import type { ComparisonHistory, ComparisonRun } from '../../api/faceComparisons'
 import { useResourceChanges } from '../../hooks/useResourceChanges'
 
 export function useFaceComparison() {
-  const [assetId, setAssetId] = useState('')
   const [page, setPage] = useState(0)
   const [chosenRunId, setChosenRunId] = useState('')
   const [historyState, setHistory] = useState<{ key: string; data: ComparisonHistory } | null>(null)
@@ -47,7 +46,7 @@ export function useFaceComparison() {
     return () => { cancelled = true }
   }, [runId, revision])
   useResourceChanges('photo-analysis', () => advance())
-  const pending = run?.status === 'Pending' || run?.status === 'Running'
+  const pending = (history?.inProgressPhotoCount ?? 0) > 0
   useEffect(() => {
     if (!pending) return
     const timer = window.setInterval(() => advance('poll'), 3000)
@@ -64,8 +63,7 @@ export function useFaceComparison() {
   }
 
   return {
-    assetId, page, history, run, runId, error, busy, pending, showReviewed,
-    choosePhoto: (id: string) => { if (!busy) { setAssetId(id); setError(null) } },
+    page, history, run, runId, error, busy, pending, showReviewed,
     chooseRun: (id: string) => { if (!busy) { changeContext.current = { source: 'FaceComparison', trigger: 'navigation' }; setChosenRunId(id); setError(null) } },
     changePage: (next: number) => { if (!busy) { changeContext.current = { source: 'FaceComparison', trigger: 'navigation' }; setPage(next); setChosenRunId(''); pendingNavigation.current = null } },
     setShowReviewed: (value: boolean) => { if (!busy) { changeContext.current = { source: 'FaceComparison', trigger: 'filter' }; setShowReviewed(value); setPage(0); setChosenRunId(''); pendingNavigation.current = null } },
@@ -114,11 +112,7 @@ export function useFaceComparison() {
     hasPrevious: history !== null && (history.runs.findIndex(item => item.id === runId) > 0 || page > 0),
     hasNext: history !== null && (() => { const index = history.runs.findIndex(item => item.id === runId); return index >= 0 && (index < history.runs.length - 1 || history.hasMore || (run?.status === 'Done' && !run.isSkipped && run.reviewedAtUtc === null)) })(),
     reload: () => { setError(null); advance() },
-    compare: () => void save(async () => {
-      const created = await createComparison(assetId)
-      setPage(0)
-      setChosenRunId(created.id)
-    }),
+    compareAll: () => void save(createAllComparisons),
     review: (id: string, isFace: boolean | null) => void save(async () => {
       await reviewDetection(id, isFace)
       setRun(current => current ? { ...current, results: current.results.map(result => ({ ...result,

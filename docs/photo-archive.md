@@ -13,8 +13,10 @@ generation is deliberately deferred until that data is reliable.
 ### Detector comparisons are separate experiments
 
 The **Face detector comparison** subsection runs YOLOv5s-face (the current FaceONNX adapter),
-SCRFD-10GF and YuNet 2023mar on one selected original. `CompareFaceDetectors` stores a new
-`FaceComparisonRun`, three `FaceComparisonResults` and their `FaceComparisonDetections`; it never
+SCRFD-10GF and YuNet 2023mar. Like the recognizer comparison, one **Compare N photos** action queues
+every image without a queued, running or fully successful comparison (one per exact-duplicate group;
+a failed run makes the photo eligible again); there is no per-photo picker. Each photo is still its
+own `CompareFaceDetectors` job, which stores a new `FaceComparisonRun`, three `FaceComparisonResults` and their `FaceComparisonDetections`; it never
 creates occurrences, embeddings, identities, references or person candidates. Old experiments remain
 in history. Each completed model is saved separately so an interrupted job can resume; a model error
 is shown independently rather than reported as zero detections.
@@ -339,6 +341,19 @@ usable.
       YOLO's 30 non-rejected boxes, without its known background box. YuNet's threshold 0.9 produced
       18 boxes, versus 27 at 0.7. Labels are incomplete and box agreement is not ground truth; validate
       thresholds on more labelled photos, including negative examples, before production changes.
+- [ ] **Featureless-face filter after detection.** Faces that are only a blurred blob or silhouette
+      (no visible eyes/nose/mouth) must not reach recognition; cropped (partial) faces stay. On the
+      112-photo review (2026-09-24) both YOLO and SCRFD confidently detected such faces (a faded school
+      photo, blurred concert faces), so detector choice cannot solve it; a plain Laplacian sharpness
+      score on the crop overlapped heavily between blobs and real faces. Idea: a second, feature-level
+      check on each face crop - the five landmarks' confidence/geometry (eyes, nose, mouth corners), a
+      face-crop re-detection by a second model, or a face-quality model (e.g. MagFace/CR-FIQA-style
+      score, or the ArcFace embedding norm) - with a threshold calibrated on labelled blobs vs real
+      faces from the comparison set. Keep the face stored but mark it unusable for recognition.
+      Measured offline on the 49 Wikimedia photos: re-running SCRFD (0.5) on each YOLO face crop
+      (box padded to 2x) rejected all 6 YOLO false positives and most blobs, but also roughly 40 real
+      profile/occluded faces out of 384 - usable as a routing signal (confirmed -> automatic path,
+      rejected -> manual review), not as a hard delete.
 - [ ] **Run face-recognizer comparison on the local archive.** The independent, incremental experiment
       is built; apply the migrations, start the worker, then inspect the stored embeddings and, where
       enough confirmed faces exist, the automatic thresholds.

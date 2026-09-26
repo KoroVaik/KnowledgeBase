@@ -206,10 +206,11 @@ ordering and fields. The frontend polls it five seconds after the preceding read
 - [ ] Verify the observability integration in the running application; runtime checks and iteration 2 request reduction are tracked in [observability.md](observability.md).
 
 - [ ] **Detector comparison API integration.** Verify authenticated
-      `GET/POST /api/photo-analysis/face-comparisons`, `GET /{id}`,
+      `GET /api/photo-analysis/face-comparisons` (with `pendingPhotoCount` / `inProgressPhotoCount`),
+      `POST /all`, `GET /{id}`,
       `PUT /detections/{id}/review` and `PUT /results/{id}/missed-faces` after migration.
-      History pages hold 20 runs; repeated requests reuse an existing pending/running comparison
-      when found. Review labels are experimental and never change person suggestions.
+      History pages hold 20 runs; `POST /all` skips photos with a pending/running or successful
+      comparison. Review labels are experimental and never change person suggestions.
 
 - [ ] Input-model validation (FluentValidation in `Controllers/<feature>/Validators/`).
       Nothing to validate yet — `LoginRequest` has one field. Relevant once note creation

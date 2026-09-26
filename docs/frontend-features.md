@@ -316,8 +316,8 @@ Uploads, HTTP/XHR, reload initiators, SSE and browser failures produce bounded s
 
 - [ ] Verify the observability integration in the running application; runtime checks and iteration 2 request reduction are tracked in [observability.md](observability.md).
 
-- [ ] **Face detector comparison UI.** The Photo analysis subsection has a single-photo picker,
-      paged run history that hides fully reviewed photos by default (with a **Show reviewed**
+- [ ] **Face detector comparison UI.** The Photo analysis subsection has a **Compare N photos** batch
+      action with an in-progress count (the single-photo picker was removed), paged run history that hides fully reviewed photos by default (with a **Show reviewed**
       checkbox), one shared photo with one grouped frame per candidate face and coloured
       model numbers, compact disagreement cards, per-model false-positive correction, hover linkage,
       and shared all-model missed-face controls. Detections are accepted by default; navigation

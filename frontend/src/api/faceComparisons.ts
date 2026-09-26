@@ -49,6 +49,8 @@ export interface ComparisonHistory {
   models: { id: string; name: string }[]
   runs: ComparisonSummary[]
   hasMore: boolean
+  pendingPhotoCount: number
+  inProgressPhotoCount: number
 }
 
 const base = '/api/photo-analysis/face-comparisons'
@@ -62,7 +64,7 @@ async function request<T>(path: string, method = 'GET', body?: unknown, context:
 export const fetchComparisonHistory = (assetId: string, page: number, showReviewed: boolean, context?: RequestContext) =>
   request<ComparisonHistory>(`?page=${page}&showReviewed=${showReviewed}${assetId ? `&assetId=${encodeURIComponent(assetId)}` : ''}`, 'GET', undefined, context)
 export const fetchComparison = (id: string, context?: RequestContext) => request<ComparisonRun>(`/${encodeURIComponent(id)}`, 'GET', undefined, context)
-export const createComparison = (assetId: string) => request<{ id: string }>('', 'POST', { assetId })
+export const createAllComparisons = () => request<{ queued: number }>('/all', 'POST')
 export const reviewDetection = (id: string, isFace: boolean | null) => request<void>(`/detections/${encodeURIComponent(id)}/review`, 'PUT', { isFace })
 export const setMissedFaces = (id: string, count: number | null) => request<void>(`/results/${encodeURIComponent(id)}/missed-faces`, 'PUT', { count })
 export const reviewComparisonDetections = (runId: string, reviews: { id: string; isFace: boolean }[]) =>

@@ -34,7 +34,12 @@ public sealed class FaceComparisonsController(KnowledgeBaseDbContext database, I
                     orderby run.CreatedAtUtc descending, run.Id descending
                     select new { run.Id, run.AssetId, AssetName = asset.OriginalFileName, run.CreatedAtUtc, run.IsSkipped, run.ReviewedAtUtc, Status = job.Status.ToString() };
         var items = await query.Skip(page * 20).Take(21).ToListAsync(cancellationToken);
-        return Ok(new { models = FaceComparisonModels.All, runs = items.Take(20), hasMore = items.Count > 20 });
+        var (uncompared, inProgress) = await PhotoQueueStateAsync(cancellationToken);
+        return Ok(new
+        {
+            models = FaceComparisonModels.All, runs = items.Take(20), hasMore = items.Count > 20,
+            pendingPhotoCount = uncompared.Count, inProgressPhotoCount = inProgress,
+        });
     }
 
     /// <summary>Returns all model outputs, crops' coordinates and review labels for one comparison.</summary>
@@ -66,37 +71,30 @@ public sealed class FaceComparisonsController(KnowledgeBaseDbContext database, I
         });
     }
 
-    /// <summary>Queues all three detectors for a photo. Completed experiments remain in history.</summary>
-    [HttpPost]
+    /// <summary>Queues all three detectors for every photo without a successful or in-progress comparison. Completed experiments remain in history.</summary>
+    [HttpPost("all")]
     [ProducesResponseType(StatusCodes.Status202Accepted)]
-    [ProducesResponseType(StatusCodes.Status200OK)]
-    [ProducesResponseType(StatusCodes.Status400BadRequest)]
-    public async Task<IActionResult> Create(CreateFaceComparisonRequest request, CancellationToken cancellationToken)
+    public async Task<IActionResult> CreateAll(CancellationToken cancellationToken)
     {
-        var asset = await database.Assets.SingleOrDefaultAsync(item => item.Id == request.AssetId, cancellationToken);
-        if (asset is null) return NotFound();
-        if (ProcessableContent.Classify(asset.ContentType, asset.OriginalFileName) != ContentKind.Image)
-            return BadRequest(new { error = "Choose an image to compare." });
-        var pending = await (from run in database.FaceComparisonRuns
-                             join job in database.ProcessingJobs on run.JobId equals job.Id
-                             where run.AssetId == asset.Id && (job.Status == ProcessingStatus.Pending || job.Status == ProcessingStatus.Running)
-                             select run.Id).FirstOrDefaultAsync(cancellationToken);
-        if (pending is not null) return Ok(new { id = pending });
-        var jobId = Guid.NewGuid().ToString("N");
-        var id = Guid.NewGuid().ToString("N");
+        var (photos, _) = await PhotoQueueStateAsync(cancellationToken);
         var now = DateTime.UtcNow;
-        database.ProcessingJobs.Add(new ProcessingJob { Id = jobId, Kind = JobKind.CompareFaceDetectors, CreatedAtUtc = now, Status = ProcessingStatus.Pending });
-        database.FaceComparisonRuns.Add(new FaceComparisonRun
+        foreach (var asset in photos)
         {
-            Id = id, AssetId = asset.Id, JobId = jobId, CreatedAtUtc = now,
-            Results = FaceComparisonModels.All.Select(model => new FaceComparisonResult
+            var jobId = Guid.NewGuid().ToString("N");
+            var id = Guid.NewGuid().ToString("N");
+            database.ProcessingJobs.Add(new ProcessingJob { Id = jobId, Kind = JobKind.CompareFaceDetectors, CreatedAtUtc = now, Status = ProcessingStatus.Pending });
+            database.FaceComparisonRuns.Add(new FaceComparisonRun
             {
-                Id = Guid.NewGuid().ToString("N"), RunId = id, ModelId = model.Id, ModelName = model.Name,
-            }).ToList(),
-        });
+                Id = id, AssetId = asset.Id, JobId = jobId, CreatedAtUtc = now,
+                Results = FaceComparisonModels.All.Select(model => new FaceComparisonResult
+                {
+                    Id = Guid.NewGuid().ToString("N"), RunId = id, ModelId = model.Id, ModelName = model.Name,
+                }).ToList(),
+            });
+        }
         await database.SaveChangesAsync(cancellationToken);
-        notifier.Publish(new(ChangeResources.PhotoAnalysis, ChangeActions.Updated));
-        return Accepted(new { id });
+        if (photos.Count > 0) notifier.Publish(new(ChangeResources.PhotoAnalysis, ChangeActions.Updated));
+        return Accepted(new { queued = photos.Count });
     }
 
     /// <summary>Labels a detection as a real face or a false positive; null clears the label.</summary>
@@ -199,9 +197,34 @@ public sealed class FaceComparisonsController(KnowledgeBaseDbContext database, I
         notifier.Publish(new(ChangeResources.PhotoAnalysis, ChangeActions.Updated));
         return NoContent();
     }
+
+    // One photo per exact-duplicate group (unfingerprinted images stand alone), like the face-analysis backfill.
+    // A group is covered by any member's queued, running or fully successful run; a failed run leaves it uncompared.
+    private async Task<(List<AssetRecord> Uncompared, int InProgress)> PhotoQueueStateAsync(CancellationToken cancellationToken)
+    {
+        var images = (await database.Assets.AsNoTracking().ToListAsync(cancellationToken))
+            .Where(asset => ProcessableContent.Classify(asset.ContentType, asset.OriginalFileName) is ContentKind.Image)
+            .ToList();
+        var expectedModelCount = FaceComparisonModels.All.Count;
+        var runs = await (from run in database.FaceComparisonRuns.AsNoTracking()
+                          join job in database.ProcessingJobs on run.JobId equals job.Id
+                          select new
+                          {
+                              run.AssetId,
+                              InProgress = job.Status == ProcessingStatus.Pending || job.Status == ProcessingStatus.Running,
+                              Succeeded = job.Status == ProcessingStatus.Done && run.Results.Count == expectedModelCount
+                                  && !run.Results.Any(result => result.CompletedAtUtc == null || result.Error != null),
+                          }).ToListAsync(cancellationToken);
+        var inProgressAssets = runs.Where(run => run.InProgress).Select(run => run.AssetId).ToHashSet();
+        var coveredAssets = runs.Where(run => run.InProgress || run.Succeeded).Select(run => run.AssetId).ToHashSet();
+        var groups = images.GroupBy(image => image.ContentSha256 ?? image.Id).ToList();
+        var uncompared = groups.Where(group => !group.Any(image => coveredAssets.Contains(image.Id)))
+            .Select(group => group.OrderBy(image => image.UploadedAtUtc).ThenBy(image => image.Id).First())
+            .ToList();
+        return (uncompared, groups.Count(group => group.Any(image => inProgressAssets.Contains(image.Id))));
+    }
 }
 
-public sealed record CreateFaceComparisonRequest([Required, StringLength(32, MinimumLength = 32)] string AssetId);
 public sealed record ReviewFaceDetectionRequest(bool? IsFace);
 public sealed record ReviewFaceDetectionsRequest([Required] IReadOnlyList<ReviewFaceDetection> Reviews);
 public sealed record ReviewFaceDetection([Required, StringLength(32, MinimumLength = 32)] string Id, bool IsFace);

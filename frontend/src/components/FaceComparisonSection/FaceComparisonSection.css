@@ -1,7 +1,7 @@
 .comparison-content { display:grid; gap:14px; min-width:0; }
 .comparison-content p { margin:0; }
 .comparison-controls, .comparison-history, .comparison-run-head, .comparison-actions { display:flex; align-items:center; gap:8px; flex-wrap:wrap; min-width:0; }
-.comparison-controls > .multiselect { flex:1 1 260px; min-width:0; }
+.comparison-controls small { color:var(--text-muted); font-size:12px; line-height:1.5; }
 .comparison-note, .comparison-run-head > span, .comparison-group-warnings, .comparison-model-settings span { color:var(--text-muted); font-size:12px; line-height:1.5; }
 .comparison-history .select-trigger { max-width:100%; }
 .comparison-history .select-trigger > span:first-child { white-space:normal; overflow-wrap:anywhere; }
