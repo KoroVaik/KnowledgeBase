@@ -49,11 +49,12 @@ public sealed class EventsController(IChangeNotifier notifier, IOptions<EventsOp
         using var subscription = _notifier.Subscribe();
         logger.LogInformation("SSE connection opened {ConnectionId}", HttpContext.TraceIdentifier);
 
-        // Flush headers now so the browser reports the stream open before the first change.
-        await Response.Body.FlushAsync(cancellationToken);
-
         try
         {
+            // Proxies can hold headers until the first body bytes arrive.
+            await Response.WriteAsync(": connected\n\n", cancellationToken);
+            await Response.Body.FlushAsync(cancellationToken);
+
             while (!cancellationToken.IsCancellationRequested)
             {
                 if (!await WriteNextAsync(subscription, cancellationToken))

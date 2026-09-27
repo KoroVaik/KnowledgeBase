@@ -46,16 +46,24 @@ public sealed class OllamaAnalyzer(HttpClient http, IOptions<OllamaOptions> opti
     public async Task<T> RunAsync<T>(AiTask task, CancellationToken cancellationToken)
         where T : class
     {
-        var images = task.Image is { } image
-            ? new[] { Convert.ToBase64String(image.Bytes) }
-            : null;
+        var imageInputs = task.Image is { } image ? new List<AnalysisImage> { image } : [];
+        if (task.AdditionalImages is not null) imageInputs.AddRange(task.AdditionalImages);
+        var images = imageInputs.Count == 0 ? null : imageInputs.Select(item => Convert.ToBase64String(item.Bytes)).ToArray();
+        var modelOptions = ModelOptions();
+        if (task.GenerationOptions is { } generation)
+        {
+            modelOptions["temperature"] = generation.Temperature;
+            modelOptions["seed"] = generation.Seed;
+            modelOptions["num_ctx"] = generation.NumCtx;
+            modelOptions["num_predict"] = generation.NumPredict;
+        }
 
         var chat = new OllamaChatRequest
         {
             Model = _options.Model,
             KeepAlive = $"{(int)_options.KeepAlive.TotalSeconds}s",
             Format = task.Schema,
-            Options = ModelOptions(),
+            Options = modelOptions,
             Messages =
             [
                 new OllamaMessage("system", task.SystemPrompt),

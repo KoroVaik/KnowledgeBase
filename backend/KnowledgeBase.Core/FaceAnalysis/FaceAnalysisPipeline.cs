@@ -1,4 +1,4 @@
-namespace KnowledgeBase.Worker.FaceAnalysis;
+namespace KnowledgeBase.Core.FaceAnalysis;
 
 // A detection fix re-runs AnalyzeFaces under a new version and supersedes the older versions'
 // occurrences; re-ranking those would write their stale boxes back into review, so everything

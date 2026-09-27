@@ -1,0 +1,26 @@
+.generic-list-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-block: 12px 4px;
+}
+
+.generic-list-controls .btn {
+  min-height: 44px;
+}
+
+[data-list-exiting] {
+  overflow: hidden !important;
+  box-sizing: border-box;
+  pointer-events: none;
+  overflow-anchor: none;
+}
+.generic-list-updates, .section-refresh {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-block: 10px;
+  font-size: 13px;
+  color: var(--text-muted);
+}

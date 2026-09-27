@@ -1,5 +1,8 @@
+import { useDraftProtection } from '../../hooks/useDraftProtection'
+import { useSectionRefresh, useVisibleReload } from '../../hooks/useSectionRefresh'
+import { useGenericList } from '../GenericList/useGenericList'
 import { requestContext, withRequestContext } from '../../diagnostics/diagnostics'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import {
   deleteNote,
   fetchNote,
@@ -24,8 +27,9 @@ export type BodyState =
 
 /** All state and server calls behind the notes list: loading, expand/collapse, and the
  *  delete/restore/purge/process-again actions. `NotesList` only turns this into markup. */
-export function useNotesList() {
-  const [state, setState] = useState<ListState>({ status: 'loading' })
+export function useNotesList(collapsed: boolean) {
+  const refresh = useSectionRefresh<ListState>({ status: 'loading' }, value => value.status === 'ready', collapsed)
+  const { state, receive: setState, updateLocal, canLoad, setError } = refresh
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [body, setBody] = useState<BodyState | null>(null)
   const [showTrash, setShowTrash] = useState(false)
@@ -37,21 +41,25 @@ export function useNotesList() {
   // poll until the watched id disappears - which is what being replaced looks like.
   const [reprocessing, setReprocessing] = useState<string[]>([])
 
+  useDraftProtection(deleting !== null || deleteBusy || busyId !== null, refresh.registerDraft)
+
   // Two reloads (mount + stream event) can race; only the newest writes. Same guard on the body.
   const latestReload = useRef(0)
   const latestBody = useRef(0)
 
-  const reload = useCallback(() => withRequestContext(requestContext('NotesList'), () => {
+  const reload = useCallback((acceptedIds: readonly string[] = []) => withRequestContext(requestContext('NotesList'), () => {
+    if (!canLoad(acceptedIds)) return
     const reloadId = ++latestReload.current
 
     // Source notes now live under their file in the Files section; this list is the rest.
-    void Promise.all([fetchNotes(['Synthesis', 'Index']), fetchTrash()])
+    return Promise.all([fetchNotes(['Synthesis', 'Index']), fetchTrash()])
       .then(([notes, trash]) => {
         if (reloadId !== latestReload.current) {
           return
         }
 
-        setState({ status: 'ready', notes, trash })
+        setState({ status: 'ready', notes, trash }, acceptedIds)
+        setError(null)
         setReprocessing((current) => current.filter((id) => notes.some((note) => note.id === id)))
       })
       .catch((error: unknown) => {
@@ -60,24 +68,20 @@ export function useNotesList() {
         }
 
         // Fail quietly: stale rows beat blanking them on a flaky connection.
-        setState((current) =>
+        setError(messageOf(error))
+        updateLocal((current) =>
           current.status === 'ready' ? current : { status: 'error', message: messageOf(error) },
         )
       })
-  }), [])
-
-  useEffect(() => withRequestContext({ trigger: 'mount' }, reload), [reload])
+  }), [canLoad, setState, updateLocal, setError])
 
   useResourceChanges('notes', reload)
-
-  useEffect(() => {
-    if (reprocessing.length === 0) {
-      return
-    }
-
-    const timer = window.setInterval(() => withRequestContext({ trigger: 'poll' }, reload), 4000)
-    return () => window.clearInterval(timer)
-  }, [reprocessing, reload])
+  useVisibleReload(refresh.enabled, () => reload(), reprocessing.length > 0 ? 4000 : undefined)
+  const notes = state.status === 'ready' ? state.notes : []
+  const trash = state.status === 'ready' ? state.trash : []
+  const incoming = refresh.latest.status === 'ready' ? refresh.latest : { notes: [], trash: [] }
+  const notesList = useGenericList(notes, 'notes', '', refresh.additions(notes, incoming.notes))
+  const trashList = useGenericList(trash, 'notes:bin', '', refresh.additions(trash, incoming.trash))
 
   const open = useCallback(async (id: string) => {
     const bodyId = ++latestBody.current
@@ -115,8 +119,18 @@ export function useNotesList() {
       return
     }
 
-    // The target may be off screen, where opening it would look like nothing happened.
-    document.querySelector(`[data-note-row="${id}"]`)?.scrollIntoView({ block: 'nearest' })
+    if (state.status === 'ready') {
+      const noteIndex = state.notes.findIndex(note => note.id === id)
+      notesList.reveal(noteIndex)
+      const trashIndex = state.trash.findIndex(note => note.id === id)
+      if (trashIndex >= 0) {
+        setShowTrash(true)
+        trashList.reveal(trashIndex)
+      }
+    }
+    window.requestAnimationFrame(() => {
+      document.querySelector(`[data-note-row="${id}"]`)?.scrollIntoView({ block: 'nearest' })
+    })
     void open(id)
   }
 
@@ -151,7 +165,7 @@ export function useNotesList() {
       }
 
       setDeleting(null)
-      reload()
+      await reload([deleting.id])
     } catch (error) {
       setActionError(messageOf(error))
     } finally {
@@ -165,7 +179,7 @@ export function useNotesList() {
 
     try {
       await restoreNote(note.id)
-      reload()
+      await reload([note.id])
     } catch (error) {
       setActionError(messageOf(error))
     } finally {
@@ -193,7 +207,7 @@ export function useNotesList() {
         setBody(null)
       }
 
-      reload()
+      await reload([note.id])
     } catch (error) {
       setActionError(messageOf(error))
     } finally {
@@ -203,6 +217,13 @@ export function useNotesList() {
 
   return {
     state,
+    refresh,
+    reloadSection: () => void refresh.reload(async () => {
+      await reload()
+      if (expandedId !== null) await open(expandedId)
+    }),
+    notesList,
+    trashList,
     expandedId,
     body,
     showTrash,

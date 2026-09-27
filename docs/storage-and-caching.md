@@ -55,7 +55,7 @@ request.
 | Signed bucket links | `GET` / `PUT` URLs | Live `Storage:S3:LinkLifetime` (default 5 min). GET links are cached in memory, up to 512 entries, with a 30-second expiry margin. PUT links belong to their upload attempt. |
 | SSE stream | `/api/events` | `Cache-Control: no-cache`. An event is only a hint: the client re-reads the collection. |
 | Server | — | No server-side cache. Every API read goes to Postgres. |
-| Client data | lists, notes | No client-side data cache (no TanStack Query yet — frontend Open). Each section fetches on mount and on SSE hints. |
+| Client data | lists, notes | Memory-only displayed/incoming section snapshots (no TanStack Query). Expanded visible sections read on entrance and SSE hints; hidden sections defer reads. See the buffered updates decision in frontend-features.md. |
 
 ## Decisions
 

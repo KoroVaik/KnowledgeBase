@@ -8,4 +8,8 @@ public sealed record AiTask(
     string SystemPrompt,
     string UserPrompt,
     JsonObject Schema,
-    AnalysisImage? Image = null);
+    AnalysisImage? Image = null,
+    IReadOnlyList<AnalysisImage>? AdditionalImages = null,
+    AiGenerationOptions? GenerationOptions = null);
+
+public sealed record AiGenerationOptions(double Temperature, int Seed, int NumCtx, int NumPredict);

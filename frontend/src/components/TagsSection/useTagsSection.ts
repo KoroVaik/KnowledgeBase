@@ -1,3 +1,5 @@
+import { useDraftProtection } from '../../hooks/useDraftProtection'
+import { useSectionRefresh, useVisibleReload } from '../../hooks/useSectionRefresh'
 import { requestContext, withRequestContext } from '../../diagnostics/diagnostics'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { fetchLastCompleted } from '../../api/jobs'
@@ -30,12 +32,16 @@ export type TagsState =
  *  turns this into markup - `queued`/`busy` key off the same string each action uses (a tag id,
  *  or 'suggest-review' / 'suggest-merges' / 'suggest-hierarchy' / 'index') so a button can tell
  *  whether it is the one running. */
-export function useTagsSection() {
-  const [state, setState] = useState<TagsState>({ status: 'loading' })
+export function useTagsSection(collapsed: boolean) {
+  const refresh = useSectionRefresh<TagsState>({ status: 'loading' }, value => value.status === 'ready', collapsed)
+  const { state, receive: setState, updateLocal, canLoad } = refresh
+  const [placementRevision, setPlacementRevision] = useState(0)
   const [busy, setBusy] = useState<string | null>(null)
   const [queued, setQueued] = useState<string[]>([])
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
+
+  useDraftProtection(busy !== null, refresh.registerDraft)
 
   const latestReload = useRef(0)
   const noticeTimer = useRef<number | undefined>(undefined)
@@ -51,12 +57,13 @@ export function useTagsSection() {
     queuedRef.current = queued
   }, [queued])
 
-  const reload = useCallback(() => withRequestContext(requestContext('TagsSection'), () => {
+  const reload = useCallback((acceptedIds: readonly string[] = []) => withRequestContext(requestContext('TagsSection'), () => {
+    if (!canLoad(acceptedIds)) return
     const reloadId = ++latestReload.current
     const previous = stateRef.current
     const finishedLabels = queuedRef.current
 
-    void Promise.all([fetchTags(), fetchNotes('Synthesis'), fetchLastCompleted(SUGGEST_REVIEW_KINDS)])
+    return Promise.all([fetchTags(), fetchNotes('Synthesis'), fetchLastCompleted(SUGGEST_REVIEW_KINDS)])
       .then(([tags, syntheses, lastSuggestRunUtc]) => {
         if (reloadId !== latestReload.current) {
           return
@@ -68,7 +75,7 @@ export function useTagsSection() {
           noticeTimer.current = window.setTimeout(() => setNotice(null), 6000)
         }
 
-        setState({ status: 'ready', tags, synthesisCount: syntheses.length, lastSuggestRunUtc })
+        setState({ status: 'ready', tags, synthesisCount: syntheses.length, lastSuggestRunUtc }, acceptedIds)
         setQueued([])
       })
       .catch((err: unknown) => {
@@ -76,13 +83,14 @@ export function useTagsSection() {
           return
         }
 
-        setState((current) =>
+        setError(messageOf(err))
+        updateLocal((current) =>
           current.status === 'ready' ? current : { status: 'error', message: messageOf(err) },
         )
       })
-  }), [])
+  }), [canLoad, setState, updateLocal])
 
-  useEffect(() => withRequestContext({ trigger: 'mount' }, reload), [reload])
+  useVisibleReload(refresh.enabled, () => reload())
   useResourceChanges('notes', reload)
   useEffect(() => () => window.clearTimeout(noticeTimer.current), [])
 
@@ -108,9 +116,7 @@ export function useTagsSection() {
   }
 
   async function change(key: string, action: () => Promise<void>) {
-    if (await run(key, action)) {
-      reload()
-    }
+    await run(key, async () => { await action(); await reload([key]) })
   }
 
   function remove(tag: Tag) {
@@ -224,6 +230,9 @@ export function useTagsSection() {
 
   return {
     state,
+    refresh,
+    reloadSection: () => void refresh.reload(async () => { await reload(); setPlacementRevision(value => value + 1) }),
+    placementRevision,
     busy,
     queued,
     error,

@@ -10,6 +10,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\KnowledgeBase.Core\KnowledgeBase.Core.csproj" />
+    <InternalsVisibleTo Include="KnowledgeBase.Tests" />
   </ItemGroup>
 
   <!-- PDF text-layer extraction. Pure managed (no native binaries), so it runs on the Alpine

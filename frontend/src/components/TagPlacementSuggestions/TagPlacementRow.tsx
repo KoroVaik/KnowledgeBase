@@ -1,4 +1,5 @@
 import type { Tag, TagParentSuggestions } from '../../api/tags'
+import type { Ref } from 'react'
 import { TagSuggestionGraph } from '../TagSuggestionGraph/TagSuggestionGraph'
 import { TagSearchPicker } from '../TagSearchPicker/TagSearchPicker'
 import { useTagPlacementRow } from './useTagPlacementRow'
@@ -7,6 +8,9 @@ import { useTagPlacementRow } from './useTagPlacementRow'
  *  TagsSection/TagReviewRow.tsx, just no tag-confirm step and a static "Apply" label instead of
  *  the dynamic "Submit new tag …" one - the tag itself needs no confirming here. */
 export function TagPlacementRow({
+  ref,
+  inert,
+  busy = false,
   tag,
   suggestions,
   tagsById,
@@ -14,6 +18,9 @@ export function TagPlacementRow({
   onMerge,
   onSubmit,
 }: {
+  ref?: Ref<HTMLLIElement>
+  inert?: boolean
+  busy?: boolean
   tag: Tag
   suggestions: TagParentSuggestions
   tagsById: Map<string, Tag>
@@ -35,7 +42,7 @@ export function TagPlacementRow({
   } = useTagPlacementRow(tag, suggestions, tagsById, onSubmit)
 
   return (
-    <li className="tags-row">
+    <li ref={ref} inert={inert} aria-busy={busy} className="tags-row">
       <TagSuggestionGraph
         centerName={tag.name}
         centerConfirmed
@@ -56,7 +63,7 @@ export function TagPlacementRow({
         onClick={submit}
         disabled={disabled || !allDecided}
       >
-        Apply
+        {busy ? 'Saving…' : 'Apply'}
       </button>
 
       <span className="tags-actions">

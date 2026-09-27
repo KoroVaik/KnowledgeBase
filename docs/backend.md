@@ -51,7 +51,9 @@ server just never finishes, with `EventSource` reconnecting on its own.
   (singleton) fans `ChangeEvent(Resource, Action, Id)` out to subscriptions, each with
   its own `Channel.CreateBounded(32, DropOldest)` so a client that stopped reading cannot
   wedge someone else's upload.
-- `GET /api/events`, `[Authorize]`, `: ping` every 20 s — keeps proxies from timing out
+- `GET /api/events`, `[Authorize]`, immediately writes and flushes `: connected` so proxies
+  forward the response before any resource changes; flushing headers alone leaves Vite
+  waiting for the first body bytes. `: ping` every 20 s — keeps proxies from timing out
   **and** detects a dead socket (the write fails and the loop exits on the token).
 - **An event is a signal, not data.** There is no event log, so a missed event cannot be
   replayed; the client just re-reads the collection after every (re)connect. A lost event
@@ -153,6 +155,12 @@ can link uploaded image assets, people and one location. Its list response also 
 unreviewed model candidates. `POST /candidates/{id}/decisions` validates the candidate kind and
 the selected canonical target, then appends one human decision without editing model evidence.
 Runs and candidates are written by future worker handlers directly to the shared database.
+`POST /people-review/submit` treats manual person assignment as confirmation of the selected faces.
+Faces that are pending, flagged or excluded receive an Approved validity decision alongside the
+person reference; already eligible faces need no override. Approval, assignment, deselected-face
+removals and regrouping are saved together after request/conflict checks. Model evidence is preserved.
+Unsorted faces are ordered by occurrence creation time, then occurrence ID, across all clusters.
+Regrouping replaces candidates but preserves the relative order of faces that remain Unsorted.
 `POST /analyze-faces` starts the initial archive backfill: it queues fingerprints first, then the
 worker queues a face job only for each exact-duplicate group's canonical asset. `POST
 /analyze-scenes` refreshes location suggestions for canonical images that do not yet have a
@@ -199,6 +207,9 @@ trace parents continue into queued jobs and SSE. The older single-item routes re
 ordering and fields. The frontend polls it five seconds after the preceding read completes.
 
 ## Open
+
+- [ ] Verify combined face approval/person assignment through the running UI in Ignored and Unsorted;
+      backend assignment tests pass for existing/new people, exclusions and rejected requests.
 
 - [ ] Verify batch endpoint limits, partial failures, concurrent confirmation retries and jobs
       summary against the running API. Implemented; tests/runtime checks skipped by request on 2026-09-23.

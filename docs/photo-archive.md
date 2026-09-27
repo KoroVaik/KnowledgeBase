@@ -103,8 +103,44 @@ the wrong part of the picture the browser shows.
 Faces that are only blurred blobs, silhouettes, or background noise must not join persons or pollute
 person reference vectors. `AnalyzeFaces` verifies every detection by running SCRFD (0.5) on a 2x-padded
 crop. If SCRFD fails to confirm the face, `NeedsReview` is set to `true`. Unconfirmed faces remain stored
-and reviewable in Unsorted (with an orange badge in People Review), but never join confirmed persons or
-form clusters automatically, and do not become `PersonReferenceFaces` when manually confirmed.
+and reviewable in Unsorted (with an orange badge in People Review), but cannot join confirmed persons,
+form clusters or become references until the reviewer explicitly approves their validity.
+
+### Face validation gates grouping and preserves manual decisions
+
+`AnalyzeFaces` measures the original crop's shorter side, normalized sharpness and contact with the
+photo boundary, then queues a separate `ValidateFaces` job. Size below 32 pixels and sharpness below
+10 are advisory warnings, not calibrated rejection thresholds. Contact with the photo boundary is
+also advisory: the legacy `IsPartial` field means only that the box touches the edge, not that facial
+features are missing. It does not block grouping, reference use or identity inheritance, including
+for already stored faces. The SCRFD `NeedsReview` flag still blocks automatic grouping.
+
+The worker sends Qwen the tight crop plus wider context with the same target marked in yellow.
+Its semantic verdict is human, animal, statue/artwork, not a face, or uncertain; the prompt never asks
+it to identify a person. Qwen's blur, partial and occlusion judgements are not used as gates. Pending,
+non-human and uncertain faces remain in Unsorted with their reasons and original-photo preview.
+Only a human verdict without a blocking SCRFD flag, or an explicit manual approval,
+allows a face into automatic grouping. Manually assigning a person also approves selected faces
+that are not eligible, including excluded faces, in the same save as their confirmed references.
+Automatic grouping still applies the validation gate even before an old grouping has been rebuilt.
+
+`FaceValidations` checkpoints each crop's current result, CPU metrics, model tag, prompt/options hash
+and input hash. An interrupted photo resumes at its unfinished faces without repeating cached model
+calls. An unavailable model or failed/invalid response leaves the face pending; exhausted jobs can be
+retried in review. A changed model tag, prompt/options or input invalidates the cache. Updating the
+model behind an unchanged tag requires a validation-version bump to invalidate stored results.
+
+Manual **Allow automatic grouping** / **Exclude from people** actions append `FaceValidationReviewDecisions`
+against the stable face identity; validation and regrouping preserve them and they override machine evidence.
+These standalone actions do not name a person; naming also records approval when needed. Exclusion deletes neither the crop nor the
+photo. Existing confirmed references are preserved, and their validity cannot be changed until the
+reference is revoked. Ignored groups keep their membership and do not trigger backfill on their own.
+
+Worker startup and completion of a face-model migration queue missing/stale validation for existing
+unconfirmed faces, followed by regrouping as results arrive. This reuses the normal queue and retry
+policy; queue priorities are a separate task. The semantic-only production prompt still needs a live
+check against the existing examples; the earlier experiment also requested quality fields and is
+not a validation of this exact prompt.
 
 ### Faces are reviewed as rows of people, grouped by comparing faces with each other
 
@@ -114,15 +150,17 @@ top guess was kept even below the 0.25 floor, so random approved people were sug
 groups every open face of the archive (current detection version, with an identity, on a canonical photo,
 not settled) and the review screen shows one row per person:
 
-1. A face joins the confirmed person whose best reference scores highest, only if that reaches
-   `PersonJoinThreshold`; a below-threshold guess is never kept, and a person on the face's negative
-   list is skipped.
-2. The rest join an ignored group the same way (best cosine to the faces the user filed into it), so an
+1. A face joins the confirmed person whose prototype (normalized centroid of consistent inlier
+   references, pruning low-correlation reference outliers when 3+ references exist) scores highest,
+   only if that reaches `PersonJoinThreshold`; a below-threshold guess is never kept, and a person on
+   the face's negative list is skipped. Single-linkage best-reference matching was dropped because a
+   single noisy or accidental reference pulled hundreds of unrelated archive faces into that person.
+2. The rest join an ignored group the same way (cosine to the group's centroid), so an
    ignored stranger does not come back as a new row on every upload.
 3. What is left is clustered agglomeratively (average linkage on cosine, merged while the linkage
    reaches `ClusterThreshold`). Single faces go to Unsorted.
-4. An anonymous row or ignored group gets a "Looks like" hint only when its average best score for one
-   person lies between `HintThreshold` and `PersonJoinThreshold`, never for a person any member is
+4. An anonymous row or ignored group gets a "Looks like" hint only when its average score to one
+   person's centroid lies between `HintThreshold` and `PersonJoinThreshold`, never for a person any member is
    negative for.
 
 Rows are ordered by the face's score to the person (person rows) or its average cosine to the other
@@ -135,9 +173,9 @@ candidate and writes one fresh candidate per open face, pointing at its cluster.
 still needs a per-asset `PhotoAnalysisRun`, so each grouping writes one per photo it touches. The full
 rewrite is the simple choice at hundreds of faces. `ClusterFaces` is queued by every detection job, every
 review action (submit, delete, ignore, revoke) and the end of `MigrateFaceModels`, at most one pending
-at a time; it finishes without work while any `FingerprintAsset` or `AnalyzeFaces` job is still active,
-because the last detection job queues another. Old `RescoreFaces` rows still in the queue run the same
-grouping - nothing queues that kind any more.
+at a time; it finishes without work while any `FingerprintAsset`, `AnalyzeFaces` or `MigrateFaceModels`
+job is still active, because the last detection or migration job queues another. Old `RescoreFaces`
+rows still in the queue run the same grouping - nothing queues that kind any more.
 
 ### The system improves from references before it retrains models
 
@@ -184,12 +222,18 @@ current.
 ### Face model migrations are self-healing; scores stay raw, percents are calibrated
 
 Every `FaceOccurrence` records the `EmbeddingModelKey` of the embedder that produced its vector
-(the current one is insightface ArcFace `w600k_r50`), and detection runs are versioned. The
-worker closes the gap between stored data and current code itself: on start it counts stale
+(the current one is insightface ArcFace `w600k_r50` with `five-point-similarity/v2` alignment),
+and detection runs are versioned. The worker closes the gap between stored data and current code
+itself: on start it counts stale
 embeddings and canonical photos without a run of the current detection version, and if either is
 non-zero it queues a `MigrateFaceModels` job for itself. That job re-crops and re-embeds every
 stale face (references included, in place, per-photo resumable), requeues detection for the
 outdated photos, and regroups the open faces. Detection fixes ride the same path — no separate procedure.
+
+The embedding key includes alignment because preprocessing changes the vector even with the same
+model weights. Alignment v2 corrects the horizontal inverse translation for rotated faces; the old
+formula sampled a shifted crop. The key change sends existing occurrences, including confirmed
+references, through the same re-embedding migration without requiring face detection again.
 
 A model swap is therefore: put the .onnx file in place, change the code, restart the worker.
 The migration is idempotent (each step touches only rows not matching current code) and
@@ -341,6 +385,18 @@ usable.
 
 ## Open
 
+- [ ] **Face-validation rollout.** Implementation and automated checks are complete; the local
+      `AddFaceValidation` migration is applied and both new tables are present. Restart the local
+      API/worker, verify the production prompt on existing
+      detections, and check pending/retry/manual review plus regrouping in the browser. Preserve
+      confirmed references and ignored groups. No new test photos are required.
+      The photo-edge correction passes automated policy, grouping and assignment checks; verify
+      the advisory badge and existing edge faces after the updated API/worker are restarted.
+
+- [ ] **Face grouping quality after corrected ArcFace alignment.** Local re-embedding and regrouping
+      completed; the two old 21-face groups were split. Review the remaining suggested groups for
+      identity consistency before calibrating thresholds; visual accuracy is not yet verified.
+
 - [ ] **Face detector comparison — UI verification and calibration pending.** Builds, lint and six
       geometry/NMS tests pass. Local database review confirms 15 completed runs with results and saved
       review labels/missed counts. Browser checks of history, model failures, popups and mobile layout
@@ -409,6 +465,13 @@ usable.
       same-person and different-person cosine distributions on real data and set
       `FaceAnalysis:Center`/`Scale` from them (defaults are placeholders from typical ArcFace
       behaviour, not measurements).
+      A CPU-only audit of existing local detections found that size/sharpness flags can catch
+      additional poor crops but also flag real faces; sharp dogs/statues need semantic evidence.
+      A local Qwen test on 25 existing examples retained 14/14 human references and flagged 10/11
+      invalid subjects; its partial/occluded outputs were uninformative across two response schemas.
+      Treat semantic checking as promising review evidence, not a validated automatic rejection rule.
+      Recognition-quality labels and acceptance thresholds remain unvalidated; size/sharpness
+      warnings remain advisory in the validation flow above. Keep queue-priority changes separate.
 - [ ] **Phase 3 — location-score calibration.** Review a manually labelled archive subset before
       interpreting cosine scores as a confidence or introducing any automatic location decision.
 - [ ] **Phase 4 — scene-observation calibration.** Review a manually labelled archive subset to

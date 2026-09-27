@@ -10,8 +10,7 @@ public sealed class FaceOccurrence
     public required int Width { get; init; }
     public required int Height { get; init; }
     public required double DetectionScore { get; init; }
-    // A real face that touches a photo edge. It remains reviewable, but should not become a
-    // reference face or influence automatic person matching until a later policy permits it.
+    // Legacy name: the box touches the photo edge; this is an advisory warning, not proof of cropping.
     public required bool IsPartial { get; init; }
     // Feature verification: true when a secondary detector (SCRFD) could not confirm facial
     // features on the crop. Kept reviewable in Unsorted, but excluded from auto-matching.

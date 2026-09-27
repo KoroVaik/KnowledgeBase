@@ -48,7 +48,7 @@ and job status together.
 
 - `IContentAnalyzer` (+ `OllamaAnalyzer` on a **typed `HttpClient`**) in `Core/Ai/`.
   `BaseAddress` and `Timeout` are set at registration, not in the analyzer.
-- `RunAsync<T>(AiTask { SystemPrompt, UserPrompt, Schema, Image? })` — the analyzer knows
+- `RunAsync<T>(AiTask { SystemPrompt, UserPrompt, Schema, Image?, AdditionalImages?, GenerationOptions? })` — the analyzer knows
   nothing about prompts. Each pipeline owns its prompt and its result shape: `SourceNotes/
   SourceNotePrompt`, `Synthesis/SynthesisPrompt`, both producing `NoteDraft { Title,
   Tags[], MarkdownBody, Links[] }` against `NoteDraft.Schema()`.
@@ -61,6 +61,10 @@ and job status together.
   changes. A text model will not take an image at all.
   `DefaultIgnoreCondition = WhenWritingNull` drops the `images` field for text requests —
   not cosmetic.
+  The primary image precedes any additional images; face validation supplies a crop and marked
+  context in that order. A task may override temperature, seed, context and output-token limits
+  without changing defaults for other tasks. Schema-constrained responses still require domain
+  validation; malformed face verdicts are retried rather than accepted.
 - Model: `qwen2.5vl:7b`, one multimodal model for both text and photos.
 - Flexible config `Ai:Ollama` — `BaseUrl`, `Model`, `KeepAlive`, `Timeout`,
   `Options { Temperature, NumCtx, NumGpu, NumThread }` (all nullable, only the set ones go

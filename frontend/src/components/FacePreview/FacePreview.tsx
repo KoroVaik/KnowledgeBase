@@ -122,16 +122,18 @@ export function FullPhotoPreview({ asset, faceBounds, label, labelContent, squar
 }
 
 function faceCrop(bounds: FaceBounds, source: { width: number; height: number }, size = 144) {
-  const faceWidth = Math.max(1, Math.min(bounds.width, source.width))
-  const faceHeight = Math.max(1, Math.min(bounds.height, source.height))
-  const side = Math.min(Math.max(faceWidth, faceHeight) * 1.3, source.width, source.height)
-  const centerX = Math.min(Math.max(bounds.x + bounds.width / 2, side / 2), source.width - side / 2)
-  const centerY = Math.min(Math.max(bounds.y + bounds.height / 2, side / 2), source.height - side / 2)
-  const scale = size / side
-  return { width: source.width * scale, height: source.height * scale, left: -(centerX - side / 2) * scale, top: -(centerY - side / 2) * scale }
+  const left = Math.max(0, Math.min(bounds.x, source.width - 1))
+  const top = Math.max(0, Math.min(bounds.y, source.height - 1))
+  const faceWidth = Math.max(1, Math.min(bounds.x + bounds.width, source.width) - left)
+  const faceHeight = Math.max(1, Math.min(bounds.y + bounds.height, source.height) - top)
+  const scale = size / Math.max(faceWidth, faceHeight)
+  return {
+    regionStyle: { width: faceWidth * scale, height: faceHeight * scale },
+    imgStyle: { width: source.width * scale, height: source.height * scale, left: -left * scale, top: -top * scale },
+  }
 }
 
-/** A tight square crop around one detected face, loaded from the full photo (no server-side thumbnail). */
+/** The detected face bounds, letterboxed in a square card and loaded from the full photo. */
 export function FaceCropPreview({ asset, faceBounds, size = 144 }: { asset: AssetSummary | undefined; faceBounds: FaceBounds; size?: number }) {
   const { url, unavailable } = useAssetPreview(asset?.storedFileName, asset?.id, 'FacePreview')
   const [sourceSize, setSourceSize] = useState<{ width: number; height: number } | null>(null)
@@ -141,13 +143,15 @@ export function FaceCropPreview({ asset, faceBounds, size = 144 }: { asset: Asse
   return <div className="face-crop-preview" style={{ width: size, height: size }}>
     {url === null && unavailable
       ? <span>Unavailable</span>
-      : <ProgressiveImage
+      : <div className="face-crop-region" style={crop?.regionStyle}>
+        <ProgressiveImage
           url={url}
           alt=""
           ariaHidden
-          imgStyle={crop ?? undefined}
+          imgStyle={crop?.imgStyle ?? { visibility: 'hidden' }}
           onImageLoad={(image) => setSourceSize({ width: image.naturalWidth, height: image.naturalHeight })}
-        />}
+        />
+      </div>}
   </div>
 }
 

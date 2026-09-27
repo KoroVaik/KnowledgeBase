@@ -8,8 +8,8 @@ import { TagSearchPicker } from '../TagSearchPicker/TagSearchPicker'
 import './FilePanel.css'
 
 interface FilePanelProps {
-  /** Remount this on a note-id change (a re-run swaps the note) - see the key in AssetList. */
   asset: AssetSummary
+  reloadToken: number
   /** Reload the list after an action that changed job or note state. */
   onChanged: () => void
   /** Drop this row from the list at once, after its file is gone. */
@@ -17,7 +17,7 @@ interface FilePanelProps {
 }
 
 /** The section that opens under a file row: actions on top, then a Note / File preview. */
-export function FilePanel({ asset, onChanged, onDeleted }: FilePanelProps) {
+export function FilePanel({ asset, reloadToken, onChanged, onDeleted }: FilePanelProps) {
   const {
     showProcess,
     hasNote,
@@ -37,7 +37,7 @@ export function FilePanel({ asset, onChanged, onDeleted }: FilePanelProps) {
     requestDelete,
     handleDeleteNote,
     handleAddTag,
-  } = useFilePanel(asset, onChanged, onDeleted)
+  } = useFilePanel(asset, onChanged, onDeleted, reloadToken)
 
   return (
     <div className="file-panel">

@@ -1,3 +1,5 @@
+import { SectionReload } from '../GenericList/SectionReload'
+import { GenericList } from '../GenericList/GenericList'
 import { formatDateTime } from '../../format'
 import { useJobsSection } from './useJobsSection'
 import type { ActiveJob, FailedJob } from '../../api/jobs'
@@ -13,11 +15,12 @@ const KIND_LABELS: Record<string, string> = {
 }
 
 export function JobsSection() {
-  const { state, retrying, retryError, retry } = useJobsSection()
   const { collapsed, toggle } = useCollapsibleSection('jobs')
+  const { state, refresh, reloadSection, retrying, retryError, retry } = useJobsSection(collapsed)
+  const incoming = refresh.latest.status === 'ready' ? refresh.latest : { jobs: [], failed: [] }
 
   return (
-    <section className="jobs">
+    <section className="jobs" {...refresh.bind}>
       <h2>
         <button type="button" className="section-toggle" aria-expanded={!collapsed} onClick={toggle}>
           <span className="section-toggle-caret" aria-hidden="true">▾</span>
@@ -28,6 +31,7 @@ export function JobsSection() {
 
       {!collapsed && (
         <>
+          <SectionReload {...refresh} reload={reloadSection} />
           {state.status === 'loading' && <p>Loading…</p>}
 
           {state.status === 'error' && (
@@ -38,15 +42,15 @@ export function JobsSection() {
 
           {state.status === 'ready' && state.jobs.length === 0 && <p>No active jobs.</p>}
 
-          {state.status === 'ready' && state.jobs.length > 0 && (
-            <ul className="jobs-list">
-              {state.jobs.map((job) => (
-                <JobRow key={job.id} job={job} />
+          {state.status === 'ready' && (state.jobs.length > 0 || incoming.jobs.length > 0) && (
+            <GenericList updates={refresh.additions(state.jobs, incoming.jobs)} items={state.jobs} listId="jobs:active">{shownItems => <ul className="jobs-list">
+              {shownItems.map((job) => (
+                <JobRow key={job.id} job={job} inactive={!incoming.jobs.some(item => item.id === job.id)} failed={incoming.failed.some(item => item.id === job.id)} />
               ))}
-            </ul>
+            </ul>}</GenericList>
           )}
 
-          {state.status === 'ready' && state.failed.length > 0 && (
+          {state.status === 'ready' && (state.failed.length > 0 || incoming.failed.length > 0) && (
             <div className="jobs-failed">
               <div className="jobs-failed-head">
                 <h3>
@@ -68,8 +72,8 @@ export function JobsSection() {
                 </p>
               )}
 
-              <ul className="jobs-list">
-                {state.failed.map((job) => (
+              <GenericList updates={refresh.additions(state.failed, incoming.failed)} items={state.failed} listId="jobs:failed">{shownItems => <ul className="jobs-list">
+                {shownItems.map((job) => (
                   <FailedJobRow
                     key={job.id}
                     job={job}
@@ -78,7 +82,7 @@ export function JobsSection() {
                     onRetry={() => void retry(job.id)}
                   />
                 ))}
-              </ul>
+              </ul>}</GenericList>
             </div>
           )}
         </>
@@ -87,8 +91,8 @@ export function JobsSection() {
   )
 }
 
-function JobRow({ job }: { job: ActiveJob }) {
-  const running = job.status === 'Running'
+function JobRow({ job, inactive, failed }: { job: ActiveJob; inactive: boolean; failed: boolean }) {
+  const running = !inactive && job.status === 'Running'
 
   return (
     <li className="job">
@@ -99,7 +103,7 @@ function JobRow({ job }: { job: ActiveJob }) {
           {job.assetFileName !== null && ` — ${job.assetFileName}`}
         </span>
         <span className={running ? 'job-status job-status-running' : 'job-status job-status-pending'}>
-          {running ? 'Running' : 'Queued'}
+          {inactive ? (failed ? 'Failed' : 'No longer active') : running ? 'Running' : 'Queued'}
         </span>
       </div>
       <div className="job-meta">

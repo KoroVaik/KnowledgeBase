@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react'
+import { useDraftProtection } from '../../hooks/useDraftProtection'
+import { useCallback, useEffect, useState } from 'react'
 import { deleteAsset, fetchDownloadUrl, processAsset } from '../../api/assets'
 import type { AssetSummary } from '../../api/assets'
 import { addNoteTag, deleteNote, fetchNote, processNoteAgain } from '../../api/notes'
@@ -26,6 +27,7 @@ export function useFilePanel(
   asset: AssetSummary,
   onChanged: () => void,
   onDeleted: (storedFileName: string) => void,
+  reloadToken: number,
 ) {
   const image = isImage(asset)
   const hasNote = asset.noteId !== null
@@ -33,9 +35,9 @@ export function useFilePanel(
   const pending = asset.processingStatus === 'Pending' || asset.processingStatus === 'Running'
 
   const [tab, setTab] = useState<Tab>(hasNote ? 'note' : 'file')
-  // Seeded here, not set inside the effect: a synchronous setState in an effect trips oxlint
-  // react(set-state-in-effect), and the parent's key gives us a fresh mount per note anyway.
-  const [note, setNote] = useState<NoteState>(hasNote ? { status: 'loading' } : { status: 'idle' })
+  const [loadedNote, setLoadedNote] = useState<{ id: string | null; state: NoteState }>({ id: asset.noteId, state: { status: 'loading' } })
+  const note: NoteState = !hasNote ? { status: 'idle' } : loadedNote.id === asset.noteId ? loadedNote.state : { status: 'loading' }
+  const setNote = useCallback((state: NoteState) => setLoadedNote({ id: asset.noteId, state }), [asset.noteId])
   const [preview, setPreview] = useState<PreviewState>(
     image ? { status: 'loading' } : { status: 'unavailable' },
   )
@@ -44,6 +46,8 @@ export function useFilePanel(
   const [actionError, setActionError] = useState<string | null>(null)
   const [addingTag, setAddingTag] = useState(false)
   const [tagError, setTagError] = useState<string | null>(null)
+
+  useDraftProtection(busy !== null || confirmingDelete || addingTag)
 
   useEffect(() => {
     if (asset.noteId === null) {
@@ -67,7 +71,7 @@ export function useFilePanel(
     return () => {
       cancelled = true
     }
-  }, [asset.noteId])
+  }, [asset.noteId, reloadToken, setNote])
 
   useEffect(() => {
     if (!image) {

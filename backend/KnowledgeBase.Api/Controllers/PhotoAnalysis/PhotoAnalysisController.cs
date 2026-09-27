@@ -215,6 +215,8 @@ public sealed class PhotoAnalysisController(KnowledgeBaseDbContext database, ICh
         if (reference is null) return NotFound();
 
         database.PersonReferenceFaces.Remove(reference);
+        var occurrence = await database.FaceOccurrences.SingleAsync(face => face.Id == faceOccurrenceId, cancellationToken);
+        await FaceValidationQueue.EnqueueAsync(database, occurrence.AssetId, cancellationToken);
         await ClusterFacesQueue.EnqueueAsync(database, cancellationToken);
         await database.SaveChangesAsync(cancellationToken);
         notifier.Publish(new ChangeEvent(ChangeResources.PhotoAnalysis, ChangeActions.Updated));
@@ -417,6 +419,14 @@ public sealed class PhotoAnalysisController(KnowledgeBaseDbContext database, ICh
             return BadRequest(new { error = "This proposal has no existing target to accept. Create one, then correct the candidate to it." });
         if (chosenTargetId is not null && !await TargetExists(candidate.Kind, chosenTargetId, cancellationToken))
             return BadRequest(new { error = "The chosen archive record no longer exists." });
+
+        if (candidate.Kind == PhotoAnalysisCandidateKind.Person && kind is PhotoAnalysisDecisionKind.Accepted or PhotoAnalysisDecisionKind.Corrected)
+        {
+            var face = await database.FaceOccurrences.SingleOrDefaultAsync(item => item.Id == candidate.SubjectFaceOccurrenceId, cancellationToken);
+            var validationState = await FaceValidationPolicy.LoadAsync(database, cancellationToken);
+            if (face is null || !validationState.Assess(face).CanUseForPeople)
+                return BadRequest(new { error = "Validate this face or explicitly approve it in people review before assigning a person." });
+        }
 
         var note = string.IsNullOrWhiteSpace(request.Note) ? null : request.Note.Trim();
         if (note?.Length > 1000) return BadRequest(new { error = "The review note is limited to 1000 characters." });

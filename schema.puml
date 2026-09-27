@@ -41,6 +41,7 @@ package "KnowledgeBase.Core.Persistence" {
     enum JobKind {
       BuildSourceNote
       AnalyzeFaces
+      ValidateFaces
       FingerprintAsset
       AnalyzeScenes
       AnalyzeSceneObservations

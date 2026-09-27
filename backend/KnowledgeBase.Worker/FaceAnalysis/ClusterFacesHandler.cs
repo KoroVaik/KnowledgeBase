@@ -22,11 +22,11 @@ public sealed class ClusterFacesHandler(KnowledgeBaseDbContext database, IOption
 
     public async Task<Note?> HandleAsync(ProcessingJob job, CancellationToken cancellationToken)
     {
-        // A batch of uploads would otherwise regroup the whole archive once per photo. The last
-        // detection job queues another ClusterFaces, so skipping here loses nothing.
+        // Wait for the upload batch and re-embedding to finish before comparing face vectors.
+        // The last detection or migration job queues another ClusterFaces.
         if (await database.ProcessingJobs.AnyAsync(
                 other => other.Id != job.Id
-                    && (other.Kind == JobKind.FingerprintAsset || other.Kind == JobKind.AnalyzeFaces)
+                    && (other.Kind == JobKind.FingerprintAsset || other.Kind == JobKind.AnalyzeFaces || other.Kind == JobKind.MigrateFaceModels)
                     && (other.Status == ProcessingStatus.Pending || other.Status == ProcessingStatus.Running),
                 cancellationToken))
             return null;
@@ -34,13 +34,17 @@ public sealed class ClusterFacesHandler(KnowledgeBaseDbContext database, IOption
         var thresholds = options.Value;
         var now = DateTime.UtcNow;
         var states = await FaceIdentityState.LoadAsync(database, cancellationToken);
+        var validationState = await FaceValidationPolicy.LoadAsync(database, cancellationToken);
         var people = await database.People.ToDictionaryAsync(person => person.Id, person => person.Name, cancellationToken);
-        var references = await (
+        var referenceRows = await (
             from reference in database.PersonReferenceFaces
             join occurrence in database.FaceOccurrences on reference.FaceOccurrenceId equals occurrence.Id
             join person in database.People on reference.PersonId equals person.Id
-            where !occurrence.IsPartial && !occurrence.NeedsReview
-            select new PersonReferenceEmbedding(person.Id, person.Name, occurrence.Id, occurrence.Embedding)).ToListAsync(cancellationToken);
+            select new { PersonId = person.Id, person.Name, Occurrence = occurrence }).ToListAsync(cancellationToken);
+        var references = referenceRows.Where(row => !row.Occurrence.NeedsReview
+                || row.Occurrence.IdentityId is { } identity && validationState.Decisions.TryGetValue(identity, out var decision)
+                    && decision == FaceValidationDecisionKind.Approved)
+            .Select(row => new PersonReferenceEmbedding(row.PersonId, row.Name, row.Occurrence.Id, row.Occurrence.Embedding)).ToList();
 
         var canonicalAssetIds = (await database.Assets.ToListAsync(cancellationToken))
             .GroupBy(asset => asset.ContentSha256 ?? asset.Id)
@@ -71,10 +75,9 @@ public sealed class ClusterFacesHandler(KnowledgeBaseDbContext database, IOption
             .FirstOrDefault();
         openOccurrences = openOccurrences.Where(occurrence => occurrence.Embedding.Length == embeddingLength).ToList();
         references = references.Where(reference => reference.Embedding.Length == embeddingLength).ToList();
-        // A crop at a photo edge or an unconfirmed/featureless detection should not automatically join a
-        // person or train future suggestions. It is still emitted as an explicitly marked Unsorted row.
-        var unconfirmedOccurrences = openOccurrences.Where(occurrence => occurrence.IsPartial || occurrence.NeedsReview).ToList();
-        openOccurrences = openOccurrences.Where(occurrence => !occurrence.IsPartial && !occurrence.NeedsReview).ToList();
+        // Pending validation and blocking verdicts stay reviewable without contributing to grouping.
+        var unconfirmedOccurrences = openOccurrences.Where(occurrence => !validationState.Assess(occurrence).CanUseForPeople).ToList();
+        openOccurrences = openOccurrences.Where(occurrence => validationState.Assess(occurrence).CanUseForPeople).ToList();
 
         var result = FaceClustering.Run(
             openOccurrences.Select(occurrence => new FaceClusteringFace(occurrence.IdentityId!, occurrence.Embedding)).ToList(),
@@ -120,20 +123,26 @@ public sealed class ClusterFacesHandler(KnowledgeBaseDbContext database, IOption
             var cluster = AddCluster(FaceClusterKind.Anonymous, hintPersonId: group.HintPersonId, hintScore: group.HintScore);
             placements.AddRange(group.IdentityIds.Select(identityId => new Placement(identityId, cluster, group.IdentityIds.Count, null, null)));
         }
-        foreach (var group in result.IgnoredGroups)
+        var preservedIgnored = unconfirmedOccurrences.Where(face => states.IgnoredGroupIds.ContainsKey(face.IdentityId!)).ToList();
+        var ignoredGroupIds = result.IgnoredGroups.Select(group => group.GroupId)
+            .Concat(preservedIgnored.Select(face => states.IgnoredGroupIds[face.IdentityId!])).Distinct();
+        foreach (var groupId in ignoredGroupIds)
         {
-            var cluster = AddCluster(FaceClusterKind.Ignored, ignoredGroupId: group.GroupId, hintPersonId: group.HintPersonId, hintScore: group.HintScore);
-            placements.AddRange(group.IdentityIds.Select(identityId => new Placement(identityId, cluster, group.IdentityIds.Count, null, null)));
+            var group = result.IgnoredGroups.FirstOrDefault(item => item.GroupId == groupId);
+            var identityIds = (group?.IdentityIds ?? []).Concat(preservedIgnored.Where(face => states.IgnoredGroupIds[face.IdentityId!] == groupId).Select(face => face.IdentityId!)).ToList();
+            var cluster = AddCluster(FaceClusterKind.Ignored, ignoredGroupId: groupId, hintPersonId: group?.HintPersonId, hintScore: group?.HintScore);
+            placements.AddRange(identityIds.Select(identityId => new Placement(identityId, cluster, identityIds.Count, null, null)));
         }
         if (result.UnsortedIdentityIds.Count > 0)
         {
             var cluster = AddCluster(FaceClusterKind.Unsorted);
             placements.AddRange(result.UnsortedIdentityIds.Select(identityId => new Placement(identityId, cluster, 1, null, null)));
         }
-        if (unconfirmedOccurrences.Count > 0)
+        var unsortedUnconfirmed = unconfirmedOccurrences.Except(preservedIgnored).ToList();
+        if (unsortedUnconfirmed.Count > 0)
         {
             var cluster = AddCluster(FaceClusterKind.Unsorted);
-            placements.AddRange(unconfirmedOccurrences.Select(occurrence => new Placement(occurrence.IdentityId!, cluster, 1, null, null)));
+            placements.AddRange(unsortedUnconfirmed.Select(occurrence => new Placement(occurrence.IdentityId!, cluster, 1, null, null)));
         }
 
         var occurrenceByIdentity = openOccurrences.Concat(unconfirmedOccurrences).ToDictionary(occurrence => occurrence.IdentityId!);

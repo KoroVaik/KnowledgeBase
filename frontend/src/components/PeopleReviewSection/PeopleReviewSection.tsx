@@ -1,3 +1,6 @@
+import { SectionReload } from '../GenericList/SectionReload'
+import { GenericList } from '../GenericList/GenericList'
+import { useListPresence } from '../GenericList/useListPresence'
 import { useState } from 'react'
 import type { FaceBounds, Person, PeopleReviewFace, PeopleReviewHint, PersonReferenceFace } from '../../api/photoAnalysis'
 import type { AssetSummary } from '../../api/assets'
@@ -5,9 +8,17 @@ import { useCollapsibleSection } from '../../hooks/useCollapsibleSection'
 import { FaceCropPreview, PhotoPopupDialog, type PhotoPopupTarget } from '../FacePreview/FacePreview'
 import { PersonNamePicker } from './PersonNamePicker'
 import { usePeopleReview } from './usePeopleReview'
+import { FaceValidationDetails } from './FaceValidationDetails'
+import { IgnoredFaceGallery } from './IgnoredFaceGallery'
+import { ExpandableBadge } from '../ExpandableBadge/ExpandableBadge'
 import './PeopleReviewSection.css'
 
 const CROP_SIZE = 64
+const warningIcon = <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" aria-hidden="true" focusable="false">
+  <path d="M8 1.5 15 14H1Z" />
+  <path d="M8 5.5v4" strokeLinecap="round" />
+  <circle cx="8" cy="11.5" r=".75" fill="currentColor" stroke="none" />
+</svg>
 
 type OpenPhoto = (title: string, assetId: string, faceBounds: FaceBounds) => void
 
@@ -27,11 +38,13 @@ function FaceStrip({ confirmed = [], faces, title, assetsById, onOpen, review }:
       </button>
     </div>)}
     {faces.map(face => <div key={face.candidateId} className="people-review-face">
-      <button type="button" className="people-review-crop" aria-label={`View full photo for ${title}`} onClick={() => onOpen(title, face.assetId, face.faceBounds)}>
-        <FaceCropPreview asset={assetsById.get(face.assetId)} faceBounds={face.faceBounds} size={CROP_SIZE} />
-        {face.isPartial && <span className="people-review-partial">Partial</span>}
-        {!face.isPartial && face.needsReview && <span className="people-review-partial people-review-needs-review">Needs review</span>}
-      </button>
+      <div className="people-review-photo">
+        <button type="button" className="people-review-crop" aria-label={`View full photo for ${title}`} onClick={() => onOpen(title, face.assetId, face.faceBounds)}>
+          <FaceCropPreview asset={assetsById.get(face.assetId)} faceBounds={face.faceBounds} size={CROP_SIZE} />
+        </button>
+        {face.isPartial && !face.needsReview && <span className="people-review-badge"><ExpandableBadge label="Photo edge" color="#fbbf2499" icon={warningIcon} /></span>}
+        {face.needsReview && <span className="people-review-badge"><ExpandableBadge label="Needs review" color="#fb923c99" icon={warningIcon} /></span>}
+      </div>
       {review && <input type="checkbox" className="people-review-keep" checked={review.isChecked(face.candidateId)} onChange={() => review.toggleFace(face.candidateId)}
         aria-label="Belongs to this person" title="Unchecked faces move to Unsorted on submit" />}
     </div>)}
@@ -48,27 +61,41 @@ function pickerId(rowKey: string) {
 }
 
 /** A row without a person yet: picking a name files the checked faces at once, or the row is ignored. */
-function NameRowActions({ rowKey, faces, canIgnore, people, review }: {
+function NameRowActions({ rowKey, faces, canIgnore, people, review, showSelection = false, explainAssignment = false }: {
   rowKey: string
   faces: PeopleReviewFace[]
   canIgnore: boolean
   people: Person[]
   review: ReturnType<typeof usePeopleReview>
+  showSelection?: boolean
+  explainAssignment?: boolean
 }) {
   const busy = review.isBusy(rowKey)
   const checked = review.checkedCount(faces)
-  return <div className="people-review-actions">
+  const actions = <div className="people-review-actions">
     <PersonNamePicker inputId={pickerId(rowKey)} people={people} value={review.nameFor(rowKey)} disabled={busy || checked === 0}
       onChange={value => review.setName(rowKey, value)}
       onPickPerson={person => review.submitToPerson(rowKey, faces, person.id)}
       onAddName={name => review.submitByName(rowKey, faces, name)} />
-    {canIgnore && <button type="button" className="btn btn-xs people-review-ignore" disabled={busy || checked === 0} onClick={() => review.ignore(rowKey, faces)}>Ignore</button>}
+    {canIgnore && <button type="button" className="btn btn-xs people-review-ignore" disabled={busy || checked === 0} title="Move the selected faces to Ignored to review later." onClick={() => review.ignore(rowKey, faces)}>Ignore</button>}
+  </div>
+  if (!showSelection && !explainAssignment) return actions
+  return <div className="people-review-assignment">
+    {showSelection && <p className="people-review-selection-count">Selected: {checked} of {faces.length}</p>}
+    {actions}
+    <p className="people-review-assignment-help">{checked === 0
+      ? 'Select at least one face to assign a person.'
+      : showSelection
+        ? 'Choose who is in the selected photos. This also confirms these are human faces. Deselected faces move to Unsorted.'
+        : 'Choose who is in the photo. This also confirms it is a human face.'}</p>
   </div>
 }
 
 export function PeopleReviewSection({ people, assetsById }: { people: Person[]; assetsById: Map<string, AssetSummary> }) {
-  const review = usePeopleReview()
+  const { collapsed: reviewCollapsed, toggle: toggleReview } = useCollapsibleSection('photo-analysis:people-review', false)
+  const { collapsed: unsortedCollapsed, toggle: toggleUnsorted } = useCollapsibleSection('photo-analysis:unsorted-faces', false)
   const { collapsed: ignoredCollapsed, toggle: toggleIgnored } = useCollapsibleSection('photo-analysis:ignored-faces')
+  const review = usePeopleReview(reviewCollapsed && unsortedCollapsed && ignoredCollapsed)
   const [openPhoto, setOpenPhoto] = useState<PhotoPopupTarget | null>(null)
   const open: OpenPhoto = (title, assetId, faceBounds) => setOpenPhoto({ title, assetId, faceBounds })
   const applyHint = (rowKey: string, name: string) => {
@@ -76,23 +103,49 @@ export function PeopleReviewSection({ people, assetsById }: { people: Person[]; 
     document.getElementById(pickerId(rowKey))?.focus()
   }
   const data = review.review
+  const hasUnsorted = useListPresence((data?.unsorted.length ?? 0) > 0)
+  const hasIgnored = useListPresence((data?.ignoredGroups.length ?? 0) > 0)
 
-  if (data === null) return review.error ? <p className="notes-error">{review.error}</p> : null
+  if (data === null) return <div className="people-review" {...review.refresh.bind}>
+    <SectionReload {...review.refresh} error={review.error} reload={review.reloadSection} />
+    {[
+      { title: 'To review', collapsed: reviewCollapsed, toggle: toggleReview },
+      { title: 'Unsorted faces', collapsed: unsortedCollapsed, toggle: toggleUnsorted },
+      { title: 'Ignored', collapsed: ignoredCollapsed, toggle: toggleIgnored },
+    ].map(section => <section key={section.title} className="subsection-panel">
+      <h4 className="tags-subhead"><button type="button" className="subsection-toggle" aria-expanded={!section.collapsed} onClick={section.toggle}>{section.title}</button></h4>
+      {!section.collapsed && <p>Loading people review…</p>}
+    </section>)}
+  </div>
   const { personRows, anonymousRows, unsorted, ignoredGroups } = data
-  const rowCount = personRows.length + anonymousRows.length + unsorted.length
-  if (rowCount === 0 && ignoredGroups.length === 0 && !data.clusteringPending && review.error === null) return null
 
-  return <div className="people-review">
-    <h4>To review <span className="section-count">{rowCount}</span></h4>
+  const latest = review.latest ?? data
+  const newRows = review.newRows([...latest.personRows, ...latest.anonymousRows])
+  const reviewUpdates = review.refresh.additions([...personRows, ...anonymousRows], [...personRows, ...anonymousRows, ...newRows])
+  const unsortedUpdates = review.refresh.additions(unsorted, latest.unsorted.filter(face => unsorted.some(old => old.candidateId === face.candidateId) || ![...personRows, ...anonymousRows, ...ignoredGroups].some(row => row.faces.some(old => old.candidateId === face.candidateId))))
+  const ignoredUpdates = review.refresh.additions(ignoredGroups, [...ignoredGroups, ...review.newRows(latest.ignoredGroups)])
+  return <div className="people-review" {...review.refresh.bind}>
+    <SectionReload {...review.refresh} error={review.error} reload={review.reloadSection} />
+    <section className="subsection-panel">
+    <h4 className="tags-subhead people-review-collapsible-head"><button type="button" className="subsection-toggle people-review-toggle" aria-expanded={!reviewCollapsed} onClick={toggleReview}><span className="people-review-caret" aria-hidden="true">▾</span>To review <span className="section-count">{personRows.length + anonymousRows.length}</span></button></h4>
+    {!reviewCollapsed && <>
     {data.clusteringPending && <p className="people-review-pending">Grouping faces…</p>}
+    {data.validationPending && <p className="people-review-pending">Validating faces… Pending faces stay out of automatic groups.</p>}
     {review.error && <p className="notes-error">{review.error}</p>}
 
-    {personRows.map(row => {
+    <GenericList updates={reviewUpdates} animated listId="people:review" items={[
+      ...personRows.map(row => ({ kind: 'person' as const, row })),
+      ...anonymousRows.map(row => ({ kind: 'anonymous' as const, row })),
+    ]}>{shownItems => <>
+    {shownItems.map(item => {
+      if (item.kind !== 'person') return null
+      const row = item.row
       const rowKey = `person:${row.personId}`
-      return <article key={rowKey} className="people-review-row">
+      return <article key={rowKey} className="people-review-row" aria-busy={review.isBusy(rowKey)}>
         <div className="people-review-row-head">
           <span className="people-review-title">{row.name}</span>
           <small>{row.faces.length} new · {row.referenceFaceCount} confirmed</small>
+          {review.isBusy(rowKey) && <small role="status">Saving…</small>}
         </div>
         <div className="people-review-band">
           <span className="people-review-band-label">Approved faces</span>
@@ -110,47 +163,60 @@ export function PeopleReviewSection({ people, assetsById }: { people: Person[]; 
       </article>
     })}
 
-    {anonymousRows.map(row => {
+    {shownItems.map(item => {
+      if (item.kind !== 'anonymous') return null
+      const row = item.row
       const rowKey = `cluster:${row.clusterId}`
-      return <article key={rowKey} className="people-review-row">
+      return <article key={rowKey} className="people-review-row" aria-busy={review.isBusy(rowKey)}>
         <div className="people-review-row-head">
           <span className="people-review-title">Unknown person</span>
           <small>{row.faces.length} faces</small>
+          {review.isBusy(rowKey) && <small role="status">Saving…</small>}
           <HintChip hint={row.hint} onUse={name => applyHint(rowKey, name)} />
         </div>
         <FaceStrip faces={row.faces} title="Unknown person" assetsById={assetsById} onOpen={open} review={review} />
         <NameRowActions rowKey={rowKey} faces={row.faces} canIgnore people={people} review={review} />
       </article>
     })}
+    </>}</GenericList>
+    </>}
+    </section>
 
-    {unsorted.length > 0 && <article className="people-review-row">
-      <div className="people-review-row-head">
-        <span className="people-review-title">Unsorted faces</span>
-        <small>{unsorted.length} · faces that didn't match anyone</small>
-      </div>
-      <div className="people-review-unsorted">{unsorted.map(face => {
+    {(hasUnsorted || unsortedUpdates.count > 0) && <section className="subsection-panel">
+      <h4 className="tags-subhead people-review-collapsible-head"><button type="button" className="subsection-toggle people-review-toggle" aria-expanded={!unsortedCollapsed} onClick={toggleUnsorted}><span className="people-review-caret" aria-hidden="true">▾</span>Unsorted faces <span className="section-count">{unsorted.length}</span></button></h4>
+      {!unsortedCollapsed && <>
+      <p className="people-review-pending">Unmatched faces and validation checks</p>
+      <GenericList updates={unsortedUpdates} animated items={unsorted} listId="people:unsorted">{shownItems => <div className="people-review-unsorted">{shownItems.map(face => {
         const rowKey = `face:${face.candidateId}`
-        return <article key={rowKey} className="people-review-row people-review-single">
+        return <article key={rowKey} className="people-review-row people-review-single" aria-busy={review.isBusy(rowKey)}>
           <FaceStrip faces={[face]} title="Unsorted face" assetsById={assetsById} onOpen={open} />
-          <NameRowActions rowKey={rowKey} faces={[face]} canIgnore people={people} review={review} />
+          <div className="people-review-single-content">
+            {review.isBusy(rowKey) && <small role="status">Saving…</small>}
+            <FaceValidationDetails face={face} rowKey={rowKey} review={review} />
+            <NameRowActions rowKey={rowKey} faces={[face]} canIgnore people={people} review={review} explainAssignment />
+          </div>
         </article>
-      })}</div>
-    </article>}
+      })}</div>}</GenericList>
+      </>}
+    </section>}
 
-    {ignoredGroups.length > 0 && <section className="people-review-group">
-      <h5><button type="button" className="people-review-toggle" aria-expanded={!ignoredCollapsed} onClick={toggleIgnored}><span className="people-review-caret" aria-hidden="true">▾</span>Ignored <span className="section-count">{ignoredGroups.length}</span></button></h5>
-      {!ignoredCollapsed && ignoredGroups.map(group => {
+    {(hasIgnored || ignoredUpdates.count > 0) && <section className="subsection-panel">
+      <h4 className="tags-subhead people-review-collapsible-head"><button type="button" className="subsection-toggle people-review-toggle" aria-expanded={!ignoredCollapsed} onClick={toggleIgnored}><span className="people-review-caret" aria-hidden="true">▾</span>Ignored <span className="section-count">{ignoredGroups.length}</span></button></h4>
+      {!ignoredCollapsed && <>
+      <p className="people-review-ignored-help">Ignored groups are set aside for later. “Excluded from people” blocks a specific face from grouping; it does not delete the photo.</p>
+      <GenericList updates={ignoredUpdates} animated items={ignoredGroups} listId="people:ignored">{shownItems => shownItems.map((group, index) => {
         const rowKey = `ignored:${group.groupId}`
-        return <article key={rowKey} className="people-review-row">
+        return <article key={rowKey} className="people-review-row people-review-ignored-group" aria-busy={review.isBusy(rowKey)}>
           <div className="people-review-row-head">
-            <span className="people-review-title">Ignored faces</span>
-            <small>{group.faces.length} faces</small>
+            <span className="people-review-title">Group {index + 1}</span>
+            <small>{group.faces.length} {group.faces.length === 1 ? 'face' : 'faces'}</small>
+            {review.isBusy(rowKey) && <small role="status">Saving…</small>}
             <HintChip hint={group.hint} onUse={name => applyHint(rowKey, name)} />
           </div>
-          <FaceStrip faces={group.faces} title="Ignored faces" assetsById={assetsById} onOpen={open} review={review} />
-          <NameRowActions rowKey={rowKey} faces={group.faces} canIgnore={false} people={people} review={review} />
+          <IgnoredFaceGallery faces={group.faces} assetsById={assetsById} onOpen={open} review={review} />
+          <NameRowActions rowKey={rowKey} faces={group.faces} canIgnore={false} people={people} review={review} showSelection />
         </article>
-      })}
+      })}</GenericList></>}
     </section>}
 
     <PhotoPopupDialog target={openPhoto} assetsById={assetsById} onClose={() => setOpenPhoto(null)} />

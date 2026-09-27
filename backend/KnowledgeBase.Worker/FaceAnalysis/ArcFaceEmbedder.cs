@@ -11,6 +11,8 @@ namespace KnowledgeBase.Worker.FaceAnalysis;
 // RGB normalized to [-1, 1]; the same person scores far from other people on this embedding.
 public sealed class ArcFaceEmbedder(string modelPath) : IDisposable
 {
+    public const string AlignmentVersion = "five-point-similarity/v2";
+
     // Standard landmark positions (left eye, right eye, nose, mouth corners) for the 112x112 input.
     private static readonly (float X, float Y)[] Template =
     [
@@ -25,6 +27,14 @@ public sealed class ArcFaceEmbedder(string modelPath) : IDisposable
 
     public float[] Embed(Image<Rgb24> image, IReadOnlyList<FaceLandmark> landmarks)
     {
+        var tensor = CreateInputTensor(image, landmarks);
+        var input = NamedOnnxValue.CreateFromTensor(_session.InputMetadata.Keys.Single(), tensor);
+        using var results = _session.Run([input]);
+        return results.Single().AsEnumerable<float>().ToArray();
+    }
+
+    internal static DenseTensor<float> CreateInputTensor(Image<Rgb24> image, IReadOnlyList<FaceLandmark> landmarks)
+    {
         if (landmarks.Count != Template.Length)
             throw new InvalidOperationException($"Face alignment needs {Template.Length} landmarks, got {landmarks.Count}.");
 
@@ -33,7 +43,7 @@ public sealed class ArcFaceEmbedder(string modelPath) : IDisposable
         // Inverse of the transform, so each output pixel can be sampled from the source image.
         var d = a * a + b * b;
         var ia = a / d; var ib = -b / d;
-        var itx = (b * ty - a * tx) / d; var ity = (b * tx - a * ty) / d;
+        var itx = (-a * tx - b * ty) / d; var ity = (b * tx - a * ty) / d;
 
         var tensor = new DenseTensor<float>([1, 3, Side, Side]);
         image.ProcessPixelRows(accessor =>
@@ -52,9 +62,7 @@ public sealed class ArcFaceEmbedder(string modelPath) : IDisposable
             }
         });
 
-        var input = NamedOnnxValue.CreateFromTensor(_session.InputMetadata.Keys.Single(), tensor);
-        using var results = _session.Run([input]);
-        return results.Single().AsEnumerable<float>().ToArray();
+        return tensor;
     }
 
     private static (float R, float G, float B) SampleBilinear(PixelAccessor<Rgb24> accessor, float x, float y)

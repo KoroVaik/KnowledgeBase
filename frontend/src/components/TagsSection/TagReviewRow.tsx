@@ -1,4 +1,5 @@
 import type { Tag } from '../../api/tags'
+import type { Ref } from 'react'
 import { notesText } from '../../format'
 import { TagSuggestionGraph } from '../TagSuggestionGraph/TagSuggestionGraph'
 import { TagActionsMenu } from './TagActionsMenu'
@@ -10,6 +11,9 @@ import { useTagReviewRow } from './useTagReviewRow'
  *  tags-row-submit in TagsSection.css). Accept/reject/flip on the graph only stage a decision
  *  locally (useTagReviewRow) - nothing reaches the backend until this button is clicked. */
 export function TagReviewRow({
+  ref,
+  inert,
+  busy = false,
   tag,
   tagsById,
   disabled,
@@ -19,6 +23,9 @@ export function TagReviewRow({
   onDelete,
   onSubmit,
 }: {
+  ref?: Ref<HTMLLIElement>
+  inert?: boolean
+  busy?: boolean
   tag: Tag
   tagsById: Map<string, Tag>
   disabled: boolean
@@ -34,7 +41,7 @@ export function TagReviewRow({
   const suggestion = tag.suggestedMergeIntoId !== null ? tagsById.get(tag.suggestedMergeIntoId) : undefined
 
   return (
-    <li className="tags-row">
+    <li ref={ref} inert={inert} aria-busy={busy} className="tags-row">
       <TagSuggestionGraph
         centerName={tag.name}
         centerConfirmed={false}
@@ -54,7 +61,7 @@ export function TagReviewRow({
           onClick={submit}
           disabled={disabled || !allDecided}
         >
-          Submit new tag &quot;<span className="tags-row-submit-name">{tag.name}</span>&quot;{' '}
+          {busy ? 'Saving…' : 'Submit new tag'} &quot;<span className="tags-row-submit-name">{tag.name}</span>&quot;{' '}
           {hasAccepted ? 'with parent(s)' : 'without parent'}
         </button>
 

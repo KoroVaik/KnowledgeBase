@@ -1,3 +1,4 @@
+import { useDraftProtection } from '../../hooks/useDraftProtection'
 import { useEffect, useState } from 'react'
 import type { SuggestionDecision } from './suggestionDecisions'
 
@@ -11,6 +12,7 @@ import type { SuggestionDecision } from './suggestionDecisions'
  *  string for the effect dependency - same trick as useTagPlacementSuggestions.ts's idsKey. */
 export function useSuggestionDecisions(requiredKeys: string[]) {
   const [decisions, setDecisions] = useState<Map<string, SuggestionDecision>>(new Map())
+  useDraftProtection(decisions.size > 0)
   const keysJoined = requiredKeys.join(',')
 
   // A candidate that disappears from a fresh fetch (resolved elsewhere, or expired) has its

@@ -75,12 +75,23 @@ export const detachEventPhoto = (eventId: string, assetId: string) =>
   remove(`events/${eventId}/photos/${assetId}`, 'Could not remove this photo from the event')
 
 // score is the raw cosine that orders a row: to the person for a person row, to the other members for a group.
-export interface PeopleReviewFace { candidateId: string; faceOccurrenceId: string; assetId: string; faceBounds: FaceBounds; score: number; isPartial: boolean; needsReview: boolean }
+export interface FaceValidation {
+  status: 'Pending' | 'Eligible' | 'NeedsReview' | 'Approved' | 'Excluded'
+  canUseForPeople: boolean
+  reasons: string[]
+  subject: string | null
+  evidence: string | null
+  minSidePixels: number | null
+  sharpness112: number | null
+  error: string | null
+  canRetry: boolean
+}
+export interface PeopleReviewFace { candidateId: string; faceOccurrenceId: string; assetId: string; faceBounds: FaceBounds; score: number; isPartial: boolean; needsReview: boolean; validation?: FaceValidation }
 export interface PeopleReviewHint { personId: string; name: string; score: number }
 export interface PeopleReviewPersonRow { personId: string; name: string; referenceFaces: PersonReferenceFace[]; referenceFaceCount: number; faces: PeopleReviewFace[] }
 export interface PeopleReviewAnonymousRow { clusterId: string; hint: PeopleReviewHint | null; faces: PeopleReviewFace[] }
 export interface PeopleReviewIgnoredGroup { groupId: string; hint: PeopleReviewHint | null; faces: PeopleReviewFace[] }
-export interface PeopleReview { clusteringPending: boolean; personRows: PeopleReviewPersonRow[]; anonymousRows: PeopleReviewAnonymousRow[]; unsorted: PeopleReviewFace[]; ignoredGroups: PeopleReviewIgnoredGroup[] }
+export interface PeopleReview { clusteringPending: boolean; validationPending: boolean; personRows: PeopleReviewPersonRow[]; anonymousRows: PeopleReviewAnonymousRow[]; unsorted: PeopleReviewFace[]; ignoredGroups: PeopleReviewIgnoredGroup[] }
 
 /** The faces changed on the server since the list was loaded - the caller reloads instead of retrying. */
 export class PeopleReviewConflictError extends Error {
@@ -106,3 +117,8 @@ export const submitPeopleReviewRow = (body: { candidateIds: string[]; removedCan
   postPeopleReview('submit', body, 'Could not save this person')
 export const ignorePeopleReviewRow = (body: { candidateIds: string[]; removedCandidateIds: string[] }) =>
   postPeopleReview('ignore', body, 'Could not ignore these faces')
+
+export const reviewFaceValidation = (faceOccurrenceId: string, kind: 'Approved' | 'Excluded') =>
+  postPeopleReview(`faces/${encodeURIComponent(faceOccurrenceId)}/validation`, { kind }, 'Could not save the face review')
+export const retryFaceValidation = (faceOccurrenceId: string) =>
+  postPeopleReview(`faces/${encodeURIComponent(faceOccurrenceId)}/validation/retry`, {}, 'Could not retry face validation')

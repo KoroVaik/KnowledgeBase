@@ -48,6 +48,14 @@ No behaviour changed doing any of this - e.g. `NoteRow`'s one existing asymmetry
 list shows a loading/error state for the expanded body, the bin only ever shows the ready
 state) was kept as-is, not unified.
 
+### Section refreshes
+
+`useSectionRefresh` owns displayed/incoming snapshots, visibility gating, draft protection
+and explicit Reload. `bufferedUpdates` handles ID-based additions and scoped mutation results;
+`useVisibleReload` schedules reads only while a section is active. `useDraftProtection` lets
+row forms and staged tag decisions prevent automatic replacement on return. See the buffered
+updates decision and pending browser verification in [frontend-features.md](frontend-features.md).
+
 ### UI settings — `usePreference`
 
 Anything the user sets about the layout (a collapsed section, a view toggle) goes through
@@ -62,6 +70,18 @@ Before building any new UI piece, check this list — reuse or extend an existin
 instead of growing a second one (the `new-feature` flow's no-copy-paste rule). The list is
 short on purpose; each component's own doc comment carries the usage details.
 
+- **`GenericList`** — supports buffered `Show N new items` controls supplied by a section,
+  retaining existing rows when accepting additions. Otherwise shows five rows, adds up to five with "Show more", and returns to five
+  with "Show less". Callers supply their row markup and list wrapper. `useGenericList` +
+  `ControlledGenericList` let Files and Notes share the same visible rows with selection
+  and wiki-link navigation. Limits are saved per list/user through `usePreference` and reset
+  when the filter changes. Tree branches paginate their children without cutting off relationships;
+  graph views, pickers, fixed model summaries and photo strips keep their existing format.
+- **`AnimatedList`** — optional row transitions inside `GenericList`, also used for scene
+  observations within a photo. Retains keyed rows until their exit finishes and animates
+  surviving rows without extra DOM wrappers. Custom row components pass `ref` and `inert`
+  to their root element. `useListPresence` keeps a previously populated list mounted when
+  its final row disappears. Behavior is documented in [`frontend-features.md`](frontend-features.md).
 - **`Dropdown`** — floating-menu primitive: trigger, outside-click / Escape closing,
   open/close transition. Decision below.
 - **`Select`** — single-choice dropdown built on `Dropdown`, replacing native `<select>`
@@ -72,8 +92,14 @@ short on purpose; each component's own doc comment carries the usage details.
   with real download progress. Decision below.
 - **`InfoHint`** — an "i" icon tooltip on hover, keyboard focus or tap; not the native
   `title` (it waits ~1 s and never shows on touch). Doc comment in the component.
-- **`FacePreview`** — `FullPhotoPreview` (photo with a face box), `FaceCropPreview` (square
-  crop of one face) and `PhotoPopupDialog`; shared by `PhotoAnalysisSection` and
+- **`ExpandableBadge`** — a 12 px coloured indicator with an optional icon that expands
+  rightward into its label on hover or keyboard focus, with reduced-motion support.
+  Callers supply the label, background/text colours and icon; alpha colours affect only
+  the background. A separate wrapper positions it on photos. It has no photo-specific
+  logic, tooltip or native title.
+- **`FacePreview`** — `FullPhotoPreview` (photo with a face box), `FaceCropPreview` (exact
+  detected face bounds, preserving proportions with neutral padding in a square card)
+  and `PhotoPopupDialog`; shared by `PhotoAnalysisSection` and
   `PeopleReviewSection`.
 - **`TagChips`** — confirmed vs unconfirmed tag chips, shared by `NotesList` and
   `FilePanel`; flat file, no hook.

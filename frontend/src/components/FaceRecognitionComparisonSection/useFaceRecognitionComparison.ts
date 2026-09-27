@@ -1,3 +1,6 @@
+import { sameData } from '../../hooks/bufferedUpdates'
+import { useVisibleAssets } from '../../hooks/useVisibleAssets'
+import { useSectionRefresh } from '../../hooks/useSectionRefresh'
 import { requestContext } from '../../diagnostics/diagnostics'
 import type { RequestContext } from '../../diagnostics/diagnostics'
 import { useCallback, useEffect, useRef, useState } from 'react'
@@ -8,8 +11,10 @@ import { useResourceChanges } from '../../hooks/useResourceChanges'
 export function useFaceRecognitionComparison() {
   const [page, setPage] = useState(0)
   const [chosenRunId, setChosenRunId] = useState('')
-  const [historyState, setHistory] = useState<{ page: number; data: RecognitionComparisonHistory } | null>(null)
-  const [runState, setRun] = useState<RecognitionComparisonRun | null>(null)
+  type HistoryState = { page: number; data: RecognitionComparisonHistory } | null
+  const refresh = useSectionRefresh<{ historyState: HistoryState; runState: RecognitionComparisonRun | null }>({ historyState: null, runState: null }, value => value.historyState !== null)
+  const assets = useVisibleAssets(refresh.enabled)
+  const { state: { historyState, runState }, receive, updateLocal, canLoad } = refresh
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [revision, setRevision] = useState(0)
@@ -23,33 +28,38 @@ export function useFaceRecognitionComparison() {
   const run = runState?.id === runId ? runState : null
 
   useEffect(() => {
+    if (!refresh.enabled) return
     let cancelled = false
     void fetchRecognitionComparisonHistory(page, changeContext.current).then(data => {
-      if (!cancelled) setHistory({ page, data })
+      if (cancelled) return
+      if (changeContext.current.trigger === 'navigation') updateLocal(current => ({ ...current, historyState: { page, data } }))
+      else receive(current => ({ ...current, historyState: { page, data } }))
     }).catch((cause: unknown) => { if (!cancelled) setError(cause instanceof Error ? cause.message : 'Could not load recognition comparisons') })
     return () => { cancelled = true }
-  }, [page, revision])
+  }, [page, revision, refresh.enabled, receive, updateLocal])
   useEffect(() => {
-    if (!runId) return
+    if (!runId || !refresh.enabled) return
     let cancelled = false
     void fetchRecognitionComparison(runId, changeContext.current).then(data => {
-      if (!cancelled) setRun(data)
+      if (cancelled) return
+      receive(current => ({ ...current, runState: data }))
+      updateLocal(current => current.runState?.id === runId ? current : { ...current, runState: data })
     }).catch((cause: unknown) => { if (!cancelled) setError(cause instanceof Error ? cause.message : 'Could not load recognition comparison') })
     return () => { cancelled = true }
-  }, [runId, revision])
-  useResourceChanges('photo-analysis', () => advance())
-  const pending = run?.status === 'Pending' || run?.status === 'Running'
+  }, [runId, revision, refresh.enabled, receive, updateLocal])
+  useResourceChanges('photo-analysis', () => { if (canLoad()) advance('sse') })
+  const pending = refresh.latest.runState?.status === 'Pending' || refresh.latest.runState?.status === 'Running'
   useEffect(() => {
-    if (!pending) return
+    if (!pending || !refresh.enabled) return
     const timer = window.setInterval(() => advance('poll'), 3000)
     return () => window.clearInterval(timer)
-  }, [pending, advance])
+  }, [pending, advance, refresh.enabled])
 
   return {
-    page, history, run, runId, error, busy, pending,
+    refresh: { ...refresh, changed: !sameData(refresh.state, refresh.latest) }, assets, page, history, run, runId, error, busy, pending,
     chooseRun: (id: string) => { if (!busy) { changeContext.current = { source: 'FaceRecognitionComparison', trigger: 'navigation' }; setChosenRunId(id); setError(null) } },
     changePage: (next: number) => { if (!busy) { changeContext.current = { source: 'FaceRecognitionComparison', trigger: 'navigation' }; setPage(next); setChosenRunId('') } },
-    reload: () => { setError(null); advance() },
+    reload: () => { setError(null); refresh.accept(); advance('manual') },
     compare: async () => {
       if (busy) return
       setBusy(true); setError(null)

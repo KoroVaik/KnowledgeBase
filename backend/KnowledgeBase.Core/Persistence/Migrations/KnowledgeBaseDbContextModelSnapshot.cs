@@ -780,6 +780,84 @@ namespace KnowledgeBase.Core.Persistence.Migrations
                     b.ToTable("FaceRecognitionComparisonScores");
                 });
 
+            modelBuilder.Entity("KnowledgeBase.Core.Persistence.FaceValidation", b =>
+                {
+                    b.Property<string>("FaceOccurrenceId")
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<DateTime?>("CompletedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ConfigurationHash")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Evidence")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<string>("InputHash")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("LastError")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<int?>("MinSidePixels")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("ModelKey")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("PipelineVersion")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<double?>("Sharpness112")
+                        .HasColumnType("double precision");
+
+                    b.Property<string>("Subject")
+                        .HasColumnType("text");
+
+                    b.Property<bool>("TouchesImageEdge")
+                        .HasColumnType("boolean");
+
+                    b.HasKey("FaceOccurrenceId");
+
+                    b.ToTable("FaceValidations");
+                });
+
+            modelBuilder.Entity("KnowledgeBase.Core.Persistence.FaceValidationReviewDecision", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("DecidedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("FaceIdentityId")
+                        .IsRequired()
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("FaceOccurrenceId")
+                        .IsRequired()
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("FaceOccurrenceId");
+
+                    b.HasIndex("FaceIdentityId", "DecidedAtUtc");
+
+                    b.ToTable("FaceValidationReviewDecisions");
+                });
+
             modelBuilder.Entity("KnowledgeBase.Core.Persistence.IgnoredFaceGroup", b =>
                 {
                     b.Property<string>("Id")
@@ -1722,6 +1800,30 @@ namespace KnowledgeBase.Core.Persistence.Migrations
                     b.HasOne("KnowledgeBase.Core.Persistence.FaceRecognitionComparisonResult", null)
                         .WithMany("Scores")
                         .HasForeignKey("ResultId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("KnowledgeBase.Core.Persistence.FaceValidation", b =>
+                {
+                    b.HasOne("KnowledgeBase.Core.Persistence.FaceOccurrence", null)
+                        .WithOne()
+                        .HasForeignKey("KnowledgeBase.Core.Persistence.FaceValidation", "FaceOccurrenceId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("KnowledgeBase.Core.Persistence.FaceValidationReviewDecision", b =>
+                {
+                    b.HasOne("KnowledgeBase.Core.Persistence.FaceIdentity", null)
+                        .WithMany()
+                        .HasForeignKey("FaceIdentityId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("KnowledgeBase.Core.Persistence.FaceOccurrence", null)
+                        .WithMany()
+                        .HasForeignKey("FaceOccurrenceId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });

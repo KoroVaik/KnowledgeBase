@@ -120,7 +120,7 @@ function open() {
     ? window.setTimeout(() => {
         if (source === nextSource && nextSource.readyState === EventSource.CONNECTING) {
           connectingTimer = undefined
-          reopenLater(nextSource)
+          setConnection('offline', null)
         }
       }, RECONNECT_GRACE_MS)
     : undefined

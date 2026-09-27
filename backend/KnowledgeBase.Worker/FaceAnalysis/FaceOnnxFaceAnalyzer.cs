@@ -16,12 +16,14 @@ public sealed class FaceOnnxFaceAnalyzer(
     IOptions<FaceAnalysisOptions> options,
     ComparisonModelFiles? modelFiles = null) : IFaceAnalyzer, IDisposable
 {
+    public const string CurrentEmbeddingModelKey = "insightface w600k_r50 (ArcFace) | " + ArcFaceEmbedder.AlignmentVersion;
+
     private readonly FaceAnalysisOptions _options = options.Value;
     private readonly SemaphoreSlim _verifierLock = new(1, 1);
     private OnnxComparisonDetector? _verifier;
     private bool _verifierInitAttempted;
 
-    public string EmbeddingModelKey => "insightface w600k_r50 (ArcFace)";
+    public string EmbeddingModelKey => CurrentEmbeddingModelKey;
 
     public string ModelKey => $"FaceONNX 4.1.1.3: YOLOv5s-face + {EmbeddingModelKey} + SCRFD verify";
 

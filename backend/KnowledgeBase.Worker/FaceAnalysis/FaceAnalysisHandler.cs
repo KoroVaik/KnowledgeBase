@@ -1,15 +1,20 @@
 using System.Text.Json;
 using KnowledgeBase.Core.Ai;
+using KnowledgeBase.Core.Ai.Configuration;
 using KnowledgeBase.Core.FaceAnalysis;
 using KnowledgeBase.Core.Persistence;
 using KnowledgeBase.Core.Pipeline;
 using KnowledgeBase.Core.Pipeline.FaceAnalysis;
 using KnowledgeBase.Core.Storage;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
+using SixLabors.ImageSharp;
+using SixLabors.ImageSharp.PixelFormats;
+using SixLabors.ImageSharp.Processing;
 
 namespace KnowledgeBase.Worker.FaceAnalysis;
 
-public sealed class FaceAnalysisHandler(KnowledgeBaseDbContext database, IAssetContentReader reader, IFaceAnalyzer analyzer) : IPipelineHandler
+public sealed class FaceAnalysisHandler(KnowledgeBaseDbContext database, IAssetContentReader reader, IFaceAnalyzer analyzer, IOptions<OllamaOptions> ollamaOptions) : IPipelineHandler
 {
     private const string PipelineVersion = FaceAnalysisPipeline.CurrentDetectionVersion;
 
@@ -48,7 +53,10 @@ public sealed class FaceAnalysisHandler(KnowledgeBaseDbContext database, IAssetC
                    select occurrence).AnyAsync(cancellationToken))
             throw new SkippableContentException("This image already has face occurrences from an earlier analysis run.");
 
-        var faces = await analyzer.AnalyzeAsync(await reader.ReadBytesAsync(asset.StoredFileName, cancellationToken), cancellationToken);
+        var imageBytes = await reader.ReadBytesAsync(asset.StoredFileName, cancellationToken);
+        var faces = await analyzer.AnalyzeAsync(imageBytes, cancellationToken);
+        using var image = Image.Load<Rgb24>(imageBytes);
+        image.Mutate(ctx => ctx.AutoOrient());
         var now = DateTime.UtcNow;
         var run = new PhotoAnalysisRun
         {
@@ -58,7 +66,7 @@ public sealed class FaceAnalysisHandler(KnowledgeBaseDbContext database, IAssetC
         database.PhotoAnalysisRuns.Add(run);
 
         var earlierFaces = (await database.FaceOccurrences
-            .Where(occurrence => occurrence.AssetId == asset.Id && occurrence.IdentityId != null && !occurrence.IsPartial && !occurrence.NeedsReview)
+            .Where(occurrence => occurrence.AssetId == asset.Id && occurrence.IdentityId != null && !occurrence.NeedsReview)
             .ToListAsync(cancellationToken))
             .Select(occurrence => new FaceForIdentityMatching(occurrence.Id, occurrence.RunId, occurrence.IdentityId, occurrence.Embedding))
             .ToList();
@@ -72,7 +80,7 @@ public sealed class FaceAnalysisHandler(KnowledgeBaseDbContext database, IAssetC
             Embedding = face.Embedding, EmbeddingModelKey = analyzer.EmbeddingModelKey, CreatedAtUtc = now
         }).ToList();
         var inheritedIdentities = FaceIdentityMatcher.MatchAgainstAssigned(
-            occurrences.Where(occurrence => !occurrence.IsPartial && !occurrence.NeedsReview)
+            occurrences.Where(occurrence => !occurrence.NeedsReview)
                 .Select(occurrence => new FaceForIdentityMatching(occurrence.Id, occurrence.RunId, null, occurrence.Embedding)).ToList(),
             earlierFaces);
 
@@ -85,8 +93,17 @@ public sealed class FaceAnalysisHandler(KnowledgeBaseDbContext database, IAssetC
             }
             occurrence.IdentityId = identityId;
             database.FaceOccurrences.Add(occurrence);
+            var validation = new FaceValidation
+            {
+                FaceOccurrenceId = occurrence.Id, PipelineVersion = FaceValidationPolicy.PipelineVersion,
+                ModelKey = ollamaOptions.Value.Model, ConfigurationHash = FaceValidationPrompt.ConfigurationHash(ollamaOptions.Value.Model),
+                InputHash = FaceValidationImages.InputHash(occurrence, asset.ContentSha256 ?? asset.Id)
+            };
+            FaceValidationImages.Measure(image, occurrence, validation);
+            database.FaceValidations.Add(validation);
         }
 
+        if (occurrences.Count > 0) await FaceValidationQueue.EnqueueAsync(database, asset.Id, cancellationToken);
         return null;
     }
 }

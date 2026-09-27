@@ -6,6 +6,51 @@ shared components inventory, styling rules) lives in [`frontend.md`](frontend.md
 
 ## Decisions
 
+### Buffered section updates
+
+Sections load when expanded and visible (180 ms dwell), and stop background reads/polling
+when collapsed, offscreen or in a hidden browser tab. SSE still marks hidden resources stale.
+An unchanged section can reuse its snapshot for a quick return; after 15 seconds it revalidates.
+Drafts and selections protect a returning section, and interaction during an entrance request
+prevents that response from replacing the working snapshot.
+
+Visible lists keep displayed and incoming snapshots separately. `Show N new items` counts
+unique new records matching the list filter, inserts them around their sorted neighbours,
+and expands the visible limit so existing rows stay visible. It never applies edits, removals,
+reordering, or new faces inside an existing group. Those changes use `Reload`. A successful
+local action applies its affected IDs without accepting unrelated pending changes. Failed
+refreshes retain the current rows and offer retry. Buffered snapshots are memory-only.
+
+Files and Jobs keep status badges live without changing list membership. A job absent from
+the active response is labelled "No longer active" (or "Failed" when known), not assumed
+successful. File panels retain the selected Note/File tab when accepting a new note version.
+Persons, Locations and Events have independent visibility and working snapshots; they still
+share the existing archive endpoint and its request coalescing. Comparison results require
+Reload while being viewed. Upload progress remains independent of section visibility.
+
+### Row removal transitions
+
+Files, Notes/Bin, tag review/confirmed lists, people review/unsorted/ignored groups and
+photo review candidates opt into `GenericList`'s shared `AnimatedList`. A removed row stays
+mounted and inert for a 380 ms fade and height collapse; lower rows move into its space,
+and the next page item fades in after the departure. Concurrent refreshes retain exits
+and row identity. Server reordering waits for departures to finish, then animates surviving
+rows from their previous positions without remounting their inputs or disclosure state.
+Filters and explicit page-limit changes reset transitions immediately. Reduced motion uses
+a 120 ms fade with no animated movement or height change. Lists that become empty remain
+mounted so the final row can finish departing. Actions retain their busy state through
+the refresh, and a failed mutation leaves the row available for retry.
+
+### Shared row limits
+
+Row lists use `GenericList` with five items initially, "Show more" in batches of up to five,
+and "Show less" returning to five. Each logical list has its own saved user preference;
+changing its filter resets the limit. This applies to Files, Notes/Bin, tag review/confirmed
+lists and tree siblings, active/failed jobs, archive records and review lists, detector groups
+and recognizer evidence. Graph views, selection menus, model summaries and horizontal photo
+strips keep their existing format. Files selects/deletes only visible rows; wiki-link navigation
+reveals the target note before scrolling to it.
+
 ### One origin, dev and prod
 
 Vite proxies `/api` → `localhost:5244` instead of CORS, so the browser sees a single
@@ -27,9 +72,10 @@ context: the connection is one per tab regardless of who is mounted.
   still visible.
 - Reconnect backoff 2→60 s — the browser recovers a dropped network on its own, but after
   an HTTP error (502 on API restart, a stale session) it gives up for good.
-- `paused` (a deliberate close) vs `offline` (any `onerror`, **including the browser's
-  own retry** — for the page that is the same absence of connection). The banner reacts
-  only to `offline`.
+- `paused` (a deliberate close) vs `offline` (an error or a reconnect still pending after
+  1.5 s). The banner reacts only to `offline`. The grace timer only shows the banner;
+  it never aborts a pending connection. Actual errors schedule retries; the manual button
+  replaces the stream immediately.
 - Cold start against a dead API does **not** drop to `anonymous` (that showed a login
   form pointing nowhere) — a separate `unreachable` state with "Try again". The tell is
   "`fetchCurrentUser` threw", not "network error": it returns `null` only on 401.
@@ -131,11 +177,9 @@ one. `AssetList` is now the only list; a row expands (one open at a time) to a `
 - `Delete`: the full `DeleteNoteDialog` (backlink warning + "also delete the file"
   checkbox) once the note has loaded; a plain `confirm` + `deleteAsset` before that or when
   there is no note.
-- `FilePanel` is keyed `storedFileName:noteId` in `AssetList` — a re-run makes a new note
-  id, and the key change remounts the panel so its `useState`-seeded loading state is fresh
-  rather than showing the old body (same trick as `DeleteNoteDialog`'s `key`). This is why
-  the fetch effects never call `setState` for "loading" — that would trip oxlint
-  `react(set-state-in-effect)`.
+- `FilePanel` is keyed by `storedFileName`. The loaded note carries its own ID, so accepting
+  a new version reloads the body without remounting the panel or losing the Note/File tab.
+  An explicit section Reload also reloads the expanded note body.
 
 ### Capture date + geolocation in the file row
 
@@ -169,11 +213,11 @@ The action bar is built to take more verbs later; for now it is only Delete.
 
 "To review" and "To place" used to be separate subsections, but both were the same action
 (approve an AI-guessed tag relationship) wearing two different looks - a chat with the owner
-2026-09-12 confirmed the duplication. Merged into one `.tags-list`: `TagsSection.tsx` renders
-`toReview.map(row)` then `<TagPlacementSuggestions>` inside the same `<ul>`, and
-`TagPlacementSuggestions` was rewritten to return bare `<li className="tags-row">` siblings
-(no own wrapper) styled with the same `tag-action-chip`/pill classes as `TagParentOptions`,
-just with an accept/reject pair per candidate instead of a single pick.
+2026-09-12 confirmed the duplication. Merged into one `.tags-list`: `TagsSection.tsx` feeds
+unconfirmed tags followed by confirmed-tag placements into one `GenericList`, rendering
+`TagReviewRow` or `TagPlacementRow` inside the same `<ul>`. Both use the same
+`tag-action-chip`/pill classes as `TagParentOptions`, with an accept/reject pair per
+placement candidate instead of a single pick.
 
 `toPlace` now filters to **confirmed** tags only
 (`confirmed.filter(tag => tag.hasPendingPlacementSuggestion)`) - an unconfirmed tag's own
@@ -226,7 +270,7 @@ earns its place there since there is no AI guess to shortcut.
 `JobsSection` lists jobs the pipeline has queued or is running, via `GET /api/jobs/summary`
 ([backend.md](backend.md)). Kept simple on purpose:
 
-- **Continuous polling, five seconds after the preceding request completes.** The worker flips `Pending` → `Running` → `Done`
+- **Polling while expanded and visible, five seconds after the preceding request completes.** The worker flips `Pending` → `Running` → `Done`
   entirely inside its own process with no ping to the API in between (only a finished note
   triggers one, see *Worker → API bridge* in [`worker.md`](worker.md)), so an event-based
   refresh would miss the states this section exists to show. Same reasoning as `NotesList`'s
@@ -261,13 +305,17 @@ to a canonical record. The section is empty until a worker writes candidates.
 Faces are not reviewed one by one. Between the Persons "Add" form and *Known Persons* sits
 `PeopleReviewSection` (own folder, `usePeopleReview` hook, reads `GET /api/photo-analysis/people-review`)
 with one row per person: confirmed people with new faces, then anonymous groups (largest first), then
-one *Unsorted faces* row (a regular row, its single faces indented under it - not a separate heading), then Ignored groups (collapsed by default, saved per user). A row is a wrapping
+*Unsorted faces*, then Ignored groups (collapsed by default, saved per user). **To review**,
+**Unsorted faces** and **Ignored** use the shared subsection cards with header strips and counts;
+each whole header toggles its content, with collapsed state saved per user. To review and
+Unsorted start expanded; Ignored starts collapsed. To review counts person and anonymous groups,
+Unsorted counts faces, and Ignored counts groups. A row is a wrapping
 strip of 64 px crops; a confirmed person's row has two labelled strips, one above the other: *Approved
 faces* (up to three most typical confirmed faces, chosen by the API as the highest average similarity to
 the person's other confirmed faces, with a small green check in the corner) and *New suggested faces*.
 New faces have a checkbox under them, checked by default. Nothing is removed on the spot - **Submit person** / **Ignore** send the
 checked faces and the unchecked ones together, and the unchecked ones move to Unsorted in the same save
-(no half-applied row if the call fails). Unsorted faces have no checkbox - one face, nothing to uncheck. Crops touching the photo edge show a yellow **Partial** badge; detections unconfirmed by secondary SCRFD verification show an orange **Needs review** badge. Clicking a crop opens the full-photo popup with
+(no half-applied row if the call fails). Unsorted faces have no checkbox - one face, nothing to uncheck. Crops touching the photo edge show a yellow warning indicator; detections unconfirmed by secondary SCRFD verification show an orange one instead. The shared `ExpandableBadge` starts as a 12 px circle inside the crop's lower-left corner, with a 60% opaque background and an opaque warning icon. Hover or keyboard focus expands it rightward into **Photo edge** or **Needs review**, without a tooltip. A separate positioning wrapper keeps the badge independent of image clipping and shared component styles. Edge contact alone never disables naming or grouping; the validation reasons still show it when both flags apply. Clicking a crop opens the full-photo popup with
 the face box. Rows without a person have a **Select person name** picker (`PersonNamePicker`, an adapter over the
 shared `SearchPicker` - same panel as the tag picker): focusing it lists up to 10 existing people (by name), typing narrows them to names containing the text, plus a
 last "Add new name "…"" option (hidden on an exact match, so no duplicate). Picking either files the
@@ -277,6 +325,23 @@ the picker and focuses it, so the suggestion is one more click. A 409 reloads th
 or detection jobs are active; SSE `photo-analysis` refreshes it. `FullPhotoPreview`, `FaceCropPreview`
 and `PhotoPopupDialog` moved to the shared `components/FacePreview/` so Known * and people review use the
 same code. Semantics and thresholds: [`photo-archive.md`](photo-archive.md).
+
+Unsorted faces also show validation status and reasons, expandable CPU/model evidence, **Allow automatic grouping**,
+**Exclude from people**, and **Retry validation** when an unfinished check has no active job. The first
+two actions are explicit, reversible validity decisions without assigning a person.
+Choosing a person also manually approves selected faces that are not eligible, including excluded ones,
+in the same save as assignment. The picker stays available regardless of validation status; Ignored and
+Unsorted explain that assigning a person also confirms the face. Ignored groups retain their faces
+and expose the same validity controls. A separate waiting banner reflects active validation jobs;
+an error never silently approves a face. An older API response without validation fields retains its
+previous rendering during a rolling restart.
+Ignored groups use one subsection per face, with a 96 px crop, a neutral selection checkbox and a short
+validation badge. Each face always shows its own validation controls beside its crop, or below it
+on narrow containers; clicking a crop still opens the original photo.
+Person assignment stays per group, with a selected count and an explanation of combined
+confirmation and assignment. Ignored means set aside; Excluded from people is a separate face-validity decision.
+Each validation status uses the shared `InfoHint` component to explain automatic waiting, grouping
+eligibility, review requirements and manual overrides; validation never assigns a person's name.
 
 Each subsection ends with a collapsible **Known …** subsection instead of a bare list of every
 record: *Known Persons* shows each person's confirmed reference faces (click for the full photo,
@@ -309,6 +374,20 @@ card is absent when the archive has no group above the clustering threshold.
 Uploads, HTTP/XHR, reload initiators, SSE and browser failures produce bounded structured diagnostics. The collector transport has its own rate/backoff limits and never logs itself. See [observability.md](observability.md).
 
 ## Open
+
+- [ ] Verify face cards on photos with adjacent people and edge-clipped faces: exact detected
+      bounds with preserved proportions and neutral padding are implemented; frontend build/lint
+      and backend build pass, browser verification is pending.
+
+- [ ] Verify buffered updates in the browser: visibility/collapse/tab gating; filtered
+      `Show N new items` with ten existing rows retained; empty lists; edits/removals and
+      regrouped faces through Reload; local actions with pending remote changes; drafts,
+      failures, reconnection and phone layout. Build/lint, 26 frontend unit tests and the
+      backend build pass; browser behavior has not been checked.
+
+- [ ] Shared row limits (`GenericList`): frontend build/lint and backend build pass;
+      browser verification pending — Show more/less, independent lists, filter/search reset,
+      saved limits, hidden file selections and wiki-links to notes beyond the first five.
 
 - [ ] Verify request reduction with all 16 sections open and an active SSE subscriber:
       single and batch upload, cold/warm previews, expiry, partial failures, retry and reconnect.
@@ -371,6 +450,35 @@ Uploads, HTTP/XHR, reload initiators, SSE and browser failures produce bounded s
 
 ### Pending browser verification
 
+- [ ] **Expandable photo badges:** verify 12 px yellow/orange warning indicators inside
+      the lower-left crop corner, translucent backgrounds, badge expansion/collapse on hover/focus,
+      full labels without clipping, reduced motion and full-photo clicks without tooltips.
+      Frontend build/lint and backend build pass; browser verification is pending.
+
+- [ ] **Row removal transitions**: frontend/backend builds, lint and six transition tests
+      pass. Browser verification pending for single/bulk deletion, the last row, next-page
+      replacement, review actions, failed requests, concurrent refreshes, reduced motion
+      and phone layout.
+
+- [ ] **Stable Unsorted face order:** the API sorts by detection time and occurrence ID so regrouping
+      cannot replace the visible first ten with another subset merely by changing clusters.
+      Regression test (one approval, other statuses and first ten unchanged) and build/lint pass;
+      restart the Rider API and repeat the browser scenario.
+
+- [ ] **People review subsection cards:** verify the matching To review, Unsorted faces and Ignored headers, counts, whole-header toggles and persisted collapsed states in the browser.
+- [ ] **Ignored face subsections:** verify selection counts, per-face controls,
+      full-photo previews, validation actions and naming explanations, desktop/mobile layout
+      and both themes. Build/lint pass; browser verification is pending.
+
+- [ ] **Face validation in People Review:** pending and flagged faces in Unsorted, original-photo
+      preview, advisory quality warnings, Allow automatic grouping/exclude, retry after failure, and
+      combined confirmation/person assignment in Unsorted and Ignored, including excluded faces.
+      Build/lint and backend assignment tests pass; browser and live worker checks are pending.
+      Also verify the advisory **Photo edge** label replacing **Partial** on existing detections.
+      Verify all five validation-status hints on hover, keyboard focus and tap.
+      Needs review and action hints now use shorter, outcome-focused wording; person assignment
+      explains human-face confirmation in plain language. Build/lint pass; browser check pending.
+
 - [ ] Every `PUT /api/preferences/*` shows `net::ERR_ABORTED` in the browser-pane network log
       although it returns 204 and the value persists — same quirk as the tag accept/reject
       mutations below. The code aborts nothing; find out whether it is the pane, the Vite proxy
@@ -415,9 +523,9 @@ Uploads, HTTP/XHR, reload initiators, SSE and browser failures produce bounded s
       path (some deletes fail → rows stay ticked + "Could not delete X of N") and
       checkboxes/buttons disabled while a bulk delete runs. (Selection, select-all,
       indeterminate, confirm text, happy-path delete and phone layout were checked.)
-- [ ] The `connectingTimer` 1.5 s branch (server accepts the connection then goes silent
-      — Render cold start). Locally a dead backend gives an instant `onerror` by another
-      path.
+- [ ] Verify SSE recovery through Vite after hiding/idle and with manual Reconnect:
+      the server now flushes an initial comment, and the 1.5 s banner timer keeps a pending
+      stream alive. Regression tests and build/lint pass; browser verification is pending.
 - [ ] SSE client in the browser: stream closing on a hidden tab, the 15-min idle close,
       the re-read after returning, reconnect after an API restart.
 
@@ -432,7 +540,7 @@ Uploads, HTTP/XHR, reload initiators, SSE and browser failures produce bounded s
       expand that row and switch its panel to Note. A link to a synthesis note goes to the
       Notes section instead.
 - [ ] `Process again` from the panel does not poll for the fresh note the way `NotesList`
-      does — it leans on `AssetList`'s job poll + the `FilePanel` key change. Fine so far;
+      does — it leans on `AssetList`'s job poll + the `FilePanel` note-ID dependency. Fine so far;
       revisit if the panel ever feels stale after a re-run.
 
 ### Tagging (design in [`database.md`](database.md))

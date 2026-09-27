@@ -1,10 +1,12 @@
+import { insertNewItems } from '../../hooks/bufferedUpdates'
+import type { ListUpdates } from '../../hooks/bufferedUpdates'
+import { GenericList } from '../GenericList/GenericList'
 import { useEffect, useRef, useState } from 'react'
 import type { ReactElement } from 'react'
 import { fetchTags } from '../../api/tags'
 import type { Tag } from '../../api/tags'
 import { useCollapsibleSection } from '../../hooks/useCollapsibleSection'
 
-const CONFIRMED_PREVIEW = 10
 const SEARCH_DEBOUNCE_MS = 200
 
 /** The confirmed vocabulary can run past a hundred tags, so it shows a short preview and
@@ -13,22 +15,31 @@ const SEARCH_DEBOUNCE_MS = 200
 export function ConfirmedTags({
   tags,
   renderRow,
+  updates,
+  latestTags,
+  updatesFor,
+  revision,
 }: {
+  updates: ListUpdates
+  latestTags: Tag[]
+  updatesFor: (ids: ReadonlySet<string>) => ListUpdates
+  revision: number
   tags: Tag[]
   renderRow: (tag: Tag) => ReactElement
 }) {
   const [query, setQuery] = useState('')
   // Only ever written from the fetch below - the empty-query case is derived at render time,
   // not reset here, so clearing the box doesn't need a synchronous setState in the effect.
-  const [results, setResults] = useState<{ term: string; ids: string[] } | null>(null)
+  const [results, setResults] = useState<{ term: string; ids: string[]; latestIds: string[]; revision: number } | null>(null)
   const [error, setError] = useState<string | null>(null)
   const latestSearch = useRef(0)
   const { collapsed, toggle } = useCollapsibleSection('tags:confirmed')
 
   const term = query.trim()
+  const latestKey = JSON.stringify(latestTags.map(tag => [tag.id, tag.name, tag.noteCount]))
 
   useEffect(() => {
-    if (term === '') {
+    if (term === '' || collapsed) {
       return
     }
 
@@ -40,7 +51,8 @@ export function ConfirmedTags({
             return
           }
 
-          setResults({ term, ids: matches.filter((tag) => tag.confirmed).map((tag) => tag.id) })
+          const ids = matches.filter(tag => tag.confirmed).map(tag => tag.id)
+          setResults(current => ({ term, latestIds: ids, revision, ids: current?.term === term && current.revision === revision ? current.ids : ids }))
           setError(null)
         })
         .catch((err: unknown) => {
@@ -53,15 +65,15 @@ export function ConfirmedTags({
     }, SEARCH_DEBOUNCE_MS)
 
     return () => window.clearTimeout(handle)
-  }, [term])
+  }, [term, collapsed, latestKey, revision])
 
   const byId = new Map(tags.map((tag) => [tag.id, tag]))
   const searching = term !== '' && results?.term !== term && error === null
   const visible =
     term === ''
-      ? tags.slice(0, CONFIRMED_PREVIEW)
+      ? tags
       : results?.term === term
-        ? results.ids.map((id) => byId.get(id)).filter((tag): tag is Tag => tag !== undefined)
+        ? insertNewItems(results.ids, results.latestIds, id => id).map((id) => byId.get(id)).filter((tag): tag is Tag => tag !== undefined)
         : []
 
   return (
@@ -97,13 +109,9 @@ export function ConfirmedTags({
             <p className="tags-empty">No matches.</p>
           )}
 
-          {!searching && <ul className="tags-list">{visible.map(renderRow)}</ul>}
-
-          {term === '' && tags.length > CONFIRMED_PREVIEW && (
-            <p className="tags-more">
-              Showing {CONFIRMED_PREVIEW} of {tags.length}.
-            </p>
-          )}
+          <GenericList updates={term === '' ? updates : results?.term === term ? updatesFor(new Set(results.latestIds)) : undefined} animated items={searching ? [] : visible} listId="tags:confirmed" filterKey={term}>
+            {shownItems => !searching && <ul className="tags-list">{shownItems.map(renderRow)}</ul>}
+          </GenericList>
         </>
       )}
     </div>

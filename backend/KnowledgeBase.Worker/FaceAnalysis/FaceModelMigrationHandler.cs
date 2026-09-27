@@ -1,10 +1,12 @@
 using System.Text.Json;
 using KnowledgeBase.Core.FaceAnalysis;
+using KnowledgeBase.Core.Ai.Configuration;
 using KnowledgeBase.Core.Persistence;
 using KnowledgeBase.Core.Pipeline;
 using KnowledgeBase.Core.Pipeline.FaceAnalysis;
 using KnowledgeBase.Core.Storage;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
 using SixLabors.ImageSharp.Processing;
@@ -21,7 +23,8 @@ public sealed class FaceModelMigrationHandler(
     KnowledgeBaseDbContext database,
     IAssetContentReader reader,
     IFaceAnalyzer analyzer,
-    ArcFaceEmbedder embedder) : IPipelineHandler
+    ArcFaceEmbedder embedder,
+    IOptions<OllamaOptions> ollamaOptions) : IPipelineHandler
 {
     public JobKind Kind => JobKind.MigrateFaceModels;
 
@@ -33,6 +36,7 @@ public sealed class FaceModelMigrationHandler(
         await AssignFaceIdentitiesAsync(cancellationToken);
         await RequeueOutdatedDetectionsAsync(cancellationToken);
         await SupersedeSettledIdentityProposalsAsync(cancellationToken);
+        await FaceValidationBackfill.EnqueueAsync(database, ollamaOptions.Value.Model, cancellationToken);
         if (await ClusterFacesQueue.EnqueueAsync(database, cancellationToken)) await database.SaveChangesAsync(cancellationToken);
         return null;
     }

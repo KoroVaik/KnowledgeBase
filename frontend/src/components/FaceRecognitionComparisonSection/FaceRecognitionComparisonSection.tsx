@@ -1,3 +1,5 @@
+import { SectionReload } from '../GenericList/SectionReload'
+import { GenericList } from '../GenericList/GenericList'
 import type { AssetSummary } from '../../api/assets'
 import type { RecognitionComparisonResult, RecognitionComparisonRun, RecognitionEvidence } from '../../api/faceRecognitionComparisons'
 import { useCollapsibleSection } from '../../hooks/useCollapsibleSection'
@@ -56,13 +58,14 @@ function EvidenceCard({ evidence, run, assetsById }: { evidence: RecognitionEvid
 
 function RecognitionComparisonContent({ assets }: { assets: AssetSummary[] }) {
   const review = useFaceRecognitionComparison()
-  const assetsById = new Map(assets.map(asset => [asset.id, asset]))
+  const assetsById = new Map((review.assets.length ? review.assets : assets).map(asset => [asset.id, asset]))
   const run = review.run
-  return <div className="recognition-comparison-content">
+  return <div className="recognition-comparison-content" {...review.refresh.bind}>
+    <SectionReload {...review.refresh} reload={review.reload} />
     <p>Run every recognizer for detected faces that do not have all three results yet. It uses the existing face detections and never changes person suggestions.</p>
     <div className="recognition-comparison-controls">
       <button type="button" className="btn btn-primary" disabled={review.busy || review.pending || !review.history?.pendingPhotoCount} onClick={() => void review.compare()}>Analyze {review.history?.pendingPhotoCount ?? 0} photos</button>
-      <small>Each model is saved once per detected face. New face detections appear here automatically.</small>
+      <small>Each model is saved once per detected face. Reload to show new face detections.</small>
     </div>
     {review.error && <p className="notes-error" role="alert">{review.error} <button type="button" className="btn btn-xs" onClick={review.reload}>Reload</button></p>}
     {review.history === null ? <p>Loading recognition comparison history…</p> : <>
@@ -82,7 +85,7 @@ function RecognitionComparisonContent({ assets }: { assets: AssetSummary[] }) {
       {run.evidence.length > 0 && <div className="recognition-evidence-list">
         <h4>Disagreements and closest calls</h4>
         <p>Confirmed people label these pairs automatically. They explain the scores; no review is required.</p>
-        {run.evidence.map(evidence => <EvidenceCard key={evidence.id} evidence={evidence} run={run} assetsById={assetsById} />)}
+        <GenericList items={run.evidence} listId="photo:recognition-evidence" filterKey={run.id}>{shownItems => shownItems.map(evidence => <EvidenceCard key={evidence.id} evidence={evidence} run={run} assetsById={assetsById} />)}</GenericList>
       </div>}
     </>}
   </div>

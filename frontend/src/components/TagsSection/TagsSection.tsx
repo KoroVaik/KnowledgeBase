@@ -1,3 +1,7 @@
+import { DraftProtection } from '../../hooks/useDraftProtection'
+import { SectionReload } from '../GenericList/SectionReload'
+import { GenericList } from '../GenericList/GenericList'
+import { useListPresence } from '../GenericList/useListPresence'
 import { useState } from 'react'
 import type { Tag } from '../../api/tags'
 import { notesText } from '../../format'
@@ -6,7 +10,7 @@ import { ConfirmedTags } from './ConfirmedTags'
 import { TagSearchPicker } from '../TagSearchPicker/TagSearchPicker'
 import { TagHierarchyTree } from '../TagHierarchyTree/TagHierarchyTree'
 import { TagHierarchyGraph } from '../TagHierarchyGraph/TagHierarchyGraph'
-import { TagPlacementSuggestions } from '../TagPlacementSuggestions/TagPlacementSuggestions'
+import { TagPlacementRow } from '../TagPlacementSuggestions/TagPlacementRow'
 import type { Placement } from '../TagPlacementSuggestions/TagPlacementSuggestions'
 import { useTagPlacementSuggestions } from '../TagPlacementSuggestions/useTagPlacementSuggestions'
 import { TagReviewRow } from './TagReviewRow'
@@ -34,8 +38,12 @@ function reviewRank(tag: Tag, tagsById: Map<string, Tag>): number {
 }
 
 export function TagsSection() {
+  const { collapsed, toggle } = useCollapsibleSection('tags')
   const {
     state,
+    refresh,
+    reloadSection,
+    placementRevision,
     busy,
     queued,
     error,
@@ -49,8 +57,7 @@ export function TagsSection() {
     buildIndex,
     addParent,
     removeParent,
-  } = useTagsSection()
-  const { collapsed, toggle } = useCollapsibleSection('tags')
+  } = useTagsSection(collapsed)
   const { collapsed: reviewCollapsed, toggle: toggleReview } = useCollapsibleSection('tags:review')
   const { collapsed: hierarchyCollapsed, toggle: toggleHierarchy } = useCollapsibleSection('tags:hierarchy')
   const [hierarchyView, setHierarchyView] = useState<'tree' | 'graph'>('tree')
@@ -58,16 +65,20 @@ export function TagsSection() {
     state.status === 'ready'
       ? state.tags.filter((tag) => tag.confirmed && tag.hasPendingPlacementSuggestion).map((tag) => tag.id)
       : []
-  const { byId: placementSuggestions, error: placementError } = useTagPlacementSuggestions(placementIds)
+  const { byId: placementSuggestions, error: placementError } = useTagPlacementSuggestions(placementIds, placementRevision)
+  const reviewPresent = useListPresence(state.status === 'ready' &&
+    (state.tags.some(tag => !tag.confirmed) || state.tags.filter(tag => tag.confirmed).length >= 2))
+  const confirmedPresent = useListPresence(state.status === 'ready' && state.tags.some(tag => tag.confirmed))
 
   if (state.status === 'loading') {
-    return null
+    return <section className="tags" {...refresh.bind}><h2><button type="button" className="section-toggle" aria-expanded={!collapsed} onClick={toggle}>Tags</button></h2>{!collapsed && <p>Loading…</p>}</section>
   }
 
   if (state.status === 'error') {
     return (
-      <section className="tags">
-        <h2>Tags</h2>
+      <section className="tags" {...refresh.bind}>
+        <h2><button type="button" className="section-toggle" aria-expanded={!collapsed} onClick={toggle}>Tags</button></h2>
+        <SectionReload {...refresh} error={state.message} reload={reloadSection} />
         <p className="notes-error" role="alert">
           {state.message}
         </p>
@@ -76,6 +87,10 @@ export function TagsSection() {
   }
 
   const { tags } = state
+  const latestTags = refresh.latest.status === 'ready' ? refresh.latest.tags : tags
+  const known = new Set(tags.map(tag => tag.id))
+  const reviewUpdates = refresh.additions(tags, latestTags.filter(tag => known.has(tag.id) || !tag.confirmed))
+  const confirmedUpdates = refresh.additions(tags, latestTags.filter(tag => known.has(tag.id) || tag.confirmed))
   const tagsById = new Map(tags.map((tag) => [tag.id, tag]))
   const toReview = tags
     .filter((tag) => !tag.confirmed)
@@ -116,7 +131,7 @@ export function TagsSection() {
     const suggestion = tag.suggestedMergeIntoId !== null ? tagsById.get(tag.suggestedMergeIntoId) : undefined
 
     return (
-      <li key={tag.id} className="tags-row">
+      <li key={tag.id} className="tags-row" aria-busy={busy === tag.id}>
         <span className="tag-chip chip-compact">{tag.name}</span>
 
         <span className="tags-count">{notesText(tag.noteCount)}</span>
@@ -143,7 +158,7 @@ export function TagsSection() {
           )}
 
           <button type="button" className="btn btn-xs" onClick={() => remove(tag)} disabled={busy !== null}>
-            Delete
+            {busy === tag.id ? 'Saving…' : 'Delete'}
           </button>
         </span>
       </li>
@@ -151,7 +166,7 @@ export function TagsSection() {
   }
 
   return (
-    <section className="tags">
+    <DraftProtection value={refresh.registerDraft}><section className="tags" {...refresh.bind}>
       <h2>
         <button type="button" className="section-toggle" aria-expanded={!collapsed} onClick={toggle}>
           <span className="section-toggle-caret" aria-hidden="true">▾</span>
@@ -162,6 +177,7 @@ export function TagsSection() {
 
       {!collapsed && (
         <>
+          <SectionReload {...refresh} reload={reloadSection} />
           <div className="tags-head-actions">
             <button
               type="button"
@@ -207,9 +223,7 @@ export function TagsSection() {
             </p>
           )}
 
-          {tags.length === 0 && <p className="tags-empty">No tags yet.</p>}
-
-          {(toReview.length > 0 || confirmed.length >= 2) && (
+          {(reviewPresent || reviewUpdates.count > 0) && (
             <div className="subsection-panel">
               <h3 className="tags-subhead">
                 <button
@@ -225,31 +239,42 @@ export function TagsSection() {
               </h3>
               {!reviewCollapsed && (
                 <>
-                  {(toReview.length > 0 || toPlace.length > 0) && (
-                    <ul className="tags-list">
-                      {toReview.map((tag) => (
-                        <TagReviewRow
-                          key={tag.id}
-                          tag={tag}
-                          tagsById={tagsById}
-                          disabled={busy !== null}
-                          queued={queued}
-                          onMerge={merge}
-                          onSynthesise={synthesiseTagNote}
-                          onDelete={remove}
-                          onSubmit={submitReview}
-                        />
-                      ))}
-                      <TagPlacementSuggestions
-                        placements={toPlace}
-                        error={placementError}
-                        tagsById={tagsById}
-                        disabled={busy !== null}
-                        onMerge={merge}
-                        onSubmit={submitPlacement}
-                      />
-                    </ul>
-                  )}
+                      {placementError !== null && <p className="notes-error" role="alert">{placementError}</p>}
+                      <GenericList
+                        animated
+                        listId="tags:review"
+                        updates={reviewUpdates}
+                        items={[
+                          ...toReview.map(tag => ({ kind: 'tag' as const, tag })),
+                          ...toPlace.map(placement => ({ kind: 'placement' as const, placement })),
+                        ]}
+                      >{shownItems => <ul className="tags-list">
+                        {shownItems.map(item => item.kind === 'tag' ? (
+                          <TagReviewRow
+                            key={item.tag.id}
+                            tag={item.tag}
+                            tagsById={tagsById}
+                            disabled={busy !== null}
+                            busy={busy === item.tag.id}
+                            queued={queued}
+                            onMerge={merge}
+                            onSynthesise={synthesiseTagNote}
+                            onDelete={remove}
+                            onSubmit={submitReview}
+                          />
+                        ) : (
+                          <TagPlacementRow
+                            key={item.placement.tag.id}
+                            tag={item.placement.tag}
+                            suggestions={item.placement.suggestions}
+                            tagsById={tagsById}
+                            disabled={busy !== null}
+                            busy={busy === item.placement.tag.id}
+                            onMerge={merge}
+                            onSubmit={submitPlacement}
+                          />
+                        ))}
+                      </ul>}</GenericList>
 
                   {toReview.length === 0 && toPlace.length === 0 && confirmed.length >= 2 && (
                     <p className="tags-empty">
@@ -262,7 +287,8 @@ export function TagsSection() {
             </div>
           )}
 
-          {confirmed.length > 0 && <ConfirmedTags tags={confirmed} renderRow={row} />}
+          {(confirmedPresent || confirmedUpdates.count > 0) && <ConfirmedTags tags={confirmed} renderRow={row} updates={confirmedUpdates} latestTags={latestTags.filter(tag => tag.confirmed)} revision={placementRevision} updatesFor={ids => refresh.additions(confirmed, latestTags.filter(tag => tag.confirmed && ids.has(tag.id)))} />}
+          {tags.length === 0 && <p className="tags-empty">No tags yet.</p>}
 
           {confirmed.length > 0 && (
             <div className="subsection-panel">
@@ -315,6 +341,6 @@ export function TagsSection() {
           )}
         </>
       )}
-    </section>
+    </section></DraftProtection>
   )
 }

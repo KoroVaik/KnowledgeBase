@@ -10,6 +10,8 @@ public enum JobKind
     // Detect faces and create identity candidates. It does not call Ollama.
     AnalyzeFaces,
 
+    ValidateFaces,
+
     CompareFaceDetectors,
 
     CompareFaceRecognizers,

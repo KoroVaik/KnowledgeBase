@@ -183,7 +183,7 @@ public sealed class PipelineWorker(
     }
 
     private static bool IsPhotoAnalysis(JobKind kind) =>
-        kind is JobKind.AnalyzeFaces or JobKind.CompareFaceDetectors or JobKind.CompareFaceRecognizers or JobKind.RescoreFaces or JobKind.ClusterFaces or JobKind.MigrateFaceModels
+        kind is JobKind.AnalyzeFaces or JobKind.ValidateFaces or JobKind.CompareFaceDetectors or JobKind.CompareFaceRecognizers or JobKind.RescoreFaces or JobKind.ClusterFaces or JobKind.MigrateFaceModels
             or JobKind.FingerprintAsset or JobKind.AnalyzeScenes or JobKind.AnalyzeSceneObservations or JobKind.AnalyzeEventCandidates;
 
     private static Task<ProcessingJob?> ClaimAsync(

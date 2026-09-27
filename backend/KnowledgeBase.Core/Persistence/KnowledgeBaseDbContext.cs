@@ -42,6 +42,10 @@ public sealed class KnowledgeBaseDbContext(DbContextOptions<KnowledgeBaseDbConte
 
     public DbSet<FaceOccurrence> FaceOccurrences => Set<FaceOccurrence>();
 
+    public DbSet<FaceValidation> FaceValidations => Set<FaceValidation>();
+
+    public DbSet<FaceValidationReviewDecision> FaceValidationReviewDecisions => Set<FaceValidationReviewDecision>();
+
     public DbSet<FaceComparisonRun> FaceComparisonRuns => Set<FaceComparisonRun>();
     public DbSet<FaceComparisonResult> FaceComparisonResults => Set<FaceComparisonResult>();
     public DbSet<FaceComparisonDetection> FaceComparisonDetections => Set<FaceComparisonDetection>();

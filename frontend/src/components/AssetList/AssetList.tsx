@@ -1,3 +1,7 @@
+import { DraftProtection } from '../../hooks/useDraftProtection'
+import { SectionReload } from '../GenericList/SectionReload'
+import { ControlledGenericList } from '../GenericList/GenericList'
+import { useListPresence } from '../GenericList/useListPresence'
 import type { AssetSummary } from '../../api/assets'
 import { formatCoordinates, formatDateTime, formatSize } from '../../format'
 import { useAssetList } from './useAssetList'
@@ -25,8 +29,12 @@ interface AssetListProps {
 }
 
 export function AssetList({ reloadToken, maxSourceChars }: AssetListProps) {
+  const { collapsed, toggle } = useCollapsibleSection('assets')
   const {
     state,
+    refresh,
+    reloadSection,
+    noteReload,
     expanded,
     setExpanded,
     actionError,
@@ -36,9 +44,7 @@ export function AssetList({ reloadToken, maxSourceChars }: AssetListProps) {
     toggleStatus,
     statusCounts,
     visibleAssets,
-    shownAssets,
-    hasMore,
-    showMore,
+    list,
     selectedAssets,
     allSelected,
     reload,
@@ -46,11 +52,11 @@ export function AssetList({ reloadToken, maxSourceChars }: AssetListProps) {
     toggleOne,
     toggleAll,
     handleBulkDelete,
-  } = useAssetList(reloadToken)
-  const { collapsed, toggle } = useCollapsibleSection('assets')
+  } = useAssetList(reloadToken, collapsed)
+  const hasSelectionBar = useListPresence(state.status === 'ready' && state.assets.length > 0)
 
   return (
-    <section className="assets">
+    <DraftProtection value={refresh.registerDraft}><section className="assets" {...refresh.bind}>
       <h2>
         <button type="button" className="section-toggle" aria-expanded={!collapsed} onClick={toggle}>
           <span className="section-toggle-caret" aria-hidden="true">▾</span>
@@ -83,6 +89,7 @@ export function AssetList({ reloadToken, maxSourceChars }: AssetListProps) {
 
       {!collapsed && (
         <>
+          <SectionReload {...refresh} reload={reloadSection} />
           {state.status === 'loading' && <p>Loading…</p>}
 
           {state.status === 'error' && (
@@ -97,11 +104,9 @@ export function AssetList({ reloadToken, maxSourceChars }: AssetListProps) {
             </p>
           )}
 
-          {state.status === 'ready' && state.assets.length === 0 && <p>Nothing uploaded yet.</p>}
-
-          {state.status === 'ready' && state.assets.length > 0 && (
+          {state.status === 'ready' && (
             <>
-              <div className="assets-selection">
+              {hasSelectionBar && <div className="assets-selection">
                 <label className="assets-selection-all">
                   <input
                     type="checkbox"
@@ -112,7 +117,7 @@ export function AssetList({ reloadToken, maxSourceChars }: AssetListProps) {
                       }
                     }}
                     onChange={toggleAll}
-                    disabled={bulkDeleting}
+                    disabled={bulkDeleting || visibleAssets.length === 0}
                   />
                   {selectedAssets.length > 0 ? `${selectedAssets.length} selected` : 'Select all'}
                 </label>
@@ -127,13 +132,13 @@ export function AssetList({ reloadToken, maxSourceChars }: AssetListProps) {
                     {bulkDeleting ? 'Deleting…' : 'Delete selected'}
                   </button>
                 )}
-              </div>
+              </div>}
 
-              {visibleAssets.length === 0 && <p>No files match the selected statuses.</p>}
-
-              <ul className="assets-list">
+              <ControlledGenericList list={list} animated disabled={bulkDeleting}>{shownAssets => <ul className="assets-list">
                 {shownAssets.map((asset) => {
-                  const badge = processingBadge(asset, maxSourceChars)
+                  const latest = refresh.latest.status === 'ready' ? refresh.latest.assets.find(item => item.id === asset.id) : undefined
+                  const liveAsset = latest ? { ...asset, processingStatus: latest.processingStatus } : asset
+                  const badge = processingBadge(liveAsset, maxSourceChars)
                   const isOpen = expanded === asset.storedFileName
 
                   return (
@@ -172,12 +177,11 @@ export function AssetList({ reloadToken, maxSourceChars }: AssetListProps) {
 
                       {isOpen && (
                         <div className="asset-detail">
-                          {/* Key on the note id: a re-run makes a new note, and the panel should
-                              reload rather than show the old body. */}
                           <FilePanel
-                            key={`${asset.storedFileName}:${asset.noteId ?? ''}`}
-                            asset={asset}
-                            onChanged={reload}
+                            key={asset.storedFileName}
+                            reloadToken={noteReload}
+                            asset={liveAsset}
+                            onChanged={() => void reload([asset.id])}
                             onDeleted={removeRow}
                           />
                         </div>
@@ -185,18 +189,14 @@ export function AssetList({ reloadToken, maxSourceChars }: AssetListProps) {
                     </li>
                   )
                 })}
-              </ul>
-
-              {hasMore && (
-                <button type="button" className="btn btn-md assets-show-more" onClick={showMore}>
-                  Show {Math.min(10, visibleAssets.length - shownAssets.length)} more
-                </button>
-              )}
+              </ul>}</ControlledGenericList>
+              {state.assets.length === 0 && <p>Nothing uploaded yet.</p>}
+              {visibleAssets.length === 0 && state.assets.length > 0 && <p>No files match the selected statuses.</p>}
             </>
           )}
         </>
       )}
-    </section>
+    </section></DraftProtection>
   )
 }
 

@@ -27,6 +27,11 @@ public sealed class PeopleReviewController(KnowledgeBaseDbContext database, ICha
     [ProducesResponseType<PeopleReviewResponse>(StatusCodes.Status200OK)]
     public async Task<ActionResult<PeopleReviewResponse>> Get(CancellationToken cancellationToken)
     {
+        var validationJobs = await database.ProcessingJobs.Where(job => job.Kind == JobKind.ValidateFaces
+            && (job.Status == ProcessingStatus.Pending || job.Status == ProcessingStatus.Running))
+            .Select(job => job.AssetId).ToListAsync(cancellationToken);
+        var validatingAssets = validationJobs.ToHashSet();
+        var validationState = await FaceValidationPolicy.LoadAsync(database, cancellationToken);
         var clusteringPending = await database.ProcessingJobs.AnyAsync(
             job => (job.Kind == JobKind.ClusterFaces || job.Kind == JobKind.RescoreFaces || job.Kind == JobKind.AnalyzeFaces
                     || job.Kind == JobKind.FingerprintAsset || job.Kind == JobKind.MigrateFaceModels)
@@ -35,7 +40,7 @@ public sealed class PeopleReviewController(KnowledgeBaseDbContext database, ICha
         var latestRun = await database.FaceClusteringRuns
             .OrderByDescending(run => run.CompletedAtUtc)
             .FirstOrDefaultAsync(cancellationToken);
-        if (latestRun is null) return Ok(new PeopleReviewResponse(clusteringPending, [], [], [], []));
+        if (latestRun is null) return Ok(new PeopleReviewResponse(clusteringPending, [], [], [], [], validationJobs.Count > 0));
 
         var clusters = await database.FaceClusters
             .Where(cluster => cluster.RunId == latestRun.Id)
@@ -63,8 +68,13 @@ public sealed class PeopleReviewController(KnowledgeBaseDbContext database, ICha
                 .Select(candidate =>
                 {
                     var occurrence = occurrences[candidate.SubjectFaceOccurrenceId!];
+                    var assessment = validationState.Assess(occurrence);
+                    var evidence = validationState.Validations.GetValueOrDefault(occurrence.Id);
                     return new PeopleReviewFaceResponse(candidate.Id, occurrence.Id, occurrence.AssetId,
-                        new FaceBoundsResponse(occurrence.X, occurrence.Y, occurrence.Width, occurrence.Height), candidate.Score, occurrence.IsPartial, occurrence.NeedsReview);
+                        new FaceBoundsResponse(occurrence.X, occurrence.Y, occurrence.Width, occurrence.Height), candidate.Score, occurrence.IsPartial, occurrence.NeedsReview,
+                        new FaceValidationResponse(assessment.Status, assessment.CanUseForPeople, assessment.Reasons,
+                            evidence?.Subject?.ToString(), evidence?.Evidence, evidence?.MinSidePixels, evidence?.Sharpness112,
+                            evidence?.LastError, assessment.Status == "Pending" && !validatingAssets.Contains(occurrence.AssetId)));
                 })
                 .ToList());
 
@@ -74,7 +84,8 @@ public sealed class PeopleReviewController(KnowledgeBaseDbContext database, ICha
                 ? new PeopleReviewHintResponse(person.Id, person.Name, score)
                 : null;
         List<(FaceCluster Cluster, List<PeopleReviewFaceResponse> Faces)> RowsOf(FaceClusterKind kind) => openByCluster
-            .Select(pair => (Cluster: clusters[pair.Key], Faces: pair.Value))
+            .Select(pair => (Cluster: clusters[pair.Key], Faces: kind is FaceClusterKind.Person or FaceClusterKind.Anonymous
+                ? pair.Value.Where(face => face.Validation.CanUseForPeople).ToList() : pair.Value))
             .Where(row => row.Cluster.Kind == kind && row.Faces.Count > 0)
             .ToList();
 
@@ -123,16 +134,22 @@ public sealed class PeopleReviewController(KnowledgeBaseDbContext database, ICha
             RowsOf(FaceClusterKind.Anonymous)
                 .OrderByDescending(row => row.Faces.Count).ThenBy(row => row.Cluster.Id)
                 .Select(row => new PeopleReviewAnonymousRowResponse(row.Cluster.Id, HintFor(row.Cluster), row.Faces)).ToList(),
-            RowsOf(FaceClusterKind.Unsorted).SelectMany(row => row.Faces).ToList(),
+            RowsOf(FaceClusterKind.Unsorted).SelectMany(row => row.Faces)
+                .Concat(openByCluster.Where(pair => clusters[pair.Key].Kind is FaceClusterKind.Person or FaceClusterKind.Anonymous)
+                    .SelectMany(pair => pair.Value).Where(face => !face.Validation.CanUseForPeople))
+                .OrderBy(face => occurrences[face.FaceOccurrenceId].CreatedAtUtc)
+                .ThenBy(face => face.FaceOccurrenceId, StringComparer.Ordinal).ToList(),
             RowsOf(FaceClusterKind.Ignored)
                 .Where(row => row.Cluster.IgnoredGroupId is not null)
                 .OrderBy(row => ignoredGroupCreatedAt.GetValueOrDefault(row.Cluster.IgnoredGroupId!))
-                .Select(row => new PeopleReviewIgnoredGroupResponse(row.Cluster.IgnoredGroupId!, HintFor(row.Cluster), row.Faces)).ToList()));
+                .Select(row => new PeopleReviewIgnoredGroupResponse(row.Cluster.IgnoredGroupId!, HintFor(row.Cluster), row.Faces)).ToList(),
+            validationJobs.Count > 0));
     }
 
     /// <summary>Names the faces of one row: attaches the checked faces to an existing person (by id, or by a name
     /// that matches one case-insensitively) or creates a new person. The unchecked faces of the same row are removed
     /// in the same save: each is pinned to Unsorted, and a person its row proposed is never suggested for it again.
+    /// Assigning a person also records manual validity approval for selected faces that are not yet eligible.
     /// If any face was decided or regrouped since the list was loaded, nothing is saved and the answer is 409.</summary>
     [HttpPost("submit")]
     [ProducesResponseType<SubmitPeopleReviewResponse>(StatusCodes.Status200OK)]
@@ -142,6 +159,12 @@ public sealed class PeopleReviewController(KnowledgeBaseDbContext database, ICha
     {
         var (candidates, removed, problem) = await LoadOpenCandidatesAsync(request.CandidateIds, request.RemovedCandidateIds, cancellationToken);
         if (problem is not null) return problem;
+
+        var occurrenceIds = candidates.Select(candidate => candidate.SubjectFaceOccurrenceId!).ToList();
+        var validationState = await FaceValidationPolicy.LoadAsync(database, cancellationToken);
+        var selectedFaces = await database.FaceOccurrences.Where(face => occurrenceIds.Contains(face.Id)).ToListAsync(cancellationToken);
+        if (selectedFaces.Count != occurrenceIds.Count || selectedFaces.Any(face => face.IdentityId is null))
+            return Conflict(new { error = "Some of these faces changed. Reload before assigning a person." });
 
         var now = DateTime.UtcNow;
         Person? person;
@@ -165,13 +188,8 @@ public sealed class PeopleReviewController(KnowledgeBaseDbContext database, ICha
             }
         }
 
-        var occurrenceIds = candidates.Select(candidate => candidate.SubjectFaceOccurrenceId!).ToList();
         if (await database.PersonReferenceFaces.AnyAsync(reference => occurrenceIds.Contains(reference.FaceOccurrenceId), cancellationToken))
             return Conflict(new { error = "One of these faces is already confirmed. Reload and try again." });
-        var unreferenceableOccurrenceIds = (await database.FaceOccurrences
-            .Where(occurrence => occurrenceIds.Contains(occurrence.Id) && (occurrence.IsPartial || occurrence.NeedsReview))
-            .Select(occurrence => occurrence.Id)
-            .ToListAsync(cancellationToken)).ToHashSet();
 
         foreach (var candidate in candidates)
         {
@@ -183,10 +201,18 @@ public sealed class PeopleReviewController(KnowledgeBaseDbContext database, ICha
                 ChosenTargetId = person.Id, DecidedAtUtc = now
             };
             database.PhotoAnalysisReviewDecisions.Add(decision);
-            if (!unreferenceableOccurrenceIds.Contains(candidate.SubjectFaceOccurrenceId!)) database.PersonReferenceFaces.Add(new PersonReferenceFace
+            database.PersonReferenceFaces.Add(new PersonReferenceFace
             {
                 PersonId = person.Id, FaceOccurrenceId = candidate.SubjectFaceOccurrenceId!,
                 SourceDecisionId = decision.Id, ConfirmedAtUtc = now
+            });
+        }
+        foreach (var face in selectedFaces.Where(face => !validationState.Assess(face).CanUseForPeople))
+        {
+            database.FaceValidationReviewDecisions.Add(new FaceValidationReviewDecision
+            {
+                Id = Guid.NewGuid().ToString("N"), FaceIdentityId = face.IdentityId!, FaceOccurrenceId = face.Id,
+                Kind = FaceValidationDecisionKind.Approved, DecidedAtUtc = now
             });
         }
         AddRemovals(removed, now);
@@ -221,6 +247,47 @@ public sealed class PeopleReviewController(KnowledgeBaseDbContext database, ICha
         await database.SaveChangesAsync(cancellationToken);
         notifier.Publish(new ChangeEvent(ChangeResources.PhotoAnalysis, ChangeActions.Updated));
         return NoContent();
+    }
+
+    /// <summary>Records a manual validity decision for this face identity without assigning a person or deleting any photo.</summary>
+    [HttpPost("faces/{faceOccurrenceId}/validation")]
+    public async Task<ActionResult> ReviewValidation(string faceOccurrenceId, [FromBody] ReviewFaceValidationRequest request, CancellationToken cancellationToken)
+    {
+        if (!Enum.TryParse<FaceValidationDecisionKind>(request.Kind, true, out var kind) || !Enum.IsDefined(kind))
+            return BadRequest(new { error = "Choose Approved or Excluded." });
+        var face = await database.FaceOccurrences.SingleOrDefaultAsync(item => item.Id == faceOccurrenceId, cancellationToken);
+        if (face?.IdentityId is null) return NotFound();
+        if ((await FaceIdentityState.SettledIdsAsync(database, cancellationToken)).Contains(face.IdentityId))
+            return Conflict(new { error = "This face already belongs to a confirmed person. Revoke that reference before changing its validity." });
+        var currentId = await (from occurrence in database.FaceOccurrences
+            join run in database.PhotoAnalysisRuns on occurrence.RunId equals run.Id
+            where occurrence.IdentityId == face.IdentityId && run.PipelineVersion == FaceAnalysisPipeline.CurrentDetectionVersion
+            orderby occurrence.CreatedAtUtc descending
+            select occurrence.Id).FirstOrDefaultAsync(cancellationToken);
+        if (currentId != face.Id) return Conflict(new { error = "This face was detected again. Reload before reviewing it." });
+        database.FaceValidationReviewDecisions.Add(new FaceValidationReviewDecision
+        {
+            Id = Guid.NewGuid().ToString("N"), FaceIdentityId = face.IdentityId, FaceOccurrenceId = face.Id,
+            Kind = kind, DecidedAtUtc = DateTime.UtcNow
+        });
+        await ClusterFacesQueue.EnqueueAsync(database, cancellationToken);
+        await database.SaveChangesAsync(cancellationToken);
+        notifier.Publish(new ChangeEvent(ChangeResources.PhotoAnalysis, ChangeActions.Updated));
+        return NoContent();
+    }
+
+    /// <summary>Retries unfinished validation; completed cached results and manual decisions are preserved.</summary>
+    [HttpPost("faces/{faceOccurrenceId}/validation/retry")]
+    public async Task<ActionResult> RetryValidation(string faceOccurrenceId, CancellationToken cancellationToken)
+    {
+        var face = await database.FaceOccurrences.SingleOrDefaultAsync(item => item.Id == faceOccurrenceId, cancellationToken);
+        if (face is null) return NotFound();
+        var state = await FaceValidationPolicy.LoadAsync(database, cancellationToken);
+        if (state.Assess(face).Status != "Pending") return Conflict(new { error = "This face already has a validation result or a manual decision." });
+        await FaceValidationQueue.EnqueueAsync(database, face.AssetId, cancellationToken);
+        await database.SaveChangesAsync(cancellationToken);
+        notifier.Publish(new ChangeEvent(ChangeResources.PhotoAnalysis, ChangeActions.Updated));
+        return Accepted();
     }
 
     // A Rejected person decision means "not this row", not "close this face": FaceIdentityState reads it as

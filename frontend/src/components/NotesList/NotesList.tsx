@@ -1,3 +1,5 @@
+import { SectionReload } from '../GenericList/SectionReload'
+import { ControlledGenericList } from '../GenericList/GenericList'
 import { formatDateTime } from '../../format'
 import { renderNoteBody } from '../../notes/renderNoteBody'
 import { useNotesList } from './useNotesList'
@@ -8,8 +10,13 @@ import { useCollapsibleSection } from '../../hooks/useCollapsibleSection'
 import './NotesList.css'
 
 export function NotesList() {
+  const { collapsed, toggle: toggleSection } = useCollapsibleSection('notes')
   const {
     state,
+    refresh,
+    reloadSection,
+    notesList,
+    trashList,
     expandedId,
     body,
     showTrash,
@@ -26,11 +33,10 @@ export function NotesList() {
     handleDelete,
     handleRestore,
     handlePurge,
-  } = useNotesList()
-  const { collapsed, toggle: toggleSection } = useCollapsibleSection('notes')
+  } = useNotesList(collapsed)
 
   return (
-    <section className="notes">
+    <section className="notes" {...refresh.bind}>
       <h2>
         <button type="button" className="section-toggle" aria-expanded={!collapsed} onClick={toggleSection}>
           <span className="section-toggle-caret" aria-hidden="true">▾</span>
@@ -41,6 +47,7 @@ export function NotesList() {
 
       {!collapsed && (
         <>
+          <SectionReload {...refresh} reload={reloadSection} />
           {state.status === 'loading' && <p>Loading…</p>}
 
           {state.status === 'error' && (
@@ -55,13 +62,9 @@ export function NotesList() {
             </p>
           )}
 
-          {state.status === 'ready' && state.notes.length === 0 && (
-            <p>No aggregated notes yet.</p>
-          )}
-
-          {state.status === 'ready' && state.notes.length > 0 && (
-            <ul className="notes-list">
-              {state.notes.map((note) => {
+          {state.status === 'ready' && (
+            <ControlledGenericList list={notesList} animated>{shownItems => <ul className="notes-list">
+              {shownItems.map((note) => {
                 const expanded = note.id === expandedId
                 const busy = busyId === note.id
                 const waiting = reprocessing.includes(note.id)
@@ -133,10 +136,12 @@ export function NotesList() {
                   />
                 )
               })}
-            </ul>
+            </ul>}</ControlledGenericList>
           )}
 
-          {state.status === 'ready' && state.trash.length > 0 && (
+          {state.status === 'ready' && state.notes.length === 0 && <p>No aggregated notes yet.</p>}
+
+          {state.status === 'ready' && (state.trash.length > 0 || trashList.newCount > 0 || showTrash) && (
             <div className="notes-trash">
               <button
                 type="button"
@@ -148,8 +153,8 @@ export function NotesList() {
               </button>
 
               {showTrash && (
-                <ul className="notes-list">
-                  {state.trash.map((note) => {
+                <ControlledGenericList list={trashList} animated>{shownItems => <ul className="notes-list">
+                  {shownItems.map((note) => {
                     const busy = busyId === note.id
                     const expanded = note.id === expandedId
 
@@ -169,10 +174,10 @@ export function NotesList() {
                         actions={
                           <>
                             <button type="button" className="btn btn-md" onClick={() => void handleRestore(note)} disabled={busy}>
-                              Restore
+                              {busy ? 'Saving…' : 'Restore'}
                             </button>
                             <button type="button" className="btn btn-md" onClick={() => void handlePurge(note)} disabled={busy}>
-                              Delete forever
+                              {busy ? 'Saving…' : 'Delete forever'}
                             </button>
                           </>
                         }
@@ -190,7 +195,7 @@ export function NotesList() {
                       />
                     )
                   })}
-                </ul>
+                </ul>}</ControlledGenericList>
               )}
             </div>
           )}

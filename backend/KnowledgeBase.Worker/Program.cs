@@ -1,6 +1,7 @@
 using KnowledgeBase.Core.Observability;
 using Serilog;
 using KnowledgeBase.Core.Ai;
+using KnowledgeBase.Core.Ai.Configuration;
 using KnowledgeBase.Core.FaceAnalysis;
 using KnowledgeBase.Core.Hosting;
 using KnowledgeBase.Core.Persistence;
@@ -111,6 +112,7 @@ try
     builder.Services.AddSingleton<IFaceAnalyzer, FaceOnnxFaceAnalyzer>();
     builder.Services.AddSingleton<ISceneEmbedder, ClipSceneEmbedder>();
     builder.Services.AddScoped<IPipelineHandler, FaceAnalysisHandler>();
+    builder.Services.AddScoped<IPipelineHandler, FaceValidationHandler>();
     builder.Services.AddScoped<IPipelineHandler, AssetFingerprintHandler>();
     builder.Services.AddScoped<IPipelineHandler, FaceRescoreHandler>();
     builder.Services.AddScoped<IPipelineHandler, ClusterFacesHandler>();
@@ -162,6 +164,7 @@ try
             database,
             scope.ServiceProvider.GetRequiredService<IFaceAnalyzer>(),
             CancellationToken.None);
+        await FaceValidationBackfill.EnqueueAsync(database, scope.ServiceProvider.GetRequiredService<IOptions<OllamaOptions>>().Value.Model, CancellationToken.None);
         // An archive upgraded to clustering has faces but no grouping yet, and nothing else would
         // trigger the first one until the next upload or review.
         if (!await database.FaceClusteringRuns.AnyAsync() && await database.FaceOccurrences.AnyAsync()

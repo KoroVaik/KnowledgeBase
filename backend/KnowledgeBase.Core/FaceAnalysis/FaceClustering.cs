@@ -31,7 +31,11 @@ public static class FaceClustering
         FaceIdentityReviewStates states,
         FaceClusteringOptions thresholds)
     {
-        var personIds = references.Select(reference => reference.PersonId).Distinct().ToList();
+        var personSets = references
+            .GroupBy(reference => reference.PersonId)
+            .Select(group => BuildPersonReferenceSet(group.Key, group.ToList()))
+            .ToList();
+
         var negatives = states.NegativePersonIds;
         var orderScores = new Dictionary<string, double>();
         var unsorted = new List<string>();
@@ -50,7 +54,9 @@ public static class FaceClustering
         }
         // Joining compares against what the user filed into the group, not what earlier runs
         // joined to it, so a group cannot drift away from the faces the user actually ignored.
-        var explicitIgnored = ignoredMembers.ToDictionary(pair => pair.Key, pair => pair.Value.ToList());
+        var explicitIgnored = ignoredMembers.ToDictionary(
+            pair => pair.Key,
+            pair => (Centroid: ComputeCentroid(pair.Value.Select(m => m.Embedding).ToList()), Members: pair.Value.ToList()));
 
         var joins = new List<FaceClusteringPersonJoin>();
         var remaining = new List<FaceClusteringFace>();
@@ -60,13 +66,13 @@ public static class FaceClustering
             string? bestPerson = null;
             var bestScore = double.NegativeInfinity;
             var bestReference = string.Empty;
-            foreach (var personId in personIds)
+            foreach (var person in personSets)
             {
-                if (faceNegatives?.Contains(personId) == true) continue;
-                var score = BestPersonScore(face.Embedding, personId, references, out var referenceId);
+                if (faceNegatives?.Contains(person.PersonId) == true) continue;
+                var score = PersonScore(face.Embedding, person, out var referenceId);
                 if (score <= bestScore) continue;
                 bestScore = score;
-                bestPerson = personId;
+                bestPerson = person.PersonId;
                 bestReference = referenceId;
             }
             if (bestPerson is not null && bestScore >= thresholds.PersonJoinThreshold)
@@ -82,10 +88,9 @@ public static class FaceClustering
         {
             string? bestGroup = null;
             var bestScore = double.NegativeInfinity;
-            foreach (var (groupId, members) in explicitIgnored)
-            foreach (var member in members)
+            foreach (var (groupId, (groupCentroid, _)) in explicitIgnored)
             {
-                var score = FaceEmbeddingMath.CosineSimilarity(face.Embedding, member.Embedding);
+                var score = FaceEmbeddingMath.CosineSimilarity(face.Embedding, groupCentroid);
                 if (score <= bestScore) continue;
                 bestScore = score;
                 bestGroup = groupId;
@@ -103,7 +108,7 @@ public static class FaceClustering
                 continue;
             }
             SetAverageOrderScores(cluster, orderScores);
-            var (hintPersonId, hintScore) = Hint(cluster, personIds, references, negatives, thresholds);
+            var (hintPersonId, hintScore) = Hint(cluster, personSets, negatives, thresholds);
             anonymousClusters.Add(new FaceClusteringGroup(cluster.Select(member => member.IdentityId).ToList(), hintPersonId, hintScore));
         }
 
@@ -111,7 +116,7 @@ public static class FaceClustering
         foreach (var (groupId, members) in ignoredMembers)
         {
             SetAverageOrderScores(members, orderScores);
-            var (hintPersonId, hintScore) = Hint(members, personIds, references, negatives, thresholds);
+            var (hintPersonId, hintScore) = Hint(members, personSets, negatives, thresholds);
             ignoredGroups.Add(new FaceClusteringIgnoredGroup(groupId, members.Select(member => member.IdentityId).ToList(), hintPersonId, hintScore));
         }
 
@@ -120,19 +125,86 @@ public static class FaceClustering
         return new FaceClusteringResult(joins, anonymousClusters, ignoredGroups, unsorted, orderScores);
     }
 
-    private static double BestPersonScore(float[] embedding, string personId, IReadOnlyList<PersonReferenceEmbedding> references, out string bestReferenceId)
+    private sealed record PersonReferenceSet(
+        string PersonId,
+        float[] Centroid,
+        IReadOnlyList<PersonReferenceEmbedding> InlierReferences);
+
+    private static PersonReferenceSet BuildPersonReferenceSet(string personId, IReadOnlyList<PersonReferenceEmbedding> references)
     {
-        var best = double.NegativeInfinity;
-        bestReferenceId = string.Empty;
-        foreach (var reference in references)
+        if (references.Count <= 2)
         {
-            if (reference.PersonId != personId) continue;
-            var score = FaceEmbeddingMath.CosineSimilarity(embedding, reference.Embedding);
-            if (score <= best) continue;
-            best = score;
-            bestReferenceId = reference.FaceOccurrenceId;
+            var centroid = ComputeCentroid(references.Select(r => r.Embedding).ToList());
+            return new PersonReferenceSet(personId, centroid, references);
         }
-        return best;
+
+        // When a person has 3+ references, prune reference outliers:
+        // A reference that has low / negative correlation with the rest of the person's references
+        // should not poison the person's centroid or candidate matching.
+        var inliers = new List<PersonReferenceEmbedding>();
+        for (var i = 0; i < references.Count; i++)
+        {
+            var sumSim = 0.0;
+            for (var j = 0; j < references.Count; j++)
+            {
+                if (i != j)
+                    sumSim += FaceEmbeddingMath.CosineSimilarity(references[i].Embedding, references[j].Embedding);
+            }
+            var avgSim = sumSim / (references.Count - 1);
+            if (avgSim >= 0.15)
+            {
+                inliers.Add(references[i]);
+            }
+        }
+
+        var effectiveReferences = inliers.Count >= 2 ? inliers : references;
+        var effectiveCentroid = ComputeCentroid(effectiveReferences.Select(r => r.Embedding).ToList());
+        return new PersonReferenceSet(personId, effectiveCentroid, effectiveReferences);
+    }
+
+    private static double PersonScore(float[] embedding, PersonReferenceSet person, out string bestReferenceId)
+    {
+        var centroidScore = FaceEmbeddingMath.CosineSimilarity(embedding, person.Centroid);
+        var bestRefScore = double.NegativeInfinity;
+        bestReferenceId = string.Empty;
+        foreach (var reference in person.InlierReferences)
+        {
+            var refScore = FaceEmbeddingMath.CosineSimilarity(embedding, reference.Embedding);
+            if (refScore > bestRefScore)
+            {
+                bestRefScore = refScore;
+                bestReferenceId = reference.FaceOccurrenceId;
+            }
+        }
+        return centroidScore;
+    }
+
+    private static float[] ComputeCentroid(IReadOnlyList<float[]> embeddings)
+    {
+        if (embeddings.Count == 0) return [];
+        if (embeddings.Count == 1) return Normalize(embeddings[0]);
+
+        var length = embeddings[0].Length;
+        var sum = new double[length];
+        foreach (var emb in embeddings)
+        {
+            var norm = Normalize(emb);
+            for (var i = 0; i < length; i++) sum[i] += norm[i];
+        }
+        var centroid = new float[length];
+        for (var i = 0; i < length; i++) centroid[i] = (float)sum[i];
+        return Normalize(centroid);
+    }
+
+    private static float[] Normalize(float[] vector)
+    {
+        double sumSq = 0;
+        for (var i = 0; i < vector.Length; i++) sumSq += vector[i] * vector[i];
+        var norm = Math.Sqrt(sumSq);
+        if (norm == 0) return (float[])vector.Clone();
+        var result = new float[vector.Length];
+        for (var i = 0; i < vector.Length; i++) result[i] = (float)(vector[i] / norm);
+        return result;
     }
 
     private static void SetAverageOrderScores(IReadOnlyList<FaceClusteringFace> members, Dictionary<string, double> orderScores)
@@ -150,22 +222,21 @@ public static class FaceClustering
     // joined the person outright, so a hint there would mean the join logic disagreed with itself.
     private static (string? PersonId, double? Score) Hint(
         IReadOnlyList<FaceClusteringFace> members,
-        IReadOnlyList<string> personIds,
-        IReadOnlyList<PersonReferenceEmbedding> references,
+        IReadOnlyList<PersonReferenceSet> personSets,
         IReadOnlyDictionary<string, IReadOnlySet<string>> negatives,
         FaceClusteringOptions thresholds)
     {
         string? bestPerson = null;
         var bestScore = double.NegativeInfinity;
-        foreach (var personId in personIds)
+        foreach (var person in personSets)
         {
             // One member's negative vetoes the hint for the whole row: a face the reviewer already
             // deleted from that person must not vote for it.
-            if (members.Any(member => negatives.GetValueOrDefault(member.IdentityId)?.Contains(personId) == true)) continue;
-            var average = members.Average(member => BestPersonScore(member.Embedding, personId, references, out _));
+            if (members.Any(member => negatives.GetValueOrDefault(member.IdentityId)?.Contains(person.PersonId) == true)) continue;
+            var average = members.Average(member => FaceEmbeddingMath.CosineSimilarity(member.Embedding, person.Centroid));
             if (average <= bestScore) continue;
             bestScore = average;
-            bestPerson = personId;
+            bestPerson = person.PersonId;
         }
         return bestPerson is not null && bestScore >= thresholds.HintThreshold && bestScore < thresholds.PersonJoinThreshold
             ? (bestPerson, bestScore)

@@ -5,7 +5,8 @@ public sealed record PeopleReviewResponse(
     IReadOnlyList<PeopleReviewPersonRowResponse> PersonRows,
     IReadOnlyList<PeopleReviewAnonymousRowResponse> AnonymousRows,
     IReadOnlyList<PeopleReviewFaceResponse> Unsorted,
-    IReadOnlyList<PeopleReviewIgnoredGroupResponse> IgnoredGroups);
+    IReadOnlyList<PeopleReviewIgnoredGroupResponse> IgnoredGroups,
+    bool ValidationPending = false);
 
 public sealed record PeopleReviewPersonRowResponse(
     string PersonId,
@@ -22,7 +23,12 @@ public sealed record PeopleReviewHintResponse(string PersonId, string Name, doub
 
 // Score is the in-row order score (raw cosine): to the person for a person row, to the other
 // members for a group, zero for an unsorted face.
-public sealed record PeopleReviewFaceResponse(string CandidateId, string FaceOccurrenceId, string AssetId, FaceBoundsResponse FaceBounds, double Score, bool IsPartial, bool NeedsReview);
+public sealed record PeopleReviewFaceResponse(string CandidateId, string FaceOccurrenceId, string AssetId, FaceBoundsResponse FaceBounds, double Score, bool IsPartial, bool NeedsReview, FaceValidationResponse Validation);
+
+public sealed record FaceValidationResponse(string Status, bool CanUseForPeople, IReadOnlyList<string> Reasons,
+    string? Subject, string? Evidence, int? MinSidePixels, double? Sharpness112, string? Error, bool CanRetry);
+
+public sealed record ReviewFaceValidationRequest(string Kind);
 
 public sealed record SubmitPeopleReviewRequest(IReadOnlyList<string>? CandidateIds, IReadOnlyList<string>? RemovedCandidateIds, string? PersonId, string? Name);
 

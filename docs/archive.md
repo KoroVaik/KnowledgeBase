@@ -149,6 +149,12 @@ not just compiled.
 
 ## Worker & AI pipeline
 
+- Qwen face-validity benchmark (2026-09-26): two passes over the same 25 existing examples retained 14 human references and flagged 10/11 invalid subjects; measured warm requests at about 1.2 s and model VRAM at 5.47 GiB, with unreliable partial/occluded flags and no production filter adopted.
+
+- Existing-face CPU quality audit (2026-09-26): measured 976 current occurrences on 110 originals against stored rejected detections and 14 reference faces; size/sharpness misses sharp non-human subjects, and no production threshold was adopted.
+
+- ArcFace inverse alignment (2026-09-26): corrected shifted crops and versioned embeddings; verified regression tests, local re-embedding of all 1,035 occurrences and regrouping, with reference/review snapshots unchanged by regrouping.
+
 - Face embedder swapped to ArcFace (2026-09-18): insightface `w600k_r50.onnx` via ONNX
   Runtime with 5-point similarity alignment, `FaceOccurrence.EmbeddingModelKey` (migration
   `AddFaceEmbeddingModelKey`), self-healing `MigrateFaceModels` job (worker auto-queues it on

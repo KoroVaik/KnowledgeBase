@@ -1,3 +1,6 @@
+import { useDraftProtection } from '../../hooks/useDraftProtection'
+import { useSectionRefresh, useVisibleReload } from '../../hooks/useSectionRefresh'
+import { useGenericList } from '../GenericList/useGenericList'
 import { requestContext, withRequestContext } from '../../diagnostics/diagnostics'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { deleteAsset, fetchAssets } from '../../api/assets'
@@ -54,16 +57,15 @@ function countByStatus(assets: AssetSummary[]): StatusCounts {
 /** State and actions behind AssetList: load/poll while a job is running, expand/select rows,
  *  filter by status, and bulk delete. `reloadToken` is bumped by the parent after a successful
  *  upload. */
-const PAGE_SIZE = 10
-
-export function useAssetList(reloadToken: number) {
-  const [state, setState] = useState<ListState>({ status: 'loading' })
+export function useAssetList(reloadToken: number, collapsed: boolean) {
+  const refresh = useSectionRefresh<ListState>({ status: 'loading' }, value => value.status === 'ready', collapsed)
+  const { state, receive, updateLocal: setState, canLoad, setError } = refresh
+  const [noteReload, setNoteReload] = useState(0)
   const [expanded, setExpanded] = useState<string | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
   const [selectedStatuses, setSelectedStatuses] = useState<ReadonlySet<StatusValue>>(
     new Set(ALL_STATUS_VALUES),
   )
-  const [visibleLimit, setVisibleLimit] = useState(PAGE_SIZE)
 
   // Stray names (a file selected then removed via SSE) stay in the set but are ignored on
   // render and cleared on the next delete - cheaper than pruning in an effect, which oxlint
@@ -71,17 +73,21 @@ export function useAssetList(reloadToken: number) {
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set())
   const [bulkDeleting, setBulkDeleting] = useState(false)
 
+  useDraftProtection(selected.size > 0 || bulkDeleting, refresh.registerDraft)
+
   // The change stream fires reloads too, so two can be in flight - only the newest writes state.
   const latestReload = useRef(0)
 
-  const reload = useCallback(() => withRequestContext(requestContext('AssetList'), () => {
+  const reload = useCallback((acceptedIds: readonly string[] = []) => withRequestContext(requestContext('AssetList'), () => {
+    if (!canLoad(acceptedIds)) return
     const reloadId = ++latestReload.current
 
     // Leave the current rows on screen, don't flash "Loading…" on every upload.
-    void fetchAssets()
+    return fetchAssets()
       .then((assets) => {
         if (reloadId === latestReload.current) {
-          setState({ status: 'ready', assets })
+          receive({ status: 'ready', assets }, acceptedIds)
+          setError(null)
         }
       })
       .catch((error: unknown) => {
@@ -90,38 +96,27 @@ export function useAssetList(reloadToken: number) {
         }
 
         // Fail quietly: stale rows beat blanking them on a flaky connection.
+        setError(messageOf(error))
         setState((current) =>
           current.status === 'ready' ? current : { status: 'error', message: messageOf(error) },
         )
       })
-  }), [])
+  }), [canLoad, receive, setState, setError])
 
-  useEffect(() => withRequestContext({ trigger: reloadToken === 0 ? 'mount' : 'upload' }, reload), [reload, reloadToken])
-
+  useEffect(() => { if (reloadToken > 0) void withRequestContext({ trigger: 'upload' }, () => reload()) }, [reload, reloadToken])
   useResourceChanges('assets', reload)
-
-  // The worker has no change stream back to the browser, so poll while a job is in flight.
-  const hasActiveJob =
-    state.status === 'ready' &&
-    state.assets.some(
-      (asset) => asset.processingStatus === 'Pending' || asset.processingStatus === 'Running',
-    )
-
-  useEffect(() => {
-    if (!hasActiveJob) {
-      return
-    }
-
-    const timer = window.setInterval(() => withRequestContext({ trigger: 'poll' }, reload), 4000)
-    return () => window.clearInterval(timer)
-  }, [hasActiveJob, reload])
+  const hasActiveJob = refresh.latest.status === 'ready' && refresh.latest.assets.some(asset => asset.processingStatus === 'Pending' || asset.processingStatus === 'Running')
+  useVisibleReload(refresh.enabled, () => reload(), hasActiveJob ? 4000 : undefined)
 
   const assets = state.status === 'ready' ? state.assets : []
   const statusCounts = countByStatus(assets)
   const visibleAssets = assets.filter((asset) => matchesFilter(asset, selectedStatuses))
-  // Only the newest PAGE_SIZE (per filter) are rendered - "Show more" raises the limit.
-  const shownAssets = visibleAssets.slice(0, visibleLimit)
-  const hasMore = visibleAssets.length > shownAssets.length
+  const latestAssets = refresh.latest.status === 'ready' ? refresh.latest.assets : []
+  const knownIds = new Set(assets.map(asset => asset.id))
+  const incoming = latestAssets.filter(asset => knownIds.has(asset.id) || matchesFilter(asset, selectedStatuses))
+  const additions = refresh.additions(visibleAssets, incoming.filter(asset => matchesFilter(asset, selectedStatuses)))
+  const list = useGenericList(visibleAssets, 'assets', [...selectedStatuses].sort().join(','), additions)
+  const shownAssets = list.shownItems
 
   // Selection, "select all", and bulk delete only ever touch rows actually on screen -
   // a row hidden by the filter or past the page limit keeps its checked state but doesn't
@@ -130,6 +125,7 @@ export function useAssetList(reloadToken: number) {
   const allSelected = shownAssets.length > 0 && selectedAssets.length === shownAssets.length
 
   function removeRow(storedFileName: string) {
+    latestReload.current++
     setState((current) =>
       current.status === 'ready'
         ? {
@@ -159,11 +155,6 @@ export function useAssetList(reloadToken: number) {
       }
       return next
     })
-    setVisibleLimit(PAGE_SIZE)
-  }
-
-  function showMore() {
-    setVisibleLimit((current) => current + PAGE_SIZE)
   }
 
   function toggleAll() {
@@ -207,12 +198,14 @@ export function useAssetList(reloadToken: number) {
       }
     })
 
+    latestReload.current++
+    const deleted = new Set(targets.filter(asset => !failed.has(asset.storedFileName)).map(asset => asset.storedFileName))
     setState((current) =>
       current.status === 'ready'
         ? {
             status: 'ready',
             assets: current.assets.filter(
-              (asset) => !selected.has(asset.storedFileName) || failed.has(asset.storedFileName),
+              (asset) => !deleted.has(asset.storedFileName),
             ),
           }
         : current,
@@ -227,6 +220,9 @@ export function useAssetList(reloadToken: number) {
 
   return {
     state,
+    refresh,
+    reloadSection: () => void refresh.reload(async () => { await reload(); setNoteReload(value => value + 1) }),
+    noteReload,
     expanded,
     setExpanded,
     actionError,
@@ -236,9 +232,7 @@ export function useAssetList(reloadToken: number) {
     toggleStatus,
     statusCounts,
     visibleAssets,
-    shownAssets,
-    hasMore,
-    showMore,
+    list,
     selectedAssets,
     allSelected,
     reload,

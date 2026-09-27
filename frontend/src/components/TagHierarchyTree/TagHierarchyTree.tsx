@@ -1,3 +1,4 @@
+import { GenericList } from '../GenericList/GenericList'
 import type { CSSProperties } from 'react'
 import type { Tag } from '../../api/tags'
 import { notesText } from '../../format'
@@ -75,9 +76,11 @@ export function TagHierarchyTree({
         </div>
 
         {hasChildren && !collapsed && (
-          <ul className="tag-tree-children">
-            {children.map((child) => renderNode(child, tag.id, [...ancestry, tag.id]))}
-          </ul>
+          <GenericList items={children} listId={`tags:hierarchy:${tag.id}`}>
+            {shownItems => <ul className="tag-tree-children">
+              {shownItems.map((child) => renderNode(child, tag.id, [...ancestry, tag.id]))}
+            </ul>}
+          </GenericList>
         )}
       </li>
     )
@@ -89,7 +92,7 @@ export function TagHierarchyTree({
 
   return (
     <div className="tag-tree">
-      <ul className="tag-tree-root">{roots.map((tag) => renderNode(tag, null, []))}</ul>
+      <GenericList items={roots} listId="tags:hierarchy:roots">{shownItems => <ul className="tag-tree-root">{shownItems.map((tag) => renderNode(tag, null, []))}</ul>}</GenericList>
     </div>
   )
 }
