@@ -7,4 +7,8 @@ public sealed class EventsOptions
     // Shared with the worker, which posts its change hints to /api/events/ingest with this in a
     // header. That endpoint has no other guard, so an empty token (the default) turns it off.
     public string IngestToken { get; set; } = "";
+
+    // Webhook URL on the worker (e.g. via Tailscale Funnel) to notify it when new jobs are queued.
+    public string WorkerWakeUrl { get; set; } = "";
 }
+

@@ -1,7 +1,9 @@
+using KnowledgeBase.Api.Controllers.Events.Configuration;
 using KnowledgeBase.Api.Infrastructure.RealTime;
 using KnowledgeBase.Core.Pipeline;
 using KnowledgeBase.Core.RealTime;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 using Xunit;
 
 namespace KnowledgeBase.Tests;
@@ -28,17 +30,23 @@ public sealed class WorkerWebSocketNotificationTests
     }
 
     [Fact]
-    public void WorkerWebSocketNotifier_CanBeConstructedAndDisposedCleanly()
+    public void WorkerWebhookNotifier_CanBeConstructedAndDisposedCleanly()
     {
         var changeNotifier = new ChangeNotifier(NullLogger<ChangeNotifier>.Instance);
-        var notifier = new WorkerWebSocketNotifier(changeNotifier, NullLogger<WorkerWebSocketNotifier>.Instance);
+        var options = Options.Create(new EventsOptions { WorkerWakeUrl = "" });
+        var notifier = new WorkerWebhookNotifier(new DummyHttpClientFactory(), options, changeNotifier, NullLogger<WorkerWebhookNotifier>.Instance);
 
-        // Should not throw when notifying without sockets
+        // Should not throw when notifying
         notifier.NotifyJobQueued();
 
         // Publishing a relevant event should not throw
         changeNotifier.Publish(new ChangeEvent(ChangeResources.Assets, ChangeActions.Created, "test.txt"));
 
         notifier.Dispose();
+    }
+
+    private sealed class DummyHttpClientFactory : IHttpClientFactory
+    {
+        public HttpClient CreateClient(string name) => new HttpClient();
     }
 }

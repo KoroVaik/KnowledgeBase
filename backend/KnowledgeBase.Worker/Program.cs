@@ -44,7 +44,7 @@ try
         return;
     }
 
-    var builder = Host.CreateApplicationBuilder(args);
+    var builder = WebApplication.CreateBuilder(args);
 
     builder.UseLocalOverrides();
     builder.AddObservability("worker");
@@ -140,26 +140,39 @@ try
         client.Timeout = TimeSpan.FromSeconds(5);
     });
     builder.Services.AddSingleton<IChangeNotifier, HttpChangeNotifier>();
-    builder.Services.AddHostedService<WorkerWebSocketListener>();
+    var app = builder.Build();
 
-    var host = builder.Build();
+    app.MapPost("/api/worker/wake", (HttpContext context, IJobWakeSignal wakeSignal, IOptions<EventsBridgeOptions> options, ILoggerFactory loggerFactory) =>
+    {
+        if (!context.Request.Headers.TryGetValue("X-Ingest-Token", out var token) || token != options.Value.IngestToken)
+        {
+            return Results.Unauthorized();
+        }
 
-    await host.Services.GetRequiredService<ArcFaceModelDownloader>().EnsureAsync(CancellationToken.None);
+        var logger = loggerFactory.CreateLogger("WorkerWebhook");
+        logger.LogInformation("Received wake webhook from API");
+        wakeSignal.Trigger();
+        return Results.Accepted();
+    });
+
+    app.MapGet("/health", () => Results.Ok("Worker online"));
+
+    await app.Services.GetRequiredService<ArcFaceModelDownloader>().EnsureAsync(CancellationToken.None);
 
     // One-off analyzer smoke test, then exit before the poll loop.
     if (AnalyzeCommand.Matches(args))
     {
-        await AnalyzeCommand.RunAsync(host.Services, args);
+        await AnalyzeCommand.RunAsync(app.Services, args);
         return;
     }
 
-    await host.WaitForMigrationsAsync(TimeSpan.FromSeconds(30));
+    await app.WaitForMigrationsAsync(TimeSpan.FromSeconds(30));
 
     // Face models may have changed since this archive was last analysed (an embedder swap, a
     // detection fix): queue the self-healing migration before the poll loop takes normal jobs.
     try
     {
-        using var scope = host.Services.CreateScope();
+        using var scope = app.Services.CreateScope();
         var database = scope.ServiceProvider.GetRequiredService<KnowledgeBaseDbContext>();
         await FaceModelMigrationQueue.EnqueueIfGapAsync(
             database,
@@ -181,7 +194,8 @@ try
         Log.Warning(error, "Face migration startup check skipped");
     }
 
-    host.Run();
+    await app.RunAsync();
+
 
 }
 catch (Exception error)

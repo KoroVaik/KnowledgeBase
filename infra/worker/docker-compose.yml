@@ -8,6 +8,8 @@ services:
     image: knowledgebase-worker:local
     container_name: knowledgebase-worker
     restart: unless-stopped
+    ports:
+      - "5100:8080"
     # Neon + R2 credentials. Copy worker.env.example -> worker.env and fill in.
     # The CD runner deploys from its own checkout, which has no worker.env, so it points
     # WORKER_ENV_FILE at the filled copy.

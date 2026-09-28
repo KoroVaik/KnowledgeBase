@@ -11,7 +11,7 @@ COPY KnowledgeBase.Core/ KnowledgeBase.Core/
 COPY KnowledgeBase.Worker/ KnowledgeBase.Worker/
 RUN dotnet publish KnowledgeBase.Worker/KnowledgeBase.Worker.csproj -c Release -o /app --no-restore
 
-FROM mcr.microsoft.com/dotnet/runtime:8.0 AS runtime
+FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS runtime
 WORKDIR /app
 COPY --from=build /app ./
 # No DOTNET_ENVIRONMENT -> Production: appsettings.json + env vars, no appsettings.Local.json.

@@ -41,8 +41,9 @@ try
     builder.Services.AddAuthFeature(builder.Configuration);
     builder.Services.AddAssetStorage(builder.Configuration);
     builder.Services.AddRealTimeUpdates();
-    builder.Services.AddSingleton<WorkerWebSocketNotifier>();
-    builder.Services.AddSingleton<IWorkerJobNotifier>(sp => sp.GetRequiredService<WorkerWebSocketNotifier>());
+    builder.Services.AddHttpClient(WorkerWebhookNotifier.HttpClientName);
+    builder.Services.AddSingleton<WorkerWebhookNotifier>();
+    builder.Services.AddSingleton<IWorkerJobNotifier>(sp => sp.GetRequiredService<WorkerWebhookNotifier>());
     builder.Services.Configure<EventsOptions>(builder.Configuration.GetSection(EventsOptions.SectionName));
     builder.Services.Configure<ImageSourceNotesOptions>(builder.Configuration.GetSection(ImageSourceNotesOptions.SectionName));
 
@@ -57,8 +58,6 @@ try
     app.MigrateDatabase();
     await app.SkipPendingJobsAsync();
     app.UseKnowledgeBasePipeline();
-    app.UseWebSockets(new WebSocketOptions { KeepAliveInterval = TimeSpan.FromSeconds(20) });
-    app.MapWorkerWebSocket();
 
     app.MapHealthChecks("/health");
     app.MapControllers();

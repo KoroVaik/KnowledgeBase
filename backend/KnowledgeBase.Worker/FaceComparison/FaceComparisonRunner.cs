@@ -5,6 +5,7 @@ using KnowledgeBase.Core.FaceAnalysis;
 using KnowledgeBase.Worker.FaceAnalysis;
 using Microsoft.Extensions.Options;
 using Microsoft.ML.OnnxRuntime;
+using SessionOptions = Microsoft.ML.OnnxRuntime.SessionOptions;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
 
