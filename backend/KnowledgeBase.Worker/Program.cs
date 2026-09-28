@@ -140,6 +140,7 @@ try
         client.Timeout = TimeSpan.FromSeconds(5);
     });
     builder.Services.AddSingleton<IChangeNotifier, HttpChangeNotifier>();
+    builder.Services.AddHostedService<WorkerWebSocketListener>();
 
     var host = builder.Build();
 

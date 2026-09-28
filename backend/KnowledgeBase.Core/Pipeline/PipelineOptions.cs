@@ -6,6 +6,9 @@ public sealed class PipelineOptions
 
     public TimeSpan PollInterval { get; set; } = TimeSpan.FromSeconds(5);
 
+    // How long the worker sleeps when the queue is empty before checking again (safety net if push notification is missed).
+    public TimeSpan IdleTimeout { get; set; } = TimeSpan.FromHours(1);
+
     // Wait, don't spin, while the analyzer is unavailable.
     public TimeSpan OutageDelay { get; set; } = TimeSpan.FromSeconds(30);
 

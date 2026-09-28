@@ -28,6 +28,8 @@ public static class PipelineRegistration
         services.AddScoped<IPipelineHandler, TagHierarchyHandler>();
         services.AddScoped<PipelineHandlerSelector>();
 
+        services.AddSingleton<IJobWakeSignal, JobWakeSignal>();
+        services.AddSingleton<IWorkerJobNotifier>(NullWorkerJobNotifier.Instance);
         services.AddHostedService<PipelineWorker>();
 
         return services;

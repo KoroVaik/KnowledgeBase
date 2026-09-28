@@ -13,6 +13,7 @@ namespace KnowledgeBase.Core.Pipeline;
 public sealed class PipelineWorker(
     IServiceScopeFactory scopeFactory,
     IOptions<PipelineOptions> options,
+    IJobWakeSignal wakeSignal,
     ILogger<PipelineWorker> logger) : BackgroundService
 {
     private readonly PipelineOptions _options = options.Value;
@@ -41,7 +42,7 @@ public sealed class PipelineWorker(
 
             if (!worked)
             {
-                await Task.Delay(_options.PollInterval, stoppingToken);
+                await wakeSignal.WaitAsync(_options.IdleTimeout, stoppingToken);
             }
         }
     }

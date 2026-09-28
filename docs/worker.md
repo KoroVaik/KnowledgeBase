@@ -76,6 +76,14 @@ the body and a shared secret in `X-Ingest-Token`; the API drops the event into i
 - Deleting a file that has a note happens in `AssetsController.Delete` inside the API
   process, so it sends `notes/deleted` directly via `_notifier` — no bridge needed.
 
+### API → Worker push notification — WebSocket
+
+To prevent burning Neon CU-hours with continuous idle polling, `PipelineWorker` sleeps
+via `IJobWakeSignal` when `ProcessingJobs` is empty (falling back to a 1-hour safety timeout).
+The API exposes `/api/worker/ws` (guarded by `X-Ingest-Token`); `WorkerWebSocketListener`
+connects to it and signals the worker to wake up immediately whenever an asset or photo
+analysis is queued. This allows Neon to scale to zero within 5 minutes of inactivity.
+
 ### CLI `analyze` command — temporary
 
 `dotnet run --project backend/KnowledgeBase.Worker -- analyze <file>` runs the analyzer

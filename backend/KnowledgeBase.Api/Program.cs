@@ -4,6 +4,7 @@ using KnowledgeBase.Api.Controllers.Auth.Configuration;
 using KnowledgeBase.Api.Controllers.Events.Configuration;
 using KnowledgeBase.Api.Controllers.Notes.Configuration;
 using KnowledgeBase.Api.Infrastructure.Hosting;
+using KnowledgeBase.Api.Infrastructure.RealTime;
 using KnowledgeBase.Core.FaceAnalysis;
 using KnowledgeBase.Core.Hosting;
 using KnowledgeBase.Core.Persistence;
@@ -40,6 +41,8 @@ try
     builder.Services.AddAuthFeature(builder.Configuration);
     builder.Services.AddAssetStorage(builder.Configuration);
     builder.Services.AddRealTimeUpdates();
+    builder.Services.AddSingleton<WorkerWebSocketNotifier>();
+    builder.Services.AddSingleton<IWorkerJobNotifier>(sp => sp.GetRequiredService<WorkerWebSocketNotifier>());
     builder.Services.Configure<EventsOptions>(builder.Configuration.GetSection(EventsOptions.SectionName));
     builder.Services.Configure<ImageSourceNotesOptions>(builder.Configuration.GetSection(ImageSourceNotesOptions.SectionName));
 
@@ -54,6 +57,8 @@ try
     app.MigrateDatabase();
     await app.SkipPendingJobsAsync();
     app.UseKnowledgeBasePipeline();
+    app.UseWebSockets();
+    app.MapWorkerWebSocket();
 
     app.MapHealthChecks("/health");
     app.MapControllers();
