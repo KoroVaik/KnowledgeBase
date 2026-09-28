@@ -57,7 +57,7 @@ try
     app.MigrateDatabase();
     await app.SkipPendingJobsAsync();
     app.UseKnowledgeBasePipeline();
-    app.UseWebSockets();
+    app.UseWebSockets(new WebSocketOptions { KeepAliveInterval = TimeSpan.FromSeconds(20) });
     app.MapWorkerWebSocket();
 
     app.MapHealthChecks("/health");

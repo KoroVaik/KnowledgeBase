@@ -36,13 +36,11 @@ public sealed class WorkerWebSocketListener(
             {
                 using var client = new ClientWebSocket();
                 client.Options.SetRequestHeader("X-Ingest-Token", options.IngestToken);
+                client.Options.KeepAliveInterval = TimeSpan.FromSeconds(20);
 
                 logger.LogInformation("Connecting to API WebSocket at {Uri}...", wsUri);
                 await client.ConnectAsync(wsUri, stoppingToken);
                 logger.LogInformation("Connected to API WebSocket. Listening for job wake signals.");
-
-                // Trigger once on successful connection to process any jobs queued while offline.
-                wakeSignal.Trigger();
 
                 var buffer = new byte[1024];
                 while (client.State == WebSocketState.Open && !stoppingToken.IsCancellationRequested)
