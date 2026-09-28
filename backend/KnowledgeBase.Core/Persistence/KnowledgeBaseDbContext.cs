@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.DataProtection.EntityFrameworkCore;
+using Microsoft.AspNetCore.DataProtection.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 
 namespace KnowledgeBase.Core.Persistence;
@@ -67,6 +67,10 @@ public sealed class KnowledgeBaseDbContext(DbContextOptions<KnowledgeBaseDbConte
     public DbSet<IgnoredFaceGroup> IgnoredFaceGroups => Set<IgnoredFaceGroup>();
 
     public DbSet<VisualEmbedding> VisualEmbeddings => Set<VisualEmbedding>();
+    public DbSet<SceneIdentity> SceneIdentities => Set<SceneIdentity>();
+    public DbSet<SceneClusteringRun> SceneClusteringRuns => Set<SceneClusteringRun>();
+    public DbSet<SceneCluster> SceneClusters => Set<SceneCluster>();
+    public DbSet<ExcludedSceneGroup> ExcludedSceneGroups => Set<ExcludedSceneGroup>();
 
     public DbSet<LocationObservation> LocationObservations => Set<LocationObservation>();
 

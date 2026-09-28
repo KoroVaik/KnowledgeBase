@@ -10,8 +10,10 @@ public sealed class DesignTimeDbContextFactory : IDesignTimeDbContextFactory<Kno
 {
     public KnowledgeBaseDbContext CreateDbContext(string[] args)
     {
+        var connectionString = Environment.GetEnvironmentVariable("ConnectionStrings__Database")
+            ?? "Host=localhost;Database=knowledgebase;Username=knowledgebase;Password=knowledgebase";
         var options = new DbContextOptionsBuilder<KnowledgeBaseDbContext>()
-            .UseNpgsql("Host=localhost;Database=knowledgebase;Username=postgres;Password=postgres")
+            .UseNpgsql(connectionString)
             .Options;
         return new KnowledgeBaseDbContext(options);
     }

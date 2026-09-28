@@ -29,7 +29,9 @@ internal static class JobKindDescriptions
         JobKind.MigrateFaceModels =>
             "Brings stored face data up to the current models — embeddings, detections and face identities — then regroups faces.",
         JobKind.AnalyzeScenes =>
-            "Generates a CLIP scene vector and proposes the most similar reviewed locations.",
+            "Generates a VPR scene vector and stores a stable identity for location grouping.",
+        JobKind.ClusterScenes =>
+            "Groups every unreviewed scene by location: joins confirmed locations and excluded groups, clusters the rest.",
         JobKind.AnalyzeSceneObservations =>
             "Uses reviewed people and locations to extract cautious actions, interactions and scene details.",
         JobKind.AnalyzeEventCandidates =>

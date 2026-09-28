@@ -18,6 +18,9 @@ public sealed class PhotoAnalysisCandidate
     // The face-clustering row this proposal was written for. Null on rows from before clustering
     // and on location/event proposals.
     public string? FaceClusterId { get; init; }
+    // The scene-clustering row this proposal was written for. Null on rows from before clustering
+    // and on person/event proposals.
+    public string? SceneClusterId { get; init; }
 }
 
 public enum PhotoAnalysisCandidateKind { Person, Location, Event }

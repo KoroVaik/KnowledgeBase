@@ -25,17 +25,20 @@ internal sealed class PhotoAnalysisCandidateConfiguration : IEntityTypeConfigura
         builder.Property(candidate => candidate.ProposedTargetId).HasMaxLength(32); builder.Property(candidate => candidate.ProposedLabel).HasMaxLength(200);
         builder.Property(candidate => candidate.Kind).HasConversion<string>().HasMaxLength(16); builder.Property(candidate => candidate.SignalsJson).HasColumnType("jsonb");
         builder.Property(candidate => candidate.FaceClusterId).HasMaxLength(32);
+        builder.Property(candidate => candidate.SceneClusterId).HasMaxLength(32);
         // Not unique: revoking a confirmation re-opens the original proposal as a new row with the
         // same run/face/kind/rank, while the decided original stays in the audit trail.
         builder.HasIndex(candidate => new { candidate.RunId, candidate.SubjectFaceOccurrenceId, candidate.Kind, candidate.Rank });
         builder.HasIndex(candidate => new { candidate.Kind, candidate.SubjectAssetId, candidate.SupersededAtUtc });
         builder.HasIndex(candidate => candidate.FaceClusterId);
+        builder.HasIndex(candidate => candidate.SceneClusterId);
         builder.HasOne<PhotoAnalysisRun>().WithMany().HasForeignKey(candidate => candidate.RunId).OnDelete(DeleteBehavior.Cascade);
         builder.HasOne<AssetRecord>().WithMany().HasForeignKey(candidate => candidate.SubjectAssetId).OnDelete(DeleteBehavior.Cascade);
         builder.HasOne<FaceOccurrence>().WithMany().HasForeignKey(candidate => candidate.SubjectFaceOccurrenceId).OnDelete(DeleteBehavior.SetNull);
         // SetNull, never Cascade: a cluster is a temporary algorithm output, the candidate is
         // audit history and must outlive any cleanup that removes old clustering runs.
         builder.HasOne<FaceCluster>().WithMany().HasForeignKey(candidate => candidate.FaceClusterId).OnDelete(DeleteBehavior.SetNull);
+        builder.HasOne<SceneCluster>().WithMany().HasForeignKey(candidate => candidate.SceneClusterId).OnDelete(DeleteBehavior.SetNull);
     }
 }
 
@@ -119,11 +122,59 @@ internal sealed class VisualEmbeddingConfiguration : IEntityTypeConfiguration<Vi
     {
         builder.HasKey(embedding => embedding.Id); builder.Property(embedding => embedding.Id).HasMaxLength(32);
         builder.Property(embedding => embedding.RunId).HasMaxLength(32); builder.Property(embedding => embedding.AssetId).HasMaxLength(32);
+        builder.Property(embedding => embedding.SceneIdentityId).HasMaxLength(32);
         builder.Property(embedding => embedding.Embedding).HasColumnType("real[]");
         builder.HasIndex(embedding => new { embedding.AssetId, embedding.CreatedAtUtc });
         builder.HasIndex(embedding => embedding.RunId).IsUnique();
+        builder.HasIndex(embedding => embedding.SceneIdentityId);
         builder.HasOne<PhotoAnalysisRun>().WithMany().HasForeignKey(embedding => embedding.RunId).OnDelete(DeleteBehavior.Cascade);
         builder.HasOne<AssetRecord>().WithMany().HasForeignKey(embedding => embedding.AssetId).OnDelete(DeleteBehavior.Cascade);
+        builder.HasOne<SceneIdentity>().WithMany().HasForeignKey(embedding => embedding.SceneIdentityId).OnDelete(DeleteBehavior.Cascade);
+    }
+}
+
+internal sealed class SceneIdentityConfiguration : IEntityTypeConfiguration<SceneIdentity>
+{
+    public void Configure(EntityTypeBuilder<SceneIdentity> builder)
+    {
+        builder.HasKey(identity => identity.Id); builder.Property(identity => identity.Id).HasMaxLength(32);
+        builder.Property(identity => identity.AssetId).HasMaxLength(32);
+        builder.HasIndex(identity => identity.AssetId).IsUnique();
+        builder.HasOne<AssetRecord>().WithMany().HasForeignKey(identity => identity.AssetId).OnDelete(DeleteBehavior.Cascade);
+    }
+}
+
+internal sealed class SceneClusteringRunConfiguration : IEntityTypeConfiguration<SceneClusteringRun>
+{
+    public void Configure(EntityTypeBuilder<SceneClusteringRun> builder)
+    {
+        builder.HasKey(run => run.Id); builder.Property(run => run.Id).HasMaxLength(32);
+        builder.Property(run => run.PipelineVersion).HasMaxLength(100); builder.Property(run => run.ConfigurationHash).HasMaxLength(128);
+        builder.HasIndex(run => run.CompletedAtUtc);
+    }
+}
+
+internal sealed class SceneClusterConfiguration : IEntityTypeConfiguration<SceneCluster>
+{
+    public void Configure(EntityTypeBuilder<SceneCluster> builder)
+    {
+        builder.HasKey(cluster => cluster.Id); builder.Property(cluster => cluster.Id).HasMaxLength(32);
+        builder.Property(cluster => cluster.RunId).HasMaxLength(32);
+        builder.Property(cluster => cluster.Kind).HasConversion<string>().HasMaxLength(16);
+        builder.Property(cluster => cluster.LocationId).HasMaxLength(32); builder.Property(cluster => cluster.HintLocationId).HasMaxLength(32);
+        builder.Property(cluster => cluster.ExcludedGroupId).HasMaxLength(32);
+        builder.HasIndex(cluster => new { cluster.RunId, cluster.Kind });
+        builder.HasOne<SceneClusteringRun>().WithMany().HasForeignKey(cluster => cluster.RunId).OnDelete(DeleteBehavior.Cascade);
+        builder.HasOne<ExcludedSceneGroup>().WithMany().HasForeignKey(cluster => cluster.ExcludedGroupId).OnDelete(DeleteBehavior.SetNull);
+    }
+}
+
+internal sealed class ExcludedSceneGroupConfiguration : IEntityTypeConfiguration<ExcludedSceneGroup>
+{
+    public void Configure(EntityTypeBuilder<ExcludedSceneGroup> builder)
+    {
+        builder.HasKey(group => group.Id); builder.Property(group => group.Id).HasMaxLength(32);
+        builder.HasIndex(group => group.CreatedAtUtc);
     }
 }
 

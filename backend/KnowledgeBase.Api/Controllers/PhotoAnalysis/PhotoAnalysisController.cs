@@ -4,6 +4,7 @@ using KnowledgeBase.Core.Persistence;
 using KnowledgeBase.Core.Pipeline;
 using KnowledgeBase.Core.Pipeline.EventClustering;
 using KnowledgeBase.Core.Pipeline.FaceAnalysis;
+using KnowledgeBase.Core.Pipeline.SceneAnalysis;
 using KnowledgeBase.Core.RealTime;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -346,6 +347,16 @@ public sealed class PhotoAnalysisController(KnowledgeBaseDbContext database, ICh
         return Accepted(new SceneAnalysisBatchResponse(fingerprintsQueued, sceneAnalysesQueued));
     }
 
+    /// <summary>Queues a scene clustering pass over open scenes.</summary>
+    [HttpPost("cluster-scenes")]
+    public async Task<IActionResult> ClusterScenes(CancellationToken cancellationToken)
+    {
+        await ClusterScenesQueue.EnqueueAsync(database, cancellationToken);
+        await database.SaveChangesAsync(cancellationToken);
+        notifier.Publish(new ChangeEvent(ChangeResources.PhotoAnalysis, ChangeActions.Updated));
+        return Accepted();
+    }
+
     /// <summary>Refreshes VLM scene observations for canonical photos with reviewed person or location context.</summary>
     [HttpPost("analyze-observations")]
     public async Task<ActionResult<ObservationAnalysisBatchResponse>> QueueSceneObservations(CancellationToken cancellationToken)
@@ -463,6 +474,7 @@ public sealed class PhotoAnalysisController(KnowledgeBaseDbContext database, ICh
                 Id = Guid.NewGuid().ToString("N"), LocationId = chosenTargetId!, AssetId = candidate.SubjectAssetId,
                 VisualEmbeddingId = visualEmbedding.Id, SourceDecisionId = decision.Id, ConfirmedAtUtc = decision.DecidedAtUtc
             });
+            await ClusterScenesQueue.EnqueueAsync(database, cancellationToken);
         }
         await SupersedeSiblingCandidates(candidate, decision.DecidedAtUtc, cancellationToken);
         await database.SaveChangesAsync(cancellationToken);

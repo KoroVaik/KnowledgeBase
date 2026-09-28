@@ -151,13 +151,18 @@ in [`photo-archive.md`](photo-archive.md) for gating and manual-review rules.
 Only the oldest image with that hash queues `AnalyzeFaces`; copies are kept but skipped. The batch
 archive action queues missing fingerprints for older images and never queues source-note jobs.
 
-### Scene analysis is local CLIP evidence, not a location decision
+### Scene analysis uses EigenPlaces VPR and clusters scenes like faces
 
-`AnalyzeScenes` uses a local ONNX CLIP vision model (downloaded once into the worker's local model
-cache on its first scene job) to write one 512-value `VisualEmbedding` for the canonical image.
-It ranks the best confirmed appearance of each location by cosine similarity and creates at most
-five `Location` candidates. The worker never assigns a location directly. A human decision turns
-the image vector into a `LocationObservation`, which later scene jobs can use as a reference.
+`AnalyzeScenes` uses a local EigenPlaces ResNet50 (`fc_output_dim=512`) ONNX model (stored in
+`%LOCALAPPDATA%/KnowledgeBase/models/eigenplaces/`) to generate an L2-normalized 512-value `VisualEmbedding`
+for the canonical image, links it to a stable `SceneIdentity`, and enqueues `ClusterScenes`.
+
+`ClusterScenes` groups every open (unsettled) scene of the archive:
+- Joins confirmed `Location` prototypes (centroid of inlier confirmed references) if score reaches `LocationJoinThreshold`.
+- Joins `ExcludedSceneGroup` centroids if score reaches the threshold.
+- Clusters remaining scenes agglomeratively (average linkage with `ClusterThreshold`) with a GPS proximity bonus (+0.10 within 100 meters).
+- Generates "Looks like" hints between `HintThreshold` and `LocationJoinThreshold`.
+- Writes one fresh `PhotoAnalysisCandidate` pointing to each `SceneCluster`.
 
 ### Scene observations are cautious VLM output, not archive facts
 
@@ -183,6 +188,7 @@ creates or changes an `ArchiveEvent`.
 Each attempt restores its saved trace/upload context and records outcome, duration, dependencies and its SSE event identity. See [observability.md](observability.md).
 
 ## Open
+- [ ] Verify Scene Clustering end to end after API and worker restart (Phase 1 backend complete; review UI is Phase 2).
 
 - [ ] Verify `ValidateFaces` with local Ollama and existing archive crops after restarting the worker
       (local migration applied); cache/resume, backfill and regrouping have automated coverage, while

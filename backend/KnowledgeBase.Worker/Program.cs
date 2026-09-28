@@ -17,7 +17,7 @@ using KnowledgeBase.Worker.Extraction;
 using KnowledgeBase.Worker.EventClustering;
 using KnowledgeBase.Worker.SceneAnalysis;
 using KnowledgeBase.Worker.SceneObservations;
-using ElBruno.LocalEmbeddings.ImageEmbeddings.Extensions;
+using KnowledgeBase.Core.Pipeline.SceneAnalysis;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using KnowledgeBase.Worker.FaceComparison;
@@ -82,14 +82,13 @@ try
                 && options.PersonJoinThreshold <= 1 && options.ClusterThreshold is > 0 and <= 1,
             "FaceClustering needs 0 < HintThreshold <= PersonJoinThreshold <= 1 and 0 < ClusterThreshold <= 1.")
         .ValidateOnStart();
-    var visualAnalysisOptions = builder.Configuration.GetSection(VisualAnalysisOptions.SectionName).Get<VisualAnalysisOptions>() ?? new VisualAnalysisOptions();
-    var visualModelDirectory = visualAnalysisOptions.ModelDirectory
-        ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "KnowledgeBase", "models", "clip");
-    builder.Services.AddImageEmbeddings(options =>
-    {
-        options.ModelDirectory = visualModelDirectory;
-        options.EnsureModelDownloaded = visualAnalysisOptions.EnsureModelDownloaded;
-    });
+    builder.Services.AddOptions<SceneClusteringOptions>()
+        .Bind(builder.Configuration.GetSection(SceneClusteringOptions.SectionName))
+        .Validate(
+            options => options.HintThreshold > 0 && options.HintThreshold <= options.LocationJoinThreshold
+                && options.LocationJoinThreshold <= 1 && options.ClusterThreshold is > 0 and <= 1,
+            "SceneClustering needs 0 < HintThreshold <= LocationJoinThreshold <= 1 and 0 < ClusterThreshold <= 1.")
+        .ValidateOnStart();
     builder.Services.AddSingleton(sp =>
     {
         var faceOptions = sp.GetRequiredService<IOptions<FaceAnalysisOptions>>().Value;
@@ -110,7 +109,7 @@ try
     });
     builder.Services.AddSingleton<ArcFaceModelDownloader>();
     builder.Services.AddSingleton<IFaceAnalyzer, FaceOnnxFaceAnalyzer>();
-    builder.Services.AddSingleton<ISceneEmbedder, ClipSceneEmbedder>();
+    builder.Services.AddSingleton<ISceneEmbedder, VprSceneEmbedder>();
     builder.Services.AddScoped<IPipelineHandler, FaceAnalysisHandler>();
     builder.Services.AddScoped<IPipelineHandler, FaceValidationHandler>();
     builder.Services.AddScoped<IPipelineHandler, AssetFingerprintHandler>();
@@ -118,6 +117,7 @@ try
     builder.Services.AddScoped<IPipelineHandler, ClusterFacesHandler>();
     builder.Services.AddScoped<IPipelineHandler, FaceModelMigrationHandler>();
     builder.Services.AddScoped<IPipelineHandler, SceneAnalysisHandler>();
+    builder.Services.AddScoped<IPipelineHandler, ClusterScenesHandler>();
     builder.Services.AddScoped<IPipelineHandler, SceneObservationHandler>();
     builder.Services.AddScoped<IPipelineHandler, EventCandidateHandler>();
 
@@ -166,10 +166,13 @@ try
             scope.ServiceProvider.GetRequiredService<IFaceAnalyzer>(),
             CancellationToken.None);
         await FaceValidationBackfill.EnqueueAsync(database, scope.ServiceProvider.GetRequiredService<IOptions<OllamaOptions>>().Value.Model, CancellationToken.None);
-        // An archive upgraded to clustering has faces but no grouping yet, and nothing else would
+        // An archive upgraded to clustering has faces/scenes but no grouping yet, and nothing else would
         // trigger the first one until the next upload or review.
         if (!await database.FaceClusteringRuns.AnyAsync() && await database.FaceOccurrences.AnyAsync()
             && await ClusterFacesQueue.EnqueueAsync(database, CancellationToken.None))
+            await database.SaveChangesAsync();
+        if (!await database.SceneClusteringRuns.AnyAsync() && await database.SceneIdentities.AnyAsync()
+            && await ClusterScenesQueue.EnqueueAsync(database, CancellationToken.None))
             await database.SaveChangesAsync();
     }
     catch (Exception error)

@@ -1,6 +1,7 @@
 .neon
 .env.local
 node_modules/
+.gemini/
 
 # Filled-in prod credentials for the home-PC worker.
 infra/worker/worker.env

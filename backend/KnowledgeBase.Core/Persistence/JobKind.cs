@@ -35,8 +35,11 @@ public enum JobKind
     // itself on start when the check finds any gap.
     MigrateFaceModels,
 
-    // Generate a CLIP scene vector and propose reviewed location candidates.
+    // Generate a VPR scene vector and store SceneIdentity.
     AnalyzeScenes,
+
+    // Groups open scenes of the archive into location clusters, anonymous clusters, and unsorted scenes.
+    ClusterScenes,
 
     // Uses the VLM with reviewed person/location context to extract cautious scene observations.
     AnalyzeSceneObservations,
